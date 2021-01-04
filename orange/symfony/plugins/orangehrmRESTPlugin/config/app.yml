@@ -1,0 +1,3 @@
+all:
+  orangehrmRESTPlugin:
+    version: '1.0'

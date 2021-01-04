@@ -36,7 +36,7 @@ $wgResourceBasePath = $wgScriptPath;
 
 ## The URL path to the logo.  Make sure you change this from the default,
 ## or else you'll overwrite your logo when you upgrade!
-$wgLogo = "$wgResourceBasePath/resources/assets/wiki.png";
+$wgLogo = "https://www.greenvilleassociates.com/fusionshell/logo.png";
 
 ## UPO means: this is also a user preference option
 
@@ -157,4 +157,4 @@ wfLoadExtension( 'WikiEditor' );
 
 # End of automatically generated settings.
 # Add more configuration options below.
-
+$wgEditPageFrameOptions = 'SAMEORIGIN';

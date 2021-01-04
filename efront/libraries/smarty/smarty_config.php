@@ -3,6 +3,7 @@
 * Smarty configuration file
 */
 $smarty = new Smarty;
+G_DEFAULTTHEMEPATH = 'C:\web\greenvilleassociates\gaweb1\fusionshellplus\efront\www\themes\default';
 
 //The templates can be read by the 'external/' directory as well
 $smarty -> template_dir = array(G_CURRENTTHEMEPATH.'external/', 
