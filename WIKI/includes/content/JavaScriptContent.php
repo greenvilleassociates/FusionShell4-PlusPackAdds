@@ -25,12 +25,9 @@
  * @author Daniel Kinzler
  */
 
-use MediaWiki\MediaWikiServices;
-
 /**
  * Content for JavaScript pages.
  *
- * @newable
  * @ingroup Content
  */
 class JavaScriptContent extends TextContent {
@@ -41,7 +38,6 @@ class JavaScriptContent extends TextContent {
 	private $redirectTarget = false;
 
 	/**
-	 * @stable to call
 	 * @param string $text JavaScript code.
 	 * @param string $modelId the content model name
 	 */
@@ -60,12 +56,12 @@ class JavaScriptContent extends TextContent {
 	 * @return JavaScriptContent
 	 */
 	public function preSaveTransform( Title $title, User $user, ParserOptions $popts ) {
+		global $wgParser;
 		// @todo Make pre-save transformation optional for script pages
-		// See T34858
+		// See bug #32858
 
-		$text = $this->getText();
-		$pst = MediaWikiServices::getInstance()->getParser()
-			->preSaveTransform( $text, $title, $user, $popts );
+		$text = $this->getNativeData();
+		$pst = $wgParser->preSaveTransform( $text, $title, $user, $popts );
 
 		return new static( $pst );
 	}
@@ -74,10 +70,12 @@ class JavaScriptContent extends TextContent {
 	 * @return string JavaScript wrapped in a <pre> tag.
 	 */
 	protected function getHtml() {
-		return Html::element( 'pre',
-			[ 'class' => 'mw-code mw-js', 'dir' => 'ltr' ],
-			"\n" . $this->getText() . "\n"
-		) . "\n";
+		$html = "";
+		$html .= "<pre class=\"mw-code mw-js\" dir=\"ltr\">\n";
+		$html .= htmlspecialchars( $this->getNativeData() );
+		$html .= "\n</pre>\n";
+
+		return $html;
 	}
 
 	/**
@@ -103,12 +101,12 @@ class JavaScriptContent extends TextContent {
 			return $this->redirectTarget;
 		}
 		$this->redirectTarget = null;
-		$text = $this->getText();
+		$text = $this->getNativeData();
 		if ( strpos( $text, '/* #REDIRECT */' ) === 0 ) {
 			// Extract the title from the url
 			preg_match( '/title=(.*?)\\\\u0026action=raw/', $text, $matches );
 			if ( isset( $matches[1] ) ) {
-				$title = Title::newFromText( urldecode( $matches[1] ) );
+				$title = Title::newFromText( $matches[1] );
 				if ( $title ) {
 					// Have a title, check that the current content equals what
 					// the redirect content should be

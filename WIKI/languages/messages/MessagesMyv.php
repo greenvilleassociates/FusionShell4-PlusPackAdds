@@ -18,7 +18,7 @@
  * @author Игорь Бродский
  */
 
-$fallback = 'mdf, ru';
+$fallback = 'ru';
 
 $namespaceNames = [
 	NS_MEDIA            => 'Медия',

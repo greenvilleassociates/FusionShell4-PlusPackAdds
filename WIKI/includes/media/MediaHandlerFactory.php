@@ -33,7 +33,7 @@ class MediaHandlerFactory {
 	 *
 	 * @var array
 	 */
-	private const CORE_HANDLERS = [
+	private static $coreHandlers = [
 		'image/jpeg' => JpegHandler::class,
 		'image/png' => PNGHandler::class,
 		'image/gif' => GIFHandler::class,
@@ -62,11 +62,15 @@ class MediaHandlerFactory {
 	private $handlers;
 
 	public function __construct( array $registry ) {
-		$this->registry = $registry + self::CORE_HANDLERS;
+		$this->registry = $registry + self::$coreHandlers;
 	}
 
 	protected function getHandlerClass( $type ) {
-		return $this->registry[$type] ?? false;
+		if ( isset( $this->registry[$type] ) ) {
+			return $this->registry[$type];
+		} else {
+			return false;
+		}
 	}
 
 	/**
@@ -83,11 +87,11 @@ class MediaHandlerFactory {
 			/** @var MediaHandler $handler */
 			$handler = new $class;
 			if ( !$handler->isEnabled() ) {
-				wfDebug( __METHOD__ . ": $class is not enabled" );
+				wfDebug( __METHOD__ . ": $class is not enabled\n" );
 				$handler = false;
 			}
 		} else {
-			wfDebug( __METHOD__ . ": no handler found for $type." );
+			wfDebug( __METHOD__ . ": no handler found for $type.\n" );
 			$handler = false;
 		}
 

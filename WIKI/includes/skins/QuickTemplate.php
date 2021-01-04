@@ -17,32 +17,34 @@
  *
  * @file
  */
-
-use MediaWiki\HookContainer\ProtectedHookAccessorTrait;
 use MediaWiki\MediaWikiServices;
 
 /**
  * Generic wrapper for template functions, with interface
  * compatible with what we use of PHPTAL 0.7.
- * @stable to extend
  * @ingroup Skins
  */
 abstract class QuickTemplate {
-	use ProtectedHookAccessorTrait;
 
 	/**
 	 * @var array
 	 */
 	public $data;
 
-	/** @var Config */
+	/**
+	 * @var MediaWikiI18N
+	 */
+	public $translator;
+
+	/** @var Config $config */
 	protected $config;
 
 	/**
-	 * @param Config|null $config
+	 * @param Config $config
 	 */
-	public function __construct( Config $config = null ) {
+	function __construct( Config $config = null ) {
 		$this->data = [];
+		$this->translator = new MediaWikiI18N();
 		if ( $config === null ) {
 			wfDebug( __METHOD__ . ' was called with no Config instance passed to it' );
 			$config = MediaWikiServices::getInstance()->getMainConfig();
@@ -67,7 +69,7 @@ abstract class QuickTemplate {
 	 */
 	public function extend( $name, $value ) {
 		if ( $this->haveData( $name ) ) {
-			$this->data[$name] .= $value;
+			$this->data[$name] = $this->data[$name] . $value;
 		} else {
 			$this->data[$name] = $value;
 		}
@@ -77,12 +79,30 @@ abstract class QuickTemplate {
 	 * Gets the template data requested
 	 * @since 1.22
 	 * @param string $name Key for the data
-	 * @param mixed|null $default Optional default (or null)
-	 * @return mixed The value of the data requested or the default
-	 * @return-taint onlysafefor_htmlnoent
+	 * @param mixed $default Optional default (or null)
+	 * @return mixed The value of the data requested or the deafult
 	 */
 	public function get( $name, $default = null ) {
-		return $this->data[$name] ?? $default;
+		if ( isset( $this->data[$name] ) ) {
+			return $this->data[$name];
+		} else {
+			return $default;
+		}
+	}
+
+	/**
+	 * @param string $name
+	 * @param mixed &$value
+	 */
+	public function setRef( $name, &$value ) {
+		$this->data[$name] =& $value;
+	}
+
+	/**
+	 * @param MediaWikiI18N &$t
+	 */
+	public function setTranslator( &$t ) {
+		$this->translator = &$t;
 	}
 
 	/**
@@ -92,43 +112,67 @@ abstract class QuickTemplate {
 	abstract public function execute();
 
 	/**
+	 * @private
 	 * @param string $str
-	 * @suppress SecurityCheck-DoubleEscaped $this->data can be either
 	 */
-	protected function text( $str ) {
+	function text( $str ) {
 		echo htmlspecialchars( $this->data[$str] );
 	}
 
 	/**
+	 * @private
 	 * @param string $str
-	 * @suppress SecurityCheck-XSS phan-taint-check cannot tell if $str is pre-escaped
 	 */
-	public function html( $str ) {
+	function html( $str ) {
 		echo $this->data[$str];
 	}
 
 	/**
-	 * @param string $msgKey
+	 * @private
+	 * @param string $str
 	 */
-	public function msg( $msgKey ) {
-		echo htmlspecialchars( wfMessage( $msgKey )->text() );
+	function msg( $str ) {
+		echo htmlspecialchars( $this->translator->translate( $str ) );
 	}
 
 	/**
+	 * @private
+	 * @param string $str
+	 */
+	function msgHtml( $str ) {
+		echo $this->translator->translate( $str );
+	}
+
+	/**
+	 * An ugly, ugly hack.
+	 * @private
+	 * @param string $str
+	 */
+	function msgWiki( $str ) {
+		global $wgOut;
+
+		$text = $this->translator->translate( $str );
+		echo $wgOut->parse( $text );
+	}
+
+	/**
+	 * @private
 	 * @param string $str
 	 * @return bool
 	 */
-	private function haveData( $str ) {
+	function haveData( $str ) {
 		return isset( $this->data[$str] );
 	}
 
 	/**
-	 * @param string $msgKey
+	 * @private
+	 *
+	 * @param string $str
 	 * @return bool
 	 */
-	protected function haveMsg( $msgKey ) {
-		$msg = wfMessage( $msgKey );
-		return $msg->exists() && !$msg->isDisabled();
+	function haveMsg( $str ) {
+		$msg = $this->translator->translate( $str );
+		return ( $msg != '-' ) && ( $msg != '' ); # ????
 	}
 
 	/**

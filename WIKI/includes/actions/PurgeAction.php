@@ -42,7 +42,7 @@ class PurgeAction extends FormAction {
 	}
 
 	public function onSubmit( $data ) {
-		return $this->getWikiPage()->doPurge();
+		return $this->page->doPurge();
 	}
 
 	public function show() {

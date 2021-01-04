@@ -1,5 +1,9 @@
 <?php
 /**
+ *
+ *
+ * Created on Sep 25, 2006
+ *
  * Copyright © 2006 Yuri Astrakhan "<Firstname><Lastname>@gmail.com"
  *
  * This program is free software; you can redistribute it and/or modify
@@ -19,9 +23,8 @@
  *
  * @file
  */
-use MediaWiki\Linker\LinkTarget;
 use MediaWiki\MediaWikiServices;
-use MediaWiki\Permissions\PermissionManager;
+use MediaWiki\Linker\LinkTarget;
 
 /**
  * A query module to show basic page information.
@@ -35,7 +38,7 @@ class ApiQueryInfo extends ApiQueryBase {
 		$fld_readable = false, $fld_watched = false,
 		$fld_watchers = false, $fld_visitingwatchers = false,
 		$fld_notificationtimestamp = false,
-		$fld_preload = false, $fld_displaytitle = false, $fld_varianttitles = false;
+		$fld_preload = false, $fld_displaytitle = false;
 
 	private $params;
 
@@ -50,7 +53,7 @@ class ApiQueryInfo extends ApiQueryBase {
 		$pageLatest, $pageLength;
 
 	private $protections, $restrictionTypes, $watched, $watchers, $visitingwatchers,
-		$notificationtimestamps, $talkids, $subjectids, $displaytitles, $variantTitles;
+		$notificationtimestamps, $talkids, $subjectids, $displaytitles;
 	private $showZeroWatchers = false;
 
 	private $tokenFunctions;
@@ -76,7 +79,9 @@ class ApiQueryInfo extends ApiQueryBase {
 		$pageSet->requestField( 'page_touched' );
 		$pageSet->requestField( 'page_latest' );
 		$pageSet->requestField( 'page_len' );
-		$pageSet->requestField( 'page_content_model' );
+		if ( $config->get( 'ContentHandlerUseDB' ) ) {
+			$pageSet->requestField( 'page_content_model' );
+		}
 		if ( $config->get( 'PageLanguageUseDB' ) ) {
 			$pageSet->requestField( 'page_lang' );
 		}
@@ -102,23 +107,22 @@ class ApiQueryInfo extends ApiQueryBase {
 		}
 
 		$this->tokenFunctions = [
-			'edit' => [ self::class, 'getEditToken' ],
-			'delete' => [ self::class, 'getDeleteToken' ],
-			'protect' => [ self::class, 'getProtectToken' ],
-			'move' => [ self::class, 'getMoveToken' ],
-			'block' => [ self::class, 'getBlockToken' ],
-			'unblock' => [ self::class, 'getUnblockToken' ],
-			'email' => [ self::class, 'getEmailToken' ],
-			'import' => [ self::class, 'getImportToken' ],
-			'watch' => [ self::class, 'getWatchToken' ],
+			'edit' => [ 'ApiQueryInfo', 'getEditToken' ],
+			'delete' => [ 'ApiQueryInfo', 'getDeleteToken' ],
+			'protect' => [ 'ApiQueryInfo', 'getProtectToken' ],
+			'move' => [ 'ApiQueryInfo', 'getMoveToken' ],
+			'block' => [ 'ApiQueryInfo', 'getBlockToken' ],
+			'unblock' => [ 'ApiQueryInfo', 'getUnblockToken' ],
+			'email' => [ 'ApiQueryInfo', 'getEmailToken' ],
+			'import' => [ 'ApiQueryInfo', 'getImportToken' ],
+			'watch' => [ 'ApiQueryInfo', 'getWatchToken' ],
 		];
-		$this->getHookRunner()->onAPIQueryInfoTokens( $this->tokenFunctions );
+		Hooks::run( 'APIQueryInfoTokens', [ &$this->tokenFunctions ] );
 
 		return $this->tokenFunctions;
 	}
 
-	/** @var string[] */
-	protected static $cachedTokens = [];
+	static protected $cachedTokens = [];
 
 	/**
 	 * @deprecated since 1.24
@@ -128,27 +132,20 @@ class ApiQueryInfo extends ApiQueryBase {
 	}
 
 	/**
-	 * Temporary method until the token methods are removed entirely
-	 *
-	 * Only for the tokens that all use User::getEditToken
-	 *
-	 * @param string $right Right needed (edit/delete/block/etc.)
-	 * @return string|false
+	 * @deprecated since 1.24
 	 */
-	private static function getUserToken( string $right ) {
+	public static function getEditToken( $pageid, $title ) {
+		// We could check for $title->userCan('edit') here,
+		// but that's too expensive for this purpose
+		// and would break caching
 		global $wgUser;
-		$user = $wgUser;
-
-		if ( !MediaWikiServices::getInstance()
-			->getPermissionManager()
-			->userHasRight( $user, $right )
-		) {
+		if ( !$wgUser->isAllowed( 'edit' ) ) {
 			return false;
 		}
 
 		// The token is always the same, let's exploit that
 		if ( !isset( self::$cachedTokens['edit'] ) ) {
-			self::$cachedTokens['edit'] = $user->getEditToken();
+			self::$cachedTokens['edit'] = $wgUser->getEditToken();
 		}
 
 		return self::$cachedTokens['edit'];
@@ -157,36 +154,69 @@ class ApiQueryInfo extends ApiQueryBase {
 	/**
 	 * @deprecated since 1.24
 	 */
-	public static function getEditToken( $pageid, $title ) {
-		return self::getUserToken( 'edit' );
-	}
-
-	/**
-	 * @deprecated since 1.24
-	 */
 	public static function getDeleteToken( $pageid, $title ) {
-		return self::getUserToken( 'delete' );
+		global $wgUser;
+		if ( !$wgUser->isAllowed( 'delete' ) ) {
+			return false;
+		}
+
+		// The token is always the same, let's exploit that
+		if ( !isset( self::$cachedTokens['delete'] ) ) {
+			self::$cachedTokens['delete'] = $wgUser->getEditToken();
+		}
+
+		return self::$cachedTokens['delete'];
 	}
 
 	/**
 	 * @deprecated since 1.24
 	 */
 	public static function getProtectToken( $pageid, $title ) {
-		return self::getUserToken( 'protect' );
+		global $wgUser;
+		if ( !$wgUser->isAllowed( 'protect' ) ) {
+			return false;
+		}
+
+		// The token is always the same, let's exploit that
+		if ( !isset( self::$cachedTokens['protect'] ) ) {
+			self::$cachedTokens['protect'] = $wgUser->getEditToken();
+		}
+
+		return self::$cachedTokens['protect'];
 	}
 
 	/**
 	 * @deprecated since 1.24
 	 */
 	public static function getMoveToken( $pageid, $title ) {
-		return self::getUserToken( 'move' );
+		global $wgUser;
+		if ( !$wgUser->isAllowed( 'move' ) ) {
+			return false;
+		}
+
+		// The token is always the same, let's exploit that
+		if ( !isset( self::$cachedTokens['move'] ) ) {
+			self::$cachedTokens['move'] = $wgUser->getEditToken();
+		}
+
+		return self::$cachedTokens['move'];
 	}
 
 	/**
 	 * @deprecated since 1.24
 	 */
 	public static function getBlockToken( $pageid, $title ) {
-		return self::getUserToken( 'block' );
+		global $wgUser;
+		if ( !$wgUser->isAllowed( 'block' ) ) {
+			return false;
+		}
+
+		// The token is always the same, let's exploit that
+		if ( !isset( self::$cachedTokens['block'] ) ) {
+			self::$cachedTokens['block'] = $wgUser->getEditToken();
+		}
+
+		return self::$cachedTokens['block'];
 	}
 
 	/**
@@ -202,15 +232,13 @@ class ApiQueryInfo extends ApiQueryBase {
 	 */
 	public static function getEmailToken( $pageid, $title ) {
 		global $wgUser;
-		$user = $wgUser;
-
-		if ( !$user->canSendEmail() || $user->isBlockedFromEmailuser() ) {
+		if ( !$wgUser->canSendEmail() || $wgUser->isBlockedFromEmailuser() ) {
 			return false;
 		}
 
 		// The token is always the same, let's exploit that
 		if ( !isset( self::$cachedTokens['email'] ) ) {
-			self::$cachedTokens['email'] = $user->getEditToken();
+			self::$cachedTokens['email'] = $wgUser->getEditToken();
 		}
 
 		return self::$cachedTokens['email'];
@@ -221,17 +249,13 @@ class ApiQueryInfo extends ApiQueryBase {
 	 */
 	public static function getImportToken( $pageid, $title ) {
 		global $wgUser;
-		$user = $wgUser;
-
-		if ( !MediaWikiServices::getInstance()
-			->getPermissionManager()
-			->userHasAnyRight( $user, 'import', 'importupload' ) ) {
+		if ( !$wgUser->isAllowedAny( 'import', 'importupload' ) ) {
 			return false;
 		}
 
 		// The token is always the same, let's exploit that
 		if ( !isset( self::$cachedTokens['import'] ) ) {
-			self::$cachedTokens['import'] = $user->getEditToken();
+			self::$cachedTokens['import'] = $wgUser->getEditToken();
 		}
 
 		return self::$cachedTokens['import'];
@@ -242,15 +266,13 @@ class ApiQueryInfo extends ApiQueryBase {
 	 */
 	public static function getWatchToken( $pageid, $title ) {
 		global $wgUser;
-		$user = $wgUser;
-
-		if ( !$user->isLoggedIn() ) {
+		if ( !$wgUser->isLoggedIn() ) {
 			return false;
 		}
 
 		// The token is always the same, let's exploit that
 		if ( !isset( self::$cachedTokens['watch'] ) ) {
-			self::$cachedTokens['watch'] = $user->getEditToken( 'watch' );
+			self::$cachedTokens['watch'] = $wgUser->getEditToken( 'watch' );
 		}
 
 		return self::$cachedTokens['watch'];
@@ -261,15 +283,13 @@ class ApiQueryInfo extends ApiQueryBase {
 	 */
 	public static function getOptionsToken( $pageid, $title ) {
 		global $wgUser;
-		$user = $wgUser;
-
-		if ( !$user->isLoggedIn() ) {
+		if ( !$wgUser->isLoggedIn() ) {
 			return false;
 		}
 
 		// The token is always the same, let's exploit that
 		if ( !isset( self::$cachedTokens['options'] ) ) {
-			self::$cachedTokens['options'] = $user->getEditToken();
+			self::$cachedTokens['options'] = $wgUser->getEditToken();
 		}
 
 		return self::$cachedTokens['options'];
@@ -277,7 +297,7 @@ class ApiQueryInfo extends ApiQueryBase {
 
 	public function execute() {
 		$this->params = $this->extractRequestParams();
-		if ( $this->params['prop'] !== null ) {
+		if ( !is_null( $this->params['prop'] ) ) {
 			$prop = array_flip( $this->params['prop'] );
 			$this->fld_protection = isset( $prop['protection'] );
 			$this->fld_watched = isset( $prop['watched'] );
@@ -290,7 +310,6 @@ class ApiQueryInfo extends ApiQueryBase {
 			$this->fld_readable = isset( $prop['readable'] );
 			$this->fld_preload = isset( $prop['preload'] );
 			$this->fld_displaytitle = isset( $prop['displaytitle'] );
-			$this->fld_varianttitles = isset( $prop['varianttitles'] );
 		}
 
 		$pageSet = $this->getPageSet();
@@ -299,8 +318,8 @@ class ApiQueryInfo extends ApiQueryBase {
 		$this->everything = $this->titles + $this->missing;
 		$result = $this->getResult();
 
-		uasort( $this->everything, [ Title::class, 'compare' ] );
-		if ( $this->params['continue'] !== null ) {
+		uasort( $this->everything, [ 'Title', 'compare' ] );
+		if ( !is_null( $this->params['continue'] ) ) {
 			// Throw away any titles we're gonna skip so they don't
 			// clutter queries
 			$cont = explode( '|', $this->params['continue'] );
@@ -353,10 +372,6 @@ class ApiQueryInfo extends ApiQueryBase {
 			$this->getDisplayTitle();
 		}
 
-		if ( $this->fld_varianttitles ) {
-			$this->getVariantTitles();
-		}
-
 		/** @var Title $title */
 		foreach ( $this->everything as $pageid => $title ) {
 			$pageInfo = $this->extractPageInfo( $pageid, $title );
@@ -393,12 +408,10 @@ class ApiQueryInfo extends ApiQueryBase {
 		$pageInfo['pagelanguagehtmlcode'] = $pageLanguage->getHtmlCode();
 		$pageInfo['pagelanguagedir'] = $pageLanguage->getDir();
 
-		$user = $this->getUser();
-
 		if ( $titleExists ) {
 			$pageInfo['touched'] = wfTimestamp( TS_ISO_8601, $this->pageTouched[$pageid] );
-			$pageInfo['lastrevid'] = (int)$this->pageLatest[$pageid];
-			$pageInfo['length'] = (int)$this->pageLength[$pageid];
+			$pageInfo['lastrevid'] = intval( $this->pageLatest[$pageid] );
+			$pageInfo['length'] = intval( $this->pageLength[$pageid] );
 
 			if ( isset( $this->pageIsRedir[$pageid] ) && $this->pageIsRedir[$pageid] ) {
 				$pageInfo['redirect'] = true;
@@ -408,7 +421,7 @@ class ApiQueryInfo extends ApiQueryBase {
 			}
 		}
 
-		if ( $this->params['token'] !== null ) {
+		if ( !is_null( $this->params['token'] ) ) {
 			$tokenFunctions = $this->getTokenFunctions();
 			$pageInfo['starttimestamp'] = wfTimestamp( TS_ISO_8601, time() );
 			foreach ( $this->params['token'] as $t ) {
@@ -479,9 +492,7 @@ class ApiQueryInfo extends ApiQueryBase {
 			$pageInfo['canonicalurl'] = wfExpandUrl( $title->getFullURL(), PROTO_CANONICAL );
 		}
 		if ( $this->fld_readable ) {
-			$pageInfo['readable'] = $this->getPermissionManager()->userCan(
-				'read', $user, $title
-			);
+			$pageInfo['readable'] = $title->userCan( 'read', $this->getUser() );
 		}
 
 		if ( $this->fld_preload ) {
@@ -489,7 +500,7 @@ class ApiQueryInfo extends ApiQueryBase {
 				$pageInfo['preload'] = '';
 			} else {
 				$text = null;
-				$this->getHookRunner()->onEditFormPreloadText( $text, $title );
+				Hooks::run( 'EditFormPreloadText', [ &$text, &$title ] );
 
 				$pageInfo['preload'] = $text;
 			}
@@ -503,44 +514,17 @@ class ApiQueryInfo extends ApiQueryBase {
 			}
 		}
 
-		if ( $this->fld_varianttitles && isset( $this->variantTitles[$pageid] ) ) {
-			$pageInfo['varianttitles'] = $this->variantTitles[$pageid];
-		}
-
 		if ( $this->params['testactions'] ) {
-			$limit = $this->getMain()->canApiHighLimits() ? self::LIMIT_SML2 : self::LIMIT_SML1;
+			$limit = $this->getMain()->canApiHighLimits() ? self::LIMIT_SML1 : self::LIMIT_SML2;
 			if ( $this->countTestedActions >= $limit ) {
 				return null; // force a continuation
-			}
-
-			$detailLevel = $this->params['testactionsdetail'];
-			$rigor = $detailLevel === 'quick'
-				? PermissionManager::RIGOR_QUICK
-				// Not using RIGOR_SECURE here, because that results in master connection
-				: PermissionManager::RIGOR_FULL;
-			$errorFormatter = $this->getErrorFormatter();
-			if ( $errorFormatter->getFormat() === 'bc' ) {
-				// Eew, no. Use a more modern format here.
-				$errorFormatter = $errorFormatter->newWithFormat( 'plaintext' );
 			}
 
 			$user = $this->getUser();
 			$pageInfo['actions'] = [];
 			foreach ( $this->params['testactions'] as $action ) {
 				$this->countTestedActions++;
-
-				if ( $detailLevel === 'boolean' ) {
-					$pageInfo['actions'][$action] = $this->getPermissionManager()->userCan(
-						$action, $user, $title
-					);
-				} else {
-					$pageInfo['actions'][$action] = $errorFormatter->arrayFromStatus( $this->errorArrayToStatus(
-						$this->getPermissionManager()->getPermissionErrors(
-							$action, $user, $title, $rigor
-						),
-						$user
-					) );
-				}
+				$pageInfo['actions'][$action] = $title->userCan( $action, $user );
 			}
 		}
 
@@ -703,11 +687,10 @@ class ApiQueryInfo extends ApiQueryBase {
 	 */
 	private function getTSIDs() {
 		$getTitles = $this->talkids = $this->subjectids = [];
-		$nsInfo = MediaWikiServices::getInstance()->getNamespaceInfo();
 
 		/** @var Title $t */
 		foreach ( $this->everything as $t ) {
-			if ( $nsInfo->isTalk( $t->getNamespace() ) ) {
+			if ( MWNamespace::isTalk( $t->getNamespace() ) ) {
 				if ( $this->fld_subjectid ) {
 					$getTitles[] = $t->getSubjectPage();
 				}
@@ -715,7 +698,7 @@ class ApiQueryInfo extends ApiQueryBase {
 				$getTitles[] = $t->getTalkPage();
 			}
 		}
-		if ( $getTitles === [] ) {
+		if ( !count( $getTitles ) ) {
 			return;
 		}
 
@@ -730,12 +713,12 @@ class ApiQueryInfo extends ApiQueryBase {
 		$this->addWhere( $lb->constructSet( 'page', $db ) );
 		$res = $this->select( __METHOD__ );
 		foreach ( $res as $row ) {
-			if ( $nsInfo->isTalk( $row->page_namespace ) ) {
-				$this->talkids[$nsInfo->getSubject( $row->page_namespace )][$row->page_title] =
-					(int)( $row->page_id );
+			if ( MWNamespace::isTalk( $row->page_namespace ) ) {
+				$this->talkids[MWNamespace::getSubject( $row->page_namespace )][$row->page_title] =
+					intval( $row->page_id );
 			} else {
-				$this->subjectids[$nsInfo->getTalk( $row->page_namespace )][$row->page_title] =
-					(int)( $row->page_id );
+				$this->subjectids[MWNamespace::getTalk( $row->page_namespace )][$row->page_title] =
+					intval( $row->page_id );
 			}
 		}
 	}
@@ -745,7 +728,7 @@ class ApiQueryInfo extends ApiQueryBase {
 
 		$pageIds = array_keys( $this->titles );
 
-		if ( $pageIds === [] ) {
+		if ( !count( $pageIds ) ) {
 			return;
 		}
 
@@ -761,32 +744,6 @@ class ApiQueryInfo extends ApiQueryBase {
 		}
 	}
 
-	private function getVariantTitles() {
-		if ( $this->titles === [] ) {
-			return;
-		}
-		$this->variantTitles = [];
-		foreach ( $this->titles as $pageId => $t ) {
-			$this->variantTitles[$pageId] = isset( $this->displaytitles[$pageId] )
-				? $this->getAllVariants( $this->displaytitles[$pageId] )
-				: $this->getAllVariants( $t->getText(), $t->getNamespace() );
-		}
-	}
-
-	private function getAllVariants( $text, $ns = NS_MAIN ) {
-		$result = [];
-		$contLang = MediaWikiServices::getInstance()->getContentLanguage();
-		foreach ( $contLang->getVariants() as $variant ) {
-			$convertTitle = $contLang->autoConvert( $text, $variant );
-			if ( $ns !== NS_MAIN ) {
-				$convertNs = $contLang->convertNamespace( $ns, $variant );
-				$convertTitle = $convertNs . ':' . $convertTitle;
-			}
-			$result[$variant] = $convertTitle;
-		}
-		return $result;
-	}
-
 	/**
 	 * Get information about watched status and put it in $this->watched
 	 * and $this->notificationtimestamps
@@ -795,7 +752,7 @@ class ApiQueryInfo extends ApiQueryBase {
 		$user = $this->getUser();
 
 		if ( $user->isAnon() || count( $this->everything ) == 0
-			|| !$this->getPermissionManager()->userHasRight( $user, 'viewmywatchlist' )
+			|| !$user->isAllowed( 'viewmywatchlist' )
 		) {
 			return;
 		}
@@ -830,7 +787,7 @@ class ApiQueryInfo extends ApiQueryBase {
 		}
 
 		$user = $this->getUser();
-		$canUnwatchedpages = $this->getPermissionManager()->userHasRight( $user, 'unwatchedpages' );
+		$canUnwatchedpages = $user->isAllowed( 'unwatchedpages' );
 		$unwatchedPageThreshold = $this->getConfig()->get( 'UnwatchedPageThreshold' );
 		if ( !$canUnwatchedpages && !is_int( $unwatchedPageThreshold ) ) {
 			return;
@@ -860,7 +817,7 @@ class ApiQueryInfo extends ApiQueryBase {
 		$user = $this->getUser();
 		$db = $this->getDB();
 
-		$canUnwatchedpages = $this->getPermissionManager()->userHasRight( $user, 'unwatchedpages' );
+		$canUnwatchedpages = $user->isAllowed( 'unwatchedpages' );
 		$unwatchedPageThreshold = $this->getConfig()->get( 'UnwatchedPageThreshold' );
 		if ( !$canUnwatchedpages && !is_int( $unwatchedPageThreshold ) ) {
 			return;
@@ -887,7 +844,7 @@ class ApiQueryInfo extends ApiQueryBase {
 			$timestamps = [];
 			foreach ( $timestampRes as $row ) {
 				$revTimestamp = wfTimestamp( TS_UNIX, (int)$row->rev_timestamp );
-				$timestamps[$row->page_namespace][$row->page_title] = (int)$revTimestamp - $age;
+				$timestamps[$row->page_namespace][$row->page_title] = $revTimestamp - $age;
 			}
 			$titlesWithThresholds = array_map(
 				function ( LinkTarget $target ) use ( $timestamps ) {
@@ -926,7 +883,6 @@ class ApiQueryInfo extends ApiQueryBase {
 			'url',
 			'preload',
 			'displaytitle',
-			'varianttitles',
 		];
 		if ( array_diff( (array)$params['prop'], $publicProps ) ) {
 			return 'private';
@@ -937,7 +893,7 @@ class ApiQueryInfo extends ApiQueryBase {
 			return 'private';
 		}
 
-		if ( $params['token'] !== null ) {
+		if ( !is_null( $params['token'] ) ) {
 			return 'private';
 		}
 
@@ -960,23 +916,14 @@ class ApiQueryInfo extends ApiQueryBase {
 					'readable', # private
 					'preload',
 					'displaytitle',
-					'varianttitles',
 					// If you add more properties here, please consider whether they
 					// need to be added to getCacheMode()
 				],
 				ApiBase::PARAM_HELP_MSG_PER_VALUE => [],
-				ApiBase::PARAM_DEPRECATED_VALUES => [
-					'readable' => true, // Since 1.32
-				],
 			],
 			'testactions' => [
 				ApiBase::PARAM_TYPE => 'string',
 				ApiBase::PARAM_ISMULTI => true,
-			],
-			'testactionsdetail' => [
-				ApiBase::PARAM_TYPE => [ 'boolean', 'full', 'quick' ],
-				ApiBase::PARAM_DFLT => 'boolean',
-				ApiBase::PARAM_HELP_MSG_PER_VALUE => [],
 			],
 			'token' => [
 				ApiBase::PARAM_DEPRECATED => true,

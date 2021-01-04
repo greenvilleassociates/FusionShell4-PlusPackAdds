@@ -32,7 +32,7 @@ class LanguageJa extends Language {
 	 * @param string $string
 	 * @return string
 	 */
-	public function segmentByWord( $string ) {
+	function segmentByWord( $string ) {
 		// Strip known punctuation ?
 		// $s = preg_replace( '/\xe3\x80[\x80-\xbf]/', '', $s ); # U3000-303f
 
@@ -56,7 +56,7 @@ class LanguageJa extends Language {
 	 * @param string $text
 	 * @return string
 	 */
-	public function emphasize( $text ) {
+	function emphasize( $text ) {
 		return $text;
 	}
 }

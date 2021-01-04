@@ -22,14 +22,10 @@
 namespace Wikimedia\Rdbms;
 
 /**
- * Exception class for replica DB wait errors
- * @newable
+ * Exception class for replica DB wait timeouts
  * @ingroup Database
  */
 class DBReplicationWaitError extends DBExpectedError {
 }
 
-/**
- * @deprecated since 1.29
- */
 class_alias( DBReplicationWaitError::class, 'DBReplicationWaitError' );

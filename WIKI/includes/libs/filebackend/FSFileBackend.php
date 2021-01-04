@@ -1,25 +1,5 @@
 <?php
 /**
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; either version 2 of the License, or
- * (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License along
- * with this program; if not, write to the Free Software Foundation, Inc.,
- * 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
- * http://www.gnu.org/copyleft/gpl.html
- *
- * @file
- * @ingroup FileBackend
- */
-
-/**
  * File system based backend.
  *
  * This program is free software; you can redistribute it and/or modify
@@ -40,8 +20,6 @@
  * @file
  * @ingroup FileBackend
  */
-
-use Wikimedia\AtEase\AtEase;
 use Wikimedia\Timestamp\ConvertibleTimestamp;
 
 /**
@@ -61,29 +39,27 @@ use Wikimedia\Timestamp\ConvertibleTimestamp;
  * @since 1.19
  */
 class FSFileBackend extends FileBackendStore {
-	/** @var MapCacheLRU Cache for known prepared/usable directorries */
-	protected $usableDirCache;
-
 	/** @var string Directory holding the container directories */
 	protected $basePath;
 
 	/** @var array Map of container names to root paths for custom container paths */
-	protected $containerPaths;
+	protected $containerPaths = [];
 
-	/** @var int Directory permission mode */
-	protected $dirMode;
 	/** @var int File permission mode */
 	protected $fileMode;
+	/** @var int File permission mode */
+	protected $dirMode;
+
 	/** @var string Required OS username to own files */
 	protected $fileOwner;
 
-	/** @var bool Simpler version of PHP_OS_FAMILY */
-	protected $os;
+	/** @var bool */
+	protected $isWindows;
 	/** @var string OS username running this script */
 	protected $currentUser;
 
-	/** @var bool[] Map of (stack index => whether a warning happened) */
-	private $warningTrapStack = [];
+	/** @var array */
+	protected $hadWarningErrors = [];
 
 	/**
 	 * @see FileBackendStore::__construct()
@@ -98,13 +74,7 @@ class FSFileBackend extends FileBackendStore {
 	public function __construct( array $config ) {
 		parent::__construct( $config );
 
-		if ( PHP_OS_FAMILY === 'Windows' ) {
-			$this->os = 'Windows';
-		} elseif ( PHP_OS_FAMILY === 'BSD' || PHP_OS_FAMILY === 'Darwin' ) {
-			$this->os = 'BSD';
-		} else {
-			$this->os = 'Linux';
-		}
+		$this->isWindows = ( strtoupper( substr( PHP_OS, 0, 3 ) ) === 'WIN' );
 		// Remove any possible trailing slash from directories
 		if ( isset( $config['basePath'] ) ) {
 			$this->basePath = rtrim( $config['basePath'], '/' ); // remove trailing slash
@@ -112,24 +82,24 @@ class FSFileBackend extends FileBackendStore {
 			$this->basePath = null; // none; containers must have explicit paths
 		}
 
-		$this->containerPaths = [];
-		foreach ( ( $config['containerPaths'] ?? [] ) as $container => $fsPath ) {
-			$this->containerPaths[$container] = rtrim( $fsPath, '/' ); // remove trailing slash
+		if ( isset( $config['containerPaths'] ) ) {
+			$this->containerPaths = (array)$config['containerPaths'];
+			foreach ( $this->containerPaths as &$path ) {
+				$path = rtrim( $path, '/' ); // remove trailing slash
+			}
 		}
 
-		$this->fileMode = $config['fileMode'] ?? 0644;
-		$this->dirMode = $config['directoryMode'] ?? 0777;
+		$this->fileMode = isset( $config['fileMode'] ) ? $config['fileMode'] : 0644;
+		$this->dirMode = isset( $config['directoryMode'] ) ? $config['directoryMode'] : 0777;
 		if ( isset( $config['fileOwner'] ) && function_exists( 'posix_getuid' ) ) {
 			$this->fileOwner = $config['fileOwner'];
-			// Cache this, assuming it doesn't change
+			// cache this, assuming it doesn't change
 			$this->currentUser = posix_getpwuid( posix_getuid() )['name'];
 		}
-
-		$this->usableDirCache = new MapCacheLRU( self::CACHE_CHEAP_SIZE );
 	}
 
 	public function getFeatures() {
-		return self::ATTR_UNICODE_PATHS;
+		return !$this->isWindows ? FileBackend::ATTR_UNICODE_PATHS : 0;
 	}
 
 	protected function resolveContainerPath( $container, $relStoragePath ) {
@@ -141,22 +111,22 @@ class FSFileBackend extends FileBackendStore {
 			}
 		}
 
-		return null; // invalid
+		return null;
 	}
 
 	/**
 	 * Sanity check a relative file system path for validity
 	 *
-	 * @param string $fsPath Normalized relative path
+	 * @param string $path Normalized relative path
 	 * @return bool
 	 */
-	protected function isLegalRelPath( $fsPath ) {
+	protected function isLegalRelPath( $path ) {
 		// Check for file names longer than 255 chars
-		if ( preg_match( '![^/]{256}!', $fsPath ) ) { // ext3/NTFS
+		if ( preg_match( '![^/]{256}!', $path ) ) { // ext3/NTFS
 			return false;
 		}
-		if ( $this->os === 'Windows' ) { // NTFS
-			return !preg_match( '![:*?"<>|]!', $fsPath );
+		if ( $this->isWindows ) { // NTFS
+			return !preg_match( '![:*?"<>|]!', $path );
 		} else {
 			return true;
 		}
@@ -205,71 +175,70 @@ class FSFileBackend extends FileBackendStore {
 		if ( $fsPath === null ) {
 			return false; // invalid
 		}
+		$parentDir = dirname( $fsPath );
+
+		if ( file_exists( $fsPath ) ) {
+			$ok = is_file( $fsPath ) && is_writable( $fsPath );
+		} else {
+			$ok = is_dir( $parentDir ) && is_writable( $parentDir );
+		}
 
 		if ( $this->fileOwner !== null && $this->currentUser !== $this->fileOwner ) {
+			$ok = false;
 			trigger_error( __METHOD__ . ": PHP process owner is not '{$this->fileOwner}'." );
-			return false;
 		}
 
-		$fsDirectory = dirname( $fsPath );
-		$usable = $this->usableDirCache->get( $fsDirectory, MapCacheLRU::TTL_PROC_SHORT );
-		if ( $usable === null ) {
-			AtEase::suppressWarnings();
-			$usable = is_dir( $fsDirectory ) && is_writable( $fsDirectory );
-			AtEase::restoreWarnings();
-			$this->usableDirCache->set( $fsDirectory, $usable ? 1 : 0 );
-		}
-
-		return $usable;
+		return $ok;
 	}
 
 	protected function doCreateInternal( array $params ) {
 		$status = $this->newStatus();
 
-		$fsDstPath = $this->resolveToFSPath( $params['dst'] );
-		if ( $fsDstPath === null ) {
+		$dest = $this->resolveToFSPath( $params['dst'] );
+		if ( $dest === null ) {
 			$status->fatal( 'backend-fail-invalidpath', $params['dst'] );
 
 			return $status;
 		}
 
 		if ( !empty( $params['async'] ) ) { // deferred
-			$tempFile = $this->newTempFileWithContent( $params );
+			$tempFile = TempFSFile::factory( 'create_', 'tmp', $this->tmpDirectory );
 			if ( !$tempFile ) {
 				$status->fatal( 'backend-fail-create', $params['dst'] );
 
 				return $status;
 			}
-			$cmd = $this->makeCopyCommand( $tempFile->getPath(), $fsDstPath, false );
-			$handler = function ( $errors, StatusValue $status, array $params, $cmd ) {
-				if ( $errors !== '' && !( $this->os === 'Windows' && $errors[0] === " " ) ) {
-					$status->fatal( 'backend-fail-create', $params['dst'] );
-					trigger_error( "$cmd\n$errors", E_USER_WARNING ); // command output
-				}
-			};
-			$status->value = new FSFileOpHandle( $this, $params, $handler, $cmd );
-			$tempFile->bind( $status->value );
-		} else { // immediate write
-			$created = false;
-			// Use fwrite+rename since (a) this clears xattrs, (b) threads still reading the old
-			// inode are unaffected since it writes to a new inode, and (c) new threads reading
-			// the file will either totally see the old version or totally see the new version
-			$fsStagePath = $this->makeStagingPath( $fsDstPath );
-			$this->trapWarningsIgnoringNotFound();
-			$stageHandle = fopen( $fsStagePath, 'xb' );
-			if ( $stageHandle ) {
-				$bytes = fwrite( $stageHandle, $params['content'] );
-				$created = ( $bytes === strlen( $params['content'] ) );
-				fclose( $stageHandle );
-				$created = $created ? rename( $fsStagePath, $fsDstPath ) : false;
-			}
-			$hadError = $this->untrapWarnings();
-			if ( $hadError || !$created ) {
+			$this->trapWarnings();
+			$bytes = file_put_contents( $tempFile->getPath(), $params['content'] );
+			$this->untrapWarnings();
+			if ( $bytes === false ) {
 				$status->fatal( 'backend-fail-create', $params['dst'] );
 
 				return $status;
 			}
-			$this->chmod( $fsDstPath );
+			$cmd = implode( ' ', [
+				$this->isWindows ? 'COPY /B /Y' : 'cp', // (binary, overwrite)
+				escapeshellarg( $this->cleanPathSlashes( $tempFile->getPath() ) ),
+				escapeshellarg( $this->cleanPathSlashes( $dest ) )
+			] );
+			$handler = function ( $errors, StatusValue $status, array $params, $cmd ) {
+				if ( $errors !== '' && !( $this->isWindows && $errors[0] === " " ) ) {
+					$status->fatal( 'backend-fail-create', $params['dst'] );
+					trigger_error( "$cmd\n$errors", E_USER_WARNING ); // command output
+				}
+			};
+			$status->value = new FSFileOpHandle( $this, $params, $handler, $cmd, $dest );
+			$tempFile->bind( $status->value );
+		} else { // immediate write
+			$this->trapWarnings();
+			$bytes = file_put_contents( $dest, $params['content'] );
+			$this->untrapWarnings();
+			if ( $bytes === false ) {
+				$status->fatal( 'backend-fail-create', $params['dst'] );
+
+				return $status;
+			}
+			$this->chmod( $dest );
 		}
 
 		return $status;
@@ -278,54 +247,41 @@ class FSFileBackend extends FileBackendStore {
 	protected function doStoreInternal( array $params ) {
 		$status = $this->newStatus();
 
-		$fsSrcPath = $params['src']; // file system path
-		$fsDstPath = $this->resolveToFSPath( $params['dst'] );
-		if ( $fsDstPath === null ) {
+		$dest = $this->resolveToFSPath( $params['dst'] );
+		if ( $dest === null ) {
 			$status->fatal( 'backend-fail-invalidpath', $params['dst'] );
 
 			return $status;
 		}
 
-		if ( $fsSrcPath === $fsDstPath ) {
-			$status->fatal( 'backend-fail-internal', $this->name );
-
-			return $status; // sanity
-		}
-
 		if ( !empty( $params['async'] ) ) { // deferred
-			$cmd = $this->makeCopyCommand( $fsSrcPath, $fsDstPath, false );
+			$cmd = implode( ' ', [
+				$this->isWindows ? 'COPY /B /Y' : 'cp', // (binary, overwrite)
+				escapeshellarg( $this->cleanPathSlashes( $params['src'] ) ),
+				escapeshellarg( $this->cleanPathSlashes( $dest ) )
+			] );
 			$handler = function ( $errors, StatusValue $status, array $params, $cmd ) {
-				if ( $errors !== '' && !( $this->os === 'Windows' && $errors[0] === " " ) ) {
+				if ( $errors !== '' && !( $this->isWindows && $errors[0] === " " ) ) {
 					$status->fatal( 'backend-fail-store', $params['src'], $params['dst'] );
 					trigger_error( "$cmd\n$errors", E_USER_WARNING ); // command output
 				}
 			};
-			$status->value = new FSFileOpHandle( $this, $params, $handler, $cmd );
+			$status->value = new FSFileOpHandle( $this, $params, $handler, $cmd, $dest );
 		} else { // immediate write
-			$stored = false;
-			// Use fwrite+rename since (a) this clears xattrs, (b) threads still reading the old
-			// inode are unaffected since it writes to a new inode, and (c) new threads reading
-			// the file will either totally see the old version or totally see the new version
-			$fsStagePath = $this->makeStagingPath( $fsDstPath );
-			$this->trapWarningsIgnoringNotFound();
-			$srcHandle = fopen( $fsSrcPath, 'rb' );
-			if ( $srcHandle ) {
-				$stageHandle = fopen( $fsStagePath, 'xb' );
-				if ( $stageHandle ) {
-					$bytes = stream_copy_to_stream( $srcHandle, $stageHandle );
-					$stored = ( $bytes !== false && $bytes === fstat( $srcHandle )['size'] );
-					fclose( $stageHandle );
-					$stored = $stored ? rename( $fsStagePath, $fsDstPath ) : false;
+			$this->trapWarnings();
+			$ok = copy( $params['src'], $dest );
+			$this->untrapWarnings();
+			// In some cases (at least over NFS), copy() returns true when it fails
+			if ( !$ok || ( filesize( $params['src'] ) !== filesize( $dest ) ) ) {
+				if ( $ok ) { // PHP bug
+					unlink( $dest ); // remove broken file
+					trigger_error( __METHOD__ . ": copy() failed but returned true." );
 				}
-				fclose( $srcHandle );
-			}
-			$hadError = $this->untrapWarnings();
-			if ( $hadError || !$stored ) {
 				$status->fatal( 'backend-fail-store', $params['src'], $params['dst'] );
 
 				return $status;
 			}
-			$this->chmod( $fsDstPath );
+			$this->chmod( $dest );
 		}
 
 		return $status;
@@ -334,62 +290,58 @@ class FSFileBackend extends FileBackendStore {
 	protected function doCopyInternal( array $params ) {
 		$status = $this->newStatus();
 
-		$fsSrcPath = $this->resolveToFSPath( $params['src'] );
-		if ( $fsSrcPath === null ) {
+		$source = $this->resolveToFSPath( $params['src'] );
+		if ( $source === null ) {
 			$status->fatal( 'backend-fail-invalidpath', $params['src'] );
 
 			return $status;
 		}
 
-		$fsDstPath = $this->resolveToFSPath( $params['dst'] );
-		if ( $fsDstPath === null ) {
+		$dest = $this->resolveToFSPath( $params['dst'] );
+		if ( $dest === null ) {
 			$status->fatal( 'backend-fail-invalidpath', $params['dst'] );
 
 			return $status;
 		}
 
-		if ( $fsSrcPath === $fsDstPath ) {
-			return $status; // no-op
+		if ( !is_file( $source ) ) {
+			if ( empty( $params['ignoreMissingSource'] ) ) {
+				$status->fatal( 'backend-fail-copy', $params['src'] );
+			}
+
+			return $status; // do nothing; either OK or bad status
 		}
 
-		$ignoreMissing = !empty( $params['ignoreMissingSource'] );
-
 		if ( !empty( $params['async'] ) ) { // deferred
-			$cmd = $this->makeCopyCommand( $fsSrcPath, $fsDstPath, $ignoreMissing );
+			$cmd = implode( ' ', [
+				$this->isWindows ? 'COPY /B /Y' : 'cp', // (binary, overwrite)
+				escapeshellarg( $this->cleanPathSlashes( $source ) ),
+				escapeshellarg( $this->cleanPathSlashes( $dest ) )
+			] );
 			$handler = function ( $errors, StatusValue $status, array $params, $cmd ) {
-				if ( $errors !== '' && !( $this->os === 'Windows' && $errors[0] === " " ) ) {
+				if ( $errors !== '' && !( $this->isWindows && $errors[0] === " " ) ) {
 					$status->fatal( 'backend-fail-copy', $params['src'], $params['dst'] );
 					trigger_error( "$cmd\n$errors", E_USER_WARNING ); // command output
 				}
 			};
-			$status->value = new FSFileOpHandle( $this, $params, $handler, $cmd );
+			$status->value = new FSFileOpHandle( $this, $params, $handler, $cmd, $dest );
 		} else { // immediate write
-			$copied = false;
-			// Use fwrite+rename since (a) this clears xattrs, (b) threads still reading the old
-			// inode are unaffected since it writes to a new inode, and (c) new threads reading
-			// the file will either totally see the old version or totally see the new version
-			$fsStagePath = $this->makeStagingPath( $fsDstPath );
-			$this->trapWarningsIgnoringNotFound();
-			$srcHandle = fopen( $fsSrcPath, 'rb' );
-			if ( $srcHandle ) {
-				$stageHandle = fopen( $fsStagePath, 'xb' );
-				if ( $stageHandle ) {
-					$bytes = stream_copy_to_stream( $srcHandle, $stageHandle );
-					$copied = ( $bytes !== false && $bytes === fstat( $srcHandle )['size'] );
-					fclose( $stageHandle );
-					$copied = $copied ? rename( $fsStagePath, $fsDstPath ) : false;
+			$this->trapWarnings();
+			$ok = ( $source === $dest ) ? true : copy( $source, $dest );
+			$this->untrapWarnings();
+			// In some cases (at least over NFS), copy() returns true when it fails
+			if ( !$ok || ( filesize( $source ) !== filesize( $dest ) ) ) {
+				if ( $ok ) { // PHP bug
+					$this->trapWarnings();
+					unlink( $dest ); // remove broken file
+					$this->untrapWarnings();
+					trigger_error( __METHOD__ . ": copy() failed but returned true." );
 				}
-				fclose( $srcHandle );
-			}
-			$hadError = $this->untrapWarnings();
-			if ( $hadError || ( !$copied && !$ignoreMissing ) ) {
 				$status->fatal( 'backend-fail-copy', $params['src'], $params['dst'] );
 
 				return $status;
 			}
-			if ( $copied ) {
-				$this->chmod( $fsDstPath );
-			}
+			$this->chmod( $dest );
 		}
 
 		return $status;
@@ -398,43 +350,47 @@ class FSFileBackend extends FileBackendStore {
 	protected function doMoveInternal( array $params ) {
 		$status = $this->newStatus();
 
-		$fsSrcPath = $this->resolveToFSPath( $params['src'] );
-		if ( $fsSrcPath === null ) {
+		$source = $this->resolveToFSPath( $params['src'] );
+		if ( $source === null ) {
 			$status->fatal( 'backend-fail-invalidpath', $params['src'] );
 
 			return $status;
 		}
 
-		$fsDstPath = $this->resolveToFSPath( $params['dst'] );
-		if ( $fsDstPath === null ) {
+		$dest = $this->resolveToFSPath( $params['dst'] );
+		if ( $dest === null ) {
 			$status->fatal( 'backend-fail-invalidpath', $params['dst'] );
 
 			return $status;
 		}
 
-		if ( $fsSrcPath === $fsDstPath ) {
-			return $status; // no-op
+		if ( !is_file( $source ) ) {
+			if ( empty( $params['ignoreMissingSource'] ) ) {
+				$status->fatal( 'backend-fail-move', $params['src'] );
+			}
+
+			return $status; // do nothing; either OK or bad status
 		}
 
-		$ignoreMissing = !empty( $params['ignoreMissingSource'] );
-
 		if ( !empty( $params['async'] ) ) { // deferred
-			$cmd = $this->makeMoveCommand( $fsSrcPath, $fsDstPath, $ignoreMissing );
+			$cmd = implode( ' ', [
+				$this->isWindows ? 'MOVE /Y' : 'mv', // (overwrite)
+				escapeshellarg( $this->cleanPathSlashes( $source ) ),
+				escapeshellarg( $this->cleanPathSlashes( $dest ) )
+			] );
 			$handler = function ( $errors, StatusValue $status, array $params, $cmd ) {
-				if ( $errors !== '' && !( $this->os === 'Windows' && $errors[0] === " " ) ) {
+				if ( $errors !== '' && !( $this->isWindows && $errors[0] === " " ) ) {
 					$status->fatal( 'backend-fail-move', $params['src'], $params['dst'] );
 					trigger_error( "$cmd\n$errors", E_USER_WARNING ); // command output
 				}
 			};
 			$status->value = new FSFileOpHandle( $this, $params, $handler, $cmd );
 		} else { // immediate write
-			// Use rename() here since (a) this clears xattrs, (b) any threads still reading the
-			// old inode are unaffected since it writes to a new inode, and (c) this is fast and
-			// atomic within a file system volume (as is normally the case)
-			$this->trapWarningsIgnoringNotFound();
-			$moved = rename( $fsSrcPath, $fsDstPath );
-			$hadError = $this->untrapWarnings();
-			if ( $hadError || ( !$moved && !$ignoreMissing ) ) {
+			$this->trapWarnings();
+			$ok = ( $source === $dest ) ? true : rename( $source, $dest );
+			$this->untrapWarnings();
+			clearstatcache(); // file no longer at source
+			if ( !$ok ) {
 				$status->fatal( 'backend-fail-move', $params['src'], $params['dst'] );
 
 				return $status;
@@ -447,29 +403,38 @@ class FSFileBackend extends FileBackendStore {
 	protected function doDeleteInternal( array $params ) {
 		$status = $this->newStatus();
 
-		$fsSrcPath = $this->resolveToFSPath( $params['src'] );
-		if ( $fsSrcPath === null ) {
+		$source = $this->resolveToFSPath( $params['src'] );
+		if ( $source === null ) {
 			$status->fatal( 'backend-fail-invalidpath', $params['src'] );
 
 			return $status;
 		}
 
-		$ignoreMissing = !empty( $params['ignoreMissingSource'] );
+		if ( !is_file( $source ) ) {
+			if ( empty( $params['ignoreMissingSource'] ) ) {
+				$status->fatal( 'backend-fail-delete', $params['src'] );
+			}
+
+			return $status; // do nothing; either OK or bad status
+		}
 
 		if ( !empty( $params['async'] ) ) { // deferred
-			$cmd = $this->makeUnlinkCommand( $fsSrcPath, $ignoreMissing );
+			$cmd = implode( ' ', [
+				$this->isWindows ? 'DEL' : 'unlink',
+				escapeshellarg( $this->cleanPathSlashes( $source ) )
+			] );
 			$handler = function ( $errors, StatusValue $status, array $params, $cmd ) {
-				if ( $errors !== '' && !( $this->os === 'Windows' && $errors[0] === " " ) ) {
+				if ( $errors !== '' && !( $this->isWindows && $errors[0] === " " ) ) {
 					$status->fatal( 'backend-fail-delete', $params['src'] );
 					trigger_error( "$cmd\n$errors", E_USER_WARNING ); // command output
 				}
 			};
 			$status->value = new FSFileOpHandle( $this, $params, $handler, $cmd );
 		} else { // immediate write
-			$this->trapWarningsIgnoringNotFound();
-			$deleted = unlink( $fsSrcPath );
-			$hadError = $this->untrapWarnings();
-			if ( $hadError || ( !$deleted && !$ignoreMissing ) ) {
+			$this->trapWarnings();
+			$ok = unlink( $source );
+			$this->untrapWarnings();
+			if ( !$ok ) {
 				$status->fatal( 'backend-fail-delete', $params['src'] );
 
 				return $status;
@@ -489,33 +454,24 @@ class FSFileBackend extends FileBackendStore {
 		$status = $this->newStatus();
 		list( , $shortCont, ) = FileBackend::splitStoragePath( $params['dir'] );
 		$contRoot = $this->containerFSRoot( $shortCont, $fullCont ); // must be valid
-		$fsDirectory = ( $dirRel != '' ) ? "{$contRoot}/{$dirRel}" : $contRoot;
+		$dir = ( $dirRel != '' ) ? "{$contRoot}/{$dirRel}" : $contRoot;
+		$existed = is_dir( $dir ); // already there?
 		// Create the directory and its parents as needed...
-		$created = false;
-		AtEase::suppressWarnings();
-		$alreadyExisted = is_dir( $fsDirectory ); // already there?
-		if ( !$alreadyExisted ) {
-			$created = mkdir( $fsDirectory, $this->dirMode, true );
-			if ( !$created ) {
-				$alreadyExisted = is_dir( $fsDirectory ); // another thread made it?
-			}
-		}
-		$isWritable = $created ?: is_writable( $fsDirectory ); // assume writable if created here
-		AtEase::restoreWarnings();
-		if ( !$alreadyExisted && !$created ) {
-			$this->logger->error( __METHOD__ . ": cannot create directory $fsDirectory" );
+		$this->trapWarnings();
+		if ( !$existed && !mkdir( $dir, $this->dirMode, true ) && !is_dir( $dir ) ) {
+			$this->logger->error( __METHOD__ . ": cannot create directory $dir" );
 			$status->fatal( 'directorycreateerror', $params['dir'] ); // fails on races
-		} elseif ( !$isWritable ) {
-			$this->logger->error( __METHOD__ . ": directory $fsDirectory is read-only" );
+		} elseif ( !is_writable( $dir ) ) {
+			$this->logger->error( __METHOD__ . ": directory $dir is read-only" );
 			$status->fatal( 'directoryreadonlyerror', $params['dir'] );
+		} elseif ( !is_readable( $dir ) ) {
+			$this->logger->error( __METHOD__ . ": directory $dir is not readable" );
+			$status->fatal( 'directorynotreadableerror', $params['dir'] );
 		}
+		$this->untrapWarnings();
 		// Respect any 'noAccess' or 'noListing' flags...
-		if ( $created ) {
+		if ( is_dir( $dir ) && !$existed ) {
 			$status->merge( $this->doSecureInternal( $fullCont, $dirRel, $params ) );
-		}
-
-		if ( $status->isOK() ) {
-			$this->usableDirCache->set( $fsDirectory, 1 );
 		}
 
 		return $status;
@@ -525,21 +481,21 @@ class FSFileBackend extends FileBackendStore {
 		$status = $this->newStatus();
 		list( , $shortCont, ) = FileBackend::splitStoragePath( $params['dir'] );
 		$contRoot = $this->containerFSRoot( $shortCont, $fullCont ); // must be valid
-		$fsDirectory = ( $dirRel != '' ) ? "{$contRoot}/{$dirRel}" : $contRoot;
+		$dir = ( $dirRel != '' ) ? "{$contRoot}/{$dirRel}" : $contRoot;
 		// Seed new directories with a blank index.html, to prevent crawling...
-		if ( !empty( $params['noListing'] ) && !is_file( "{$fsDirectory}/index.html" ) ) {
+		if ( !empty( $params['noListing'] ) && !file_exists( "{$dir}/index.html" ) ) {
 			$this->trapWarnings();
-			$bytes = file_put_contents( "{$fsDirectory}/index.html", $this->indexHtmlPrivate() );
+			$bytes = file_put_contents( "{$dir}/index.html", $this->indexHtmlPrivate() );
 			$this->untrapWarnings();
 			if ( $bytes === false ) {
 				$status->fatal( 'backend-fail-create', $params['dir'] . '/index.html' );
 			}
 		}
 		// Add a .htaccess file to the root of the container...
-		if ( !empty( $params['noAccess'] ) && !is_file( "{$contRoot}/.htaccess" ) ) {
-			AtEase::suppressWarnings();
+		if ( !empty( $params['noAccess'] ) && !file_exists( "{$contRoot}/.htaccess" ) ) {
+			$this->trapWarnings();
 			$bytes = file_put_contents( "{$contRoot}/.htaccess", $this->htaccessPrivate() );
-			AtEase::restoreWarnings();
+			$this->untrapWarnings();
 			if ( $bytes === false ) {
 				$storeDir = "mwstore://{$this->name}/{$shortCont}";
 				$status->fatal( 'backend-fail-create', "{$storeDir}/.htaccess" );
@@ -553,21 +509,25 @@ class FSFileBackend extends FileBackendStore {
 		$status = $this->newStatus();
 		list( , $shortCont, ) = FileBackend::splitStoragePath( $params['dir'] );
 		$contRoot = $this->containerFSRoot( $shortCont, $fullCont ); // must be valid
-		$fsDirectory = ( $dirRel != '' ) ? "{$contRoot}/{$dirRel}" : $contRoot;
+		$dir = ( $dirRel != '' ) ? "{$contRoot}/{$dirRel}" : $contRoot;
 		// Unseed new directories with a blank index.html, to allow crawling...
-		if ( !empty( $params['listing'] ) && is_file( "{$fsDirectory}/index.html" ) ) {
-			$exists = ( file_get_contents( "{$fsDirectory}/index.html" ) === $this->indexHtmlPrivate() );
-			if ( $exists && !$this->unlink( "{$fsDirectory}/index.html" ) ) { // reverse secure()
+		if ( !empty( $params['listing'] ) && is_file( "{$dir}/index.html" ) ) {
+			$exists = ( file_get_contents( "{$dir}/index.html" ) === $this->indexHtmlPrivate() );
+			$this->trapWarnings();
+			if ( $exists && !unlink( "{$dir}/index.html" ) ) { // reverse secure()
 				$status->fatal( 'backend-fail-delete', $params['dir'] . '/index.html' );
 			}
+			$this->untrapWarnings();
 		}
 		// Remove the .htaccess file from the root of the container...
 		if ( !empty( $params['access'] ) && is_file( "{$contRoot}/.htaccess" ) ) {
 			$exists = ( file_get_contents( "{$contRoot}/.htaccess" ) === $this->htaccessPrivate() );
-			if ( $exists && !$this->unlink( "{$contRoot}/.htaccess" ) ) { // reverse secure()
+			$this->trapWarnings();
+			if ( $exists && !unlink( "{$contRoot}/.htaccess" ) ) { // reverse secure()
 				$storeDir = "mwstore://{$this->name}/{$shortCont}";
 				$status->fatal( 'backend-fail-delete', "{$storeDir}/.htaccess" );
 			}
+			$this->untrapWarnings();
 		}
 
 		return $status;
@@ -577,60 +537,54 @@ class FSFileBackend extends FileBackendStore {
 		$status = $this->newStatus();
 		list( , $shortCont, ) = FileBackend::splitStoragePath( $params['dir'] );
 		$contRoot = $this->containerFSRoot( $shortCont, $fullCont ); // must be valid
-		$fsDirectory = ( $dirRel != '' ) ? "{$contRoot}/{$dirRel}" : $contRoot;
-
-		$this->rmdir( $fsDirectory );
+		$dir = ( $dirRel != '' ) ? "{$contRoot}/{$dirRel}" : $contRoot;
+		$this->trapWarnings();
+		if ( is_dir( $dir ) ) {
+			rmdir( $dir ); // remove directory if empty
+		}
+		$this->untrapWarnings();
 
 		return $status;
 	}
 
 	protected function doGetFileStat( array $params ) {
-		$fsSrcPath = $this->resolveToFSPath( $params['src'] );
-		if ( $fsSrcPath === null ) {
-			return self::$RES_ERROR; // invalid storage path
+		$source = $this->resolveToFSPath( $params['src'] );
+		if ( $source === null ) {
+			return false; // invalid storage path
 		}
 
 		$this->trapWarnings(); // don't trust 'false' if there were errors
-		$stat = is_file( $fsSrcPath ) ? stat( $fsSrcPath ) : false; // regular files only
+		$stat = is_file( $source ) ? stat( $source ) : false; // regular files only
 		$hadError = $this->untrapWarnings();
 
-		if ( is_array( $stat ) ) {
+		if ( $stat ) {
 			$ct = new ConvertibleTimestamp( $stat['mtime'] );
 
 			return [
 				'mtime' => $ct->getTimestamp( TS_MW ),
 				'size' => $stat['size']
 			];
+		} elseif ( !$hadError ) {
+			return false; // file does not exist
+		} else {
+			return null; // failure
 		}
-
-		return $hadError ? self::$RES_ERROR : self::$RES_ABSENT;
 	}
 
 	protected function doClearCache( array $paths = null ) {
-		if ( is_array( $paths ) ) {
-			foreach ( $paths as $path ) {
-				$fsPath = $this->resolveToFSPath( $path );
-				if ( $fsPath !== null ) {
-					clearstatcache( true, $fsPath );
-					$this->usableDirCache->clear( $fsPath );
-				}
-			}
-		} else {
-			clearstatcache( true ); // clear the PHP file stat cache
-			$this->usableDirCache->clear();
-		}
+		clearstatcache(); // clear the PHP file stat cache
 	}
 
 	protected function doDirectoryExists( $fullCont, $dirRel, array $params ) {
 		list( , $shortCont, ) = FileBackend::splitStoragePath( $params['dir'] );
 		$contRoot = $this->containerFSRoot( $shortCont, $fullCont ); // must be valid
-		$fsDirectory = ( $dirRel != '' ) ? "{$contRoot}/{$dirRel}" : $contRoot;
+		$dir = ( $dirRel != '' ) ? "{$contRoot}/{$dirRel}" : $contRoot;
 
 		$this->trapWarnings(); // don't trust 'false' if there were errors
-		$exists = is_dir( $fsDirectory );
+		$exists = is_dir( $dir );
 		$hadError = $this->untrapWarnings();
 
-		return $hadError ? self::$RES_ERROR : $exists;
+		return $hadError ? null : $exists;
 	}
 
 	/**
@@ -643,27 +597,19 @@ class FSFileBackend extends FileBackendStore {
 	public function getDirectoryListInternal( $fullCont, $dirRel, array $params ) {
 		list( , $shortCont, ) = FileBackend::splitStoragePath( $params['dir'] );
 		$contRoot = $this->containerFSRoot( $shortCont, $fullCont ); // must be valid
-		$fsDirectory = ( $dirRel != '' ) ? "{$contRoot}/{$dirRel}" : $contRoot;
+		$dir = ( $dirRel != '' ) ? "{$contRoot}/{$dirRel}" : $contRoot;
+		$exists = is_dir( $dir );
+		if ( !$exists ) {
+			$this->logger->warning( __METHOD__ . "() given directory does not exist: '$dir'\n" );
 
-		$list = new FSFileBackendDirList( $fsDirectory, $params );
-		$error = $list->getLastError();
-		if ( $error !== null ) {
-			if ( $this->isFileNotFoundError( $error ) ) {
-				$this->logger->info( __METHOD__ . ": non-existant directory: '$fsDirectory'" );
+			return []; // nothing under this dir
+		} elseif ( !is_readable( $dir ) ) {
+			$this->logger->warning( __METHOD__ . "() given directory is unreadable: '$dir'\n" );
 
-				return []; // nothing under this dir
-			} elseif ( is_dir( $fsDirectory ) ) {
-				$this->logger->warning( __METHOD__ . ": unreadable directory: '$fsDirectory'" );
-
-				return self::$RES_ERROR; // bad permissions?
-			} else {
-				$this->logger->warning( __METHOD__ . ": unreachable directory: '$fsDirectory'" );
-
-				return self::$RES_ERROR;
-			}
+			return null; // bad permissions?
 		}
 
-		return $list;
+		return new FSFileBackendDirList( $dir, $params );
 	}
 
 	/**
@@ -676,29 +622,19 @@ class FSFileBackend extends FileBackendStore {
 	public function getFileListInternal( $fullCont, $dirRel, array $params ) {
 		list( , $shortCont, ) = FileBackend::splitStoragePath( $params['dir'] );
 		$contRoot = $this->containerFSRoot( $shortCont, $fullCont ); // must be valid
-		$fsDirectory = ( $dirRel != '' ) ? "{$contRoot}/{$dirRel}" : $contRoot;
+		$dir = ( $dirRel != '' ) ? "{$contRoot}/{$dirRel}" : $contRoot;
+		$exists = is_dir( $dir );
+		if ( !$exists ) {
+			$this->logger->warning( __METHOD__ . "() given directory does not exist: '$dir'\n" );
 
-		$list = new FSFileBackendFileList( $fsDirectory, $params );
-		$error = $list->getLastError();
-		if ( $error !== null ) {
-			if ( $this->isFileNotFoundError( $error ) ) {
-				$this->logger->info( __METHOD__ . ": non-existent directory: '$fsDirectory'" );
+			return []; // nothing under this dir
+		} elseif ( !is_readable( $dir ) ) {
+			$this->logger->warning( __METHOD__ . "() given directory is unreadable: '$dir'\n" );
 
-				return []; // nothing under this dir
-			} elseif ( is_dir( $fsDirectory ) ) {
-				$this->logger->warning( __METHOD__ .
-					": unreadable directory: '$fsDirectory': $error" );
-
-				return self::$RES_ERROR; // bad permissions?
-			} else {
-				$this->logger->warning( __METHOD__ .
-					": unreachable directory: '$fsDirectory': $error" );
-
-				return self::$RES_ERROR;
-			}
+			return null; // bad permissions?
 		}
 
-		return $list;
+		return new FSFileBackendFileList( $dir, $params );
 	}
 
 	protected function doGetLocalReferenceMulti( array $params ) {
@@ -706,21 +642,10 @@ class FSFileBackend extends FileBackendStore {
 
 		foreach ( $params['srcs'] as $src ) {
 			$source = $this->resolveToFSPath( $src );
-			if ( $source === null ) {
-				$fsFiles[$src] = self::$RES_ERROR; // invalid path
-				continue;
-			}
-
-			$this->trapWarnings(); // don't trust 'false' if there were errors
-			$isFile = is_file( $source ); // regular files only
-			$hadError = $this->untrapWarnings();
-
-			if ( $isFile ) {
-				$fsFiles[$src] = new FSFile( $source );
-			} elseif ( $hadError ) {
-				$fsFiles[$src] = self::$RES_ERROR;
+			if ( $source === null || !is_file( $source ) ) {
+				$fsFiles[$src] = null; // invalid path or file does not exist
 			} else {
-				$fsFiles[$src] = self::$RES_ABSENT;
+				$fsFiles[$src] = new FSFile( $source );
 			}
 		}
 
@@ -733,31 +658,26 @@ class FSFileBackend extends FileBackendStore {
 		foreach ( $params['srcs'] as $src ) {
 			$source = $this->resolveToFSPath( $src );
 			if ( $source === null ) {
-				$tmpFiles[$src] = self::$RES_ERROR; // invalid path
-				continue;
-			}
-			// Create a new temporary file with the same extension...
-			$ext = FileBackend::extensionFromPath( $src );
-			$tmpFile = $this->tmpFileFactory->newTempFSFile( 'localcopy_', $ext );
-			if ( !$tmpFile ) {
-				$tmpFiles[$src] = self::$RES_ERROR;
-				continue;
-			}
-
-			$tmpPath = $tmpFile->getPath();
-			// Copy the source file over the temp file
-			$this->trapWarnings(); // don't trust 'false' if there were errors
-			$isFile = is_file( $source ); // regular files only
-			$copySuccess = $isFile ? copy( $source, $tmpPath ) : false;
-			$hadError = $this->untrapWarnings();
-
-			if ( $copySuccess ) {
-				$this->chmod( $tmpPath );
-				$tmpFiles[$src] = $tmpFile;
-			} elseif ( $hadError ) {
-				$tmpFiles[$src] = self::$RES_ERROR; // copy failed
+				$tmpFiles[$src] = null; // invalid path
 			} else {
-				$tmpFiles[$src] = self::$RES_ABSENT;
+				// Create a new temporary file with the same extension...
+				$ext = FileBackend::extensionFromPath( $src );
+				$tmpFile = TempFSFile::factory( 'localcopy_', $ext, $this->tmpDirectory );
+				if ( !$tmpFile ) {
+					$tmpFiles[$src] = null;
+				} else {
+					$tmpPath = $tmpFile->getPath();
+					// Copy the source file over the temp file
+					$this->trapWarnings();
+					$ok = copy( $source, $tmpPath );
+					$this->untrapWarnings();
+					if ( !$ok ) {
+						$tmpFiles[$src] = null;
+					} else {
+						$this->chmod( $tmpPath );
+						$tmpFiles[$src] = $tmpFile;
+					}
+				}
 			}
 		}
 
@@ -778,7 +698,7 @@ class FSFileBackend extends FileBackendStore {
 
 		$pipes = [];
 		foreach ( $fileOpHandles as $index => $fileOpHandle ) {
-			$pipes[$index] = popen( $fileOpHandle->cmd, 'r' );
+			$pipes[$index] = popen( "{$fileOpHandle->cmd} 2>&1", 'r' );
 		}
 
 		$errs = [];
@@ -791,166 +711,30 @@ class FSFileBackend extends FileBackendStore {
 
 		foreach ( $fileOpHandles as $index => $fileOpHandle ) {
 			$status = $this->newStatus();
-			$function = $fileOpHandle->callback;
+			$function = $fileOpHandle->call;
 			$function( $errs[$index], $status, $fileOpHandle->params, $fileOpHandle->cmd );
 			$statuses[$index] = $status;
-		}
-
-		return $statuses;
-	}
-
-	/**
-	 * @param string $fsPath Absolute file system path
-	 * @return string Absolute file system path on the same device
-	 */
-	private function makeStagingPath( $fsPath ) {
-		$time = dechex( time() ); // make it easy to find old orphans
-		$hash = \Wikimedia\base_convert( md5( basename( $fsPath ) ), 16, 36, 25 );
-		$unique = \Wikimedia\base_convert( bin2hex( random_bytes( 16 ) ), 16, 36, 25 );
-
-		return dirname( $fsPath ) . "/.{$time}_{$hash}_{$unique}.tmpfsfile";
-	}
-
-	/**
-	 * @param string $fsSrcPath Absolute file system path
-	 * @param string $fsDstPath Absolute file system path
-	 * @param bool $ignoreMissing Whether to no-op if the source file is non-existant
-	 * @return string Command
-	 */
-	private function makeCopyCommand( $fsSrcPath, $fsDstPath, $ignoreMissing ) {
-		// Use copy+rename since (a) this clears xattrs, (b) threads still reading the old
-		// inode are unaffected since it writes to a new inode, and (c) new threads reading
-		// the file will either totally see the old version or totally see the new version
-		$fsStagePath = $this->makeStagingPath( $fsDstPath );
-		$encSrc = escapeshellarg( $this->cleanPathSlashes( $fsSrcPath ) );
-		$encStage = escapeshellarg( $this->cleanPathSlashes( $fsStagePath ) );
-		$encDst = escapeshellarg( $this->cleanPathSlashes( $fsDstPath ) );
-		if ( $this->os === 'Windows' ) {
-			// https://docs.microsoft.com/en-us/windows-server/administration/windows-commands/copy
-			// https://docs.microsoft.com/en-us/windows-server/administration/windows-commands/move
-			$cmdWrite = "COPY /B /Y $encSrc $encStage 2>&1 && MOVE /Y $encStage $encDst 2>&1";
-			$cmd = $ignoreMissing ? "IF EXIST $encSrc $cmdWrite" : $cmdWrite;
-		} else {
-			// https://manpages.debian.org/buster/coreutils/cp.1.en.html
-			// https://manpages.debian.org/buster/coreutils/mv.1.en.html
-			$cmdWrite = "cp $encSrc $encStage 2>&1 && mv $encStage $encDst 2>&1";
-			$cmd = $ignoreMissing ? "test -f $encSrc && $cmdWrite" : $cmdWrite;
-			// Clean up permissions on any newly created destination file
-			$octalPermissions = '0' . decoct( $this->fileMode );
-			if ( strlen( $octalPermissions ) == 4 ) {
-				$cmd .= " && chmod $octalPermissions $encDst 2>/dev/null";
+			if ( $status->isOK() && $fileOpHandle->chmodPath ) {
+				$this->chmod( $fileOpHandle->chmodPath );
 			}
 		}
 
-		return $cmd;
-	}
-
-	/**
-	 * @param string $fsSrcPath Absolute file system path
-	 * @param string $fsDstPath Absolute file system path
-	 * @param bool $ignoreMissing Whether to no-op if the source file is non-existant
-	 * @return string Command
-	 */
-	private function makeMoveCommand( $fsSrcPath, $fsDstPath, $ignoreMissing = false ) {
-		// https://manpages.debian.org/buster/coreutils/mv.1.en.html
-		// https://docs.microsoft.com/en-us/windows-server/administration/windows-commands/move
-		$encSrc = escapeshellarg( $this->cleanPathSlashes( $fsSrcPath ) );
-		$encDst	= escapeshellarg( $this->cleanPathSlashes( $fsDstPath ) );
-		if ( $this->os === 'Windows' ) {
-			$writeCmd = "MOVE /Y $encSrc $encDst 2>&1";
-			$cmd = $ignoreMissing ? "IF EXIST $encSrc $writeCmd" : $writeCmd;
-		} else {
-			$writeCmd = "mv -f $encSrc $encDst 2>&1";
-			$cmd = $ignoreMissing ? "test -f $encSrc && $writeCmd" : $writeCmd;
-		}
-
-		return $cmd;
-	}
-
-	/**
-	 * @param string $fsPath Absolute file system path
-	 * @param bool $ignoreMissing Whether to no-op if the file is non-existant
-	 * @return string Command
-	 */
-	private function makeUnlinkCommand( $fsPath, $ignoreMissing = false ) {
-		// https://manpages.debian.org/buster/coreutils/rm.1.en.html
-		// https://docs.microsoft.com/en-us/windows-server/administration/windows-commands/del
-		$encSrc = escapeshellarg( $this->cleanPathSlashes( $fsPath ) );
-		if ( $this->os === 'Windows' ) {
-			$writeCmd = "DEL /Q $encSrc 2>&1";
-			$cmd = $ignoreMissing ? "IF EXIST $encSrc $writeCmd" : $writeCmd;
-		} else {
-			$cmd = $ignoreMissing ? "rm -f $encSrc 2>&1" : "rm $encSrc 2>&1";
-		}
-
-		return $cmd;
+		clearstatcache(); // files changed
+		return $statuses;
 	}
 
 	/**
 	 * Chmod a file, suppressing the warnings
 	 *
-	 * @param string $fsPath Absolute file system path
+	 * @param string $path Absolute file system path
 	 * @return bool Success
 	 */
-	protected function chmod( $fsPath ) {
-		if ( $this->os === 'Windows' ) {
-			return true;
-		}
-
-		AtEase::suppressWarnings();
-		$ok = chmod( $fsPath, $this->fileMode );
-		AtEase::restoreWarnings();
+	protected function chmod( $path ) {
+		$this->trapWarnings();
+		$ok = chmod( $path, $this->fileMode );
+		$this->untrapWarnings();
 
 		return $ok;
-	}
-
-	/**
-	 * Unlink a file, suppressing the warnings
-	 *
-	 * @param string $fsPath Absolute file system path
-	 * @return bool Success
-	 */
-	protected function unlink( $fsPath ) {
-		AtEase::suppressWarnings();
-		$ok = unlink( $fsPath );
-		AtEase::restoreWarnings();
-		clearstatcache( true, $fsPath );
-
-		return $ok;
-	}
-
-	/**
-	 * Remove an empty directory, suppressing the warnings
-	 *
-	 * @param string $fsDirectory Absolute file system path
-	 * @return bool Success
-	 */
-	protected function rmdir( $fsDirectory ) {
-		AtEase::suppressWarnings();
-		$ok = rmdir( $fsDirectory ); // remove directory if empty
-		AtEase::restoreWarnings();
-		clearstatcache( true, $fsDirectory );
-
-		return $ok;
-	}
-
-	/**
-	 * @param array $params Parameters for FileBackend 'create' operation
-	 * @return TempFSFile|null
-	 */
-	protected function newTempFileWithContent( array $params ) {
-		$tempFile = $this->tmpFileFactory->newTempFSFile( 'create_', 'tmp' );
-		if ( !$tempFile ) {
-			return null;
-		}
-
-		AtEase::suppressWarnings();
-		if ( file_put_contents( $tempFile->getPath(), $params['content'] ) === false ) {
-			$tempFile = null;
-		}
-		AtEase::restoreWarnings();
-
-		return $tempFile;
 	}
 
 	/**
@@ -974,79 +758,227 @@ class FSFileBackend extends FileBackendStore {
 	/**
 	 * Clean up directory separators for the given OS
 	 *
-	 * @param string $fsPath FS path
+	 * @param string $path FS path
 	 * @return string
 	 */
-	protected function cleanPathSlashes( $fsPath ) {
-		return ( $this->os === 'Windows' ) ? strtr( $fsPath, '/', '\\' ) : $fsPath;
+	protected function cleanPathSlashes( $path ) {
+		return $this->isWindows ? strtr( $path, '/', '\\' ) : $path;
 	}
 
 	/**
-	 * Listen for E_WARNING errors and track whether any that happen
-	 *
-	 * @param string|null $regexIgnore Optional regex of errors to ignore
+	 * Listen for E_WARNING errors and track whether any happen
 	 */
-	protected function trapWarnings( $regexIgnore = null ) {
-		$this->warningTrapStack[] = false;
-		set_error_handler( function ( $errno, $errstr ) use ( $regexIgnore ) {
-			if ( $regexIgnore === null || !preg_match( $regexIgnore, $errstr ) ) {
-				$this->logger->error( $errstr );
-				$this->warningTrapStack[count( $this->warningTrapStack ) - 1] = true;
-			}
-			return true; // suppress from PHP handler
-		}, E_WARNING );
+	protected function trapWarnings() {
+		$this->hadWarningErrors[] = false; // push to stack
+		set_error_handler( [ $this, 'handleWarning' ], E_WARNING );
 	}
 
 	/**
-	 * Track E_WARNING errors but ignore any that correspond to ENOENT "No such file or directory"
-	 */
-	protected function trapWarningsIgnoringNotFound() {
-		$this->trapWarnings( $this->getFileNotFoundRegex() );
-	}
-
-	/**
-	 * Stop listening for E_WARNING errors and get whether any happened
+	 * Stop listening for E_WARNING errors and return true if any happened
 	 *
-	 * @return bool Whether any warnings happened
-	 */
-	protected function untrapWarnings() {
-		restore_error_handler();
-
-		return array_pop( $this->warningTrapStack );
-	}
-
-	/**
-	 * Get a regex matching file not found errors
-	 *
-	 * @return string
-	 */
-	protected function getFileNotFoundRegex() {
-		static $regex;
-		if ( $regex === null ) {
-			// "No such file or directory": string literal in spl_directory.c etc.
-			$alternatives = [ ': No such file or directory' ];
-			if ( $this->os === 'Windows' ) {
-				// 2 = The system cannot find the file specified.
-				// 3 = The system cannot find the path specified.
-				$alternatives[] = ' \(code: [23]\)';
-			}
-			if ( function_exists( 'pcntl_strerror' ) ) {
-				$alternatives[] = preg_quote( ': ' . pcntl_strerror( 2 ), '/' );
-			} elseif ( function_exists( 'socket_strerror' ) ) {
-				$alternatives[] = preg_quote( ': ' . socket_strerror( SOCKET_ENOENT ), '/' );
-			}
-			$regex = '/(' . implode( '|', $alternatives ) . ')$/';
-		}
-		return $regex;
-	}
-
-	/**
-	 * Determine whether a given error message is a file not found error.
-	 *
-	 * @param string $error
 	 * @return bool
 	 */
-	protected function isFileNotFoundError( $error ) {
-		return (bool)preg_match( $this->getFileNotFoundRegex(), $error );
+	protected function untrapWarnings() {
+		restore_error_handler(); // restore previous handler
+		return array_pop( $this->hadWarningErrors ); // pop from stack
+	}
+
+	/**
+	 * @param int $errno
+	 * @param string $errstr
+	 * @return bool
+	 * @access private
+	 */
+	public function handleWarning( $errno, $errstr ) {
+		$this->logger->error( $errstr ); // more detailed error logging
+		$this->hadWarningErrors[count( $this->hadWarningErrors ) - 1] = true;
+
+		return true; // suppress from PHP handler
+	}
+}
+
+/**
+ * @see FileBackendStoreOpHandle
+ */
+class FSFileOpHandle extends FileBackendStoreOpHandle {
+	public $cmd; // string; shell command
+	public $chmodPath; // string; file to chmod
+
+	/**
+	 * @param FSFileBackend $backend
+	 * @param array $params
+	 * @param callable $call
+	 * @param string $cmd
+	 * @param int|null $chmodPath
+	 */
+	public function __construct(
+		FSFileBackend $backend, array $params, $call, $cmd, $chmodPath = null
+	) {
+		$this->backend = $backend;
+		$this->params = $params;
+		$this->call = $call;
+		$this->cmd = $cmd;
+		$this->chmodPath = $chmodPath;
+	}
+}
+
+/**
+ * Wrapper around RecursiveDirectoryIterator/DirectoryIterator that
+ * catches exception or does any custom behavoir that we may want.
+ * Do not use this class from places outside FSFileBackend.
+ *
+ * @ingroup FileBackend
+ */
+abstract class FSFileBackendList implements Iterator {
+	/** @var Iterator */
+	protected $iter;
+
+	/** @var int */
+	protected $suffixStart;
+
+	/** @var int */
+	protected $pos = 0;
+
+	/** @var array */
+	protected $params = [];
+
+	/**
+	 * @param string $dir File system directory
+	 * @param array $params
+	 */
+	public function __construct( $dir, array $params ) {
+		$path = realpath( $dir ); // normalize
+		if ( $path === false ) {
+			$path = $dir;
+		}
+		$this->suffixStart = strlen( $path ) + 1; // size of "path/to/dir/"
+		$this->params = $params;
+
+		try {
+			$this->iter = $this->initIterator( $path );
+		} catch ( UnexpectedValueException $e ) {
+			$this->iter = null; // bad permissions? deleted?
+		}
+	}
+
+	/**
+	 * Return an appropriate iterator object to wrap
+	 *
+	 * @param string $dir File system directory
+	 * @return Iterator
+	 */
+	protected function initIterator( $dir ) {
+		if ( !empty( $this->params['topOnly'] ) ) { // non-recursive
+			# Get an iterator that will get direct sub-nodes
+			return new DirectoryIterator( $dir );
+		} else { // recursive
+			# Get an iterator that will return leaf nodes (non-directories)
+			# RecursiveDirectoryIterator extends FilesystemIterator.
+			# FilesystemIterator::SKIP_DOTS default is inconsistent in PHP 5.3.x.
+			$flags = FilesystemIterator::CURRENT_AS_SELF | FilesystemIterator::SKIP_DOTS;
+
+			return new RecursiveIteratorIterator(
+				new RecursiveDirectoryIterator( $dir, $flags ),
+				RecursiveIteratorIterator::CHILD_FIRST // include dirs
+			);
+		}
+	}
+
+	/**
+	 * @see Iterator::key()
+	 * @return int
+	 */
+	public function key() {
+		return $this->pos;
+	}
+
+	/**
+	 * @see Iterator::current()
+	 * @return string|bool String or false
+	 */
+	public function current() {
+		return $this->getRelPath( $this->iter->current()->getPathname() );
+	}
+
+	/**
+	 * @see Iterator::next()
+	 * @throws FileBackendError
+	 */
+	public function next() {
+		try {
+			$this->iter->next();
+			$this->filterViaNext();
+		} catch ( UnexpectedValueException $e ) { // bad permissions? deleted?
+			throw new FileBackendError( "File iterator gave UnexpectedValueException." );
+		}
+		++$this->pos;
+	}
+
+	/**
+	 * @see Iterator::rewind()
+	 * @throws FileBackendError
+	 */
+	public function rewind() {
+		$this->pos = 0;
+		try {
+			$this->iter->rewind();
+			$this->filterViaNext();
+		} catch ( UnexpectedValueException $e ) { // bad permissions? deleted?
+			throw new FileBackendError( "File iterator gave UnexpectedValueException." );
+		}
+	}
+
+	/**
+	 * @see Iterator::valid()
+	 * @return bool
+	 */
+	public function valid() {
+		return $this->iter && $this->iter->valid();
+	}
+
+	/**
+	 * Filter out items by advancing to the next ones
+	 */
+	protected function filterViaNext() {
+	}
+
+	/**
+	 * Return only the relative path and normalize slashes to FileBackend-style.
+	 * Uses the "real path" since the suffix is based upon that.
+	 *
+	 * @param string $dir
+	 * @return string
+	 */
+	protected function getRelPath( $dir ) {
+		$path = realpath( $dir );
+		if ( $path === false ) {
+			$path = $dir;
+		}
+
+		return strtr( substr( $path, $this->suffixStart ), '\\', '/' );
+	}
+}
+
+class FSFileBackendDirList extends FSFileBackendList {
+	protected function filterViaNext() {
+		while ( $this->iter->valid() ) {
+			if ( $this->iter->current()->isDot() || !$this->iter->current()->isDir() ) {
+				$this->iter->next(); // skip non-directories and dot files
+			} else {
+				break;
+			}
+		}
+	}
+}
+
+class FSFileBackendFileList extends FSFileBackendList {
+	protected function filterViaNext() {
+		while ( $this->iter->valid() ) {
+			if ( !$this->iter->current()->isFile() ) {
+				$this->iter->next(); // skip non-files and dot files
+			} else {
+				break;
+			}
+		}
 	}
 }

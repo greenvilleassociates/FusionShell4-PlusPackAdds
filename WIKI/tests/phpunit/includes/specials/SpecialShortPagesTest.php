@@ -1,17 +1,17 @@
 <?php
 
 /**
- * Test class for SpecialShortPages class
+ * Test class for SpecialShortpages class
  *
  * @since 1.30
  *
- * @license GPL-2.0-or-later
+ * @licence GNU GPL v2+
  */
-class SpecialShortPagesTest extends MediaWikiIntegrationTestCase {
+class SpecialShortpagesTest extends MediaWikiTestCase {
 
 	/**
 	 * @dataProvider provideGetQueryInfoRespectsContentNs
-	 * @covers SpecialShortPages::getQueryInfo()
+	 * @covers ShortPagesPage::getQueryInfo()
 	 */
 	public function testGetQueryInfoRespectsContentNS( $contentNS, $blacklistNS, $expectedNS ) {
 		$this->setMwGlobals( [
@@ -22,7 +22,7 @@ class SpecialShortPagesTest extends MediaWikiIntegrationTestCase {
 			// empty hook handler
 		} );
 
-		$page = new SpecialShortPages();
+		$page = new ShortPagesPage();
 		$queryInfo = $page->getQueryInfo();
 
 		$this->assertArrayHasKey( 'conds', $queryInfo );

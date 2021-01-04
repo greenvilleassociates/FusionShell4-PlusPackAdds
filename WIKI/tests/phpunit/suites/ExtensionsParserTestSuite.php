@@ -1,8 +1,5 @@
 <?php
-
-use PHPUnit\Framework\TestSuite;
-
-class ExtensionsParserTestSuite extends TestSuite {
+class ExtensionsParserTestSuite extends PHPUnit_Framework_TestSuite {
 
 	public static function suite() {
 		return ParserTestTopLevelSuite::suite( ParserTestTopLevelSuite::NO_CORE );

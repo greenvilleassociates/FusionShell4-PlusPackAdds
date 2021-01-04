@@ -20,7 +20,6 @@
  * @file
  */
 
-use MediaWiki\MediaWikiServices;
 use Wikimedia\Rdbms\FakeResultWrapper;
 
 /**
@@ -29,13 +28,13 @@ use Wikimedia\Rdbms\FakeResultWrapper;
  * @ingroup Media
  */
 class WikiFilePage extends WikiPage {
-	/** @var File|false */
+	/** @var File */
 	protected $mFile = false;
-	/** @var LocalRepo|null */
+	/** @var LocalRepo */
 	protected $mRepo = null;
 	/** @var bool */
 	protected $mFileLoaded = false;
-	/** @var array|null */
+	/** @var array */
 	protected $mDupes = null;
 
 	public function __construct( $title ) {
@@ -47,7 +46,7 @@ class WikiFilePage extends WikiPage {
 	/**
 	 * @param File $file
 	 */
-	public function setFile( File $file ) {
+	public function setFile( $file ) {
 		$this->mFile = $file;
 		$this->mFileLoaded = true;
 	}
@@ -56,16 +55,14 @@ class WikiFilePage extends WikiPage {
 	 * @return bool
 	 */
 	protected function loadFile() {
-		$services = MediaWikiServices::getInstance();
 		if ( $this->mFileLoaded ) {
 			return true;
 		}
 		$this->mFileLoaded = true;
 
-		$this->mFile = $services->getRepoGroup()->findFile( $this->mTitle );
+		$this->mFile = wfFindFile( $this->mTitle );
 		if ( !$this->mFile ) {
-			$this->mFile = $services->getRepoGroup()->getLocalRepo()
-				->newFile( $this->mTitle ); // always a File
+			$this->mFile = wfLocalFile( $this->mTitle ); // always a File
 		}
 		$this->mRepo = $this->mFile->getRepo();
 		return true;
@@ -138,7 +135,7 @@ class WikiFilePage extends WikiPage {
 	 */
 	public function getDuplicates() {
 		$this->loadFile();
-		if ( $this->mDupes !== null ) {
+		if ( !is_null( $this->mDupes ) ) {
 			return $this->mDupes;
 		}
 		$hash = $this->mFile->getSha1();
@@ -146,13 +143,13 @@ class WikiFilePage extends WikiPage {
 			$this->mDupes = [];
 			return $this->mDupes;
 		}
-		$dupes = MediaWikiServices::getInstance()->getRepoGroup()->findBySha1( $hash );
+		$dupes = RepoGroup::singleton()->findBySha1( $hash );
 		// Remove duplicates with self and non matching file sizes
 		$self = $this->mFile->getRepoName() . ':' . $this->mFile->getName();
 		$size = $this->mFile->getSize();
 
 		/**
-		 * @var File $file
+		 * @var $file File
 		 */
 		foreach ( $dupes as $index => $file ) {
 			$key = $file->getRepoName() . ':' . $file->getName();
@@ -175,16 +172,11 @@ class WikiFilePage extends WikiPage {
 		$this->loadFile();
 
 		if ( $this->mFile->exists() ) {
-			wfDebug( 'ImagePage::doPurge purging ' . $this->mFile->getName() );
-			$job = HTMLCacheUpdateJob::newForBacklinks(
-				$this->mTitle,
-				'imagelinks',
-				[ 'causeAction' => 'file-purge' ]
-			);
-			JobQueueGroup::singleton()->lazyPush( $job );
+			wfDebug( 'ImagePage::doPurge purging ' . $this->mFile->getName() . "\n" );
+			DeferredUpdates::addUpdate( new HTMLCacheUpdate( $this->mTitle, 'imagelinks' ) );
 		} else {
 			wfDebug( 'ImagePage::doPurge no image for '
-				. $this->mFile->getName() . "; limiting purge to cache only" );
+				. $this->mFile->getName() . "; limiting purge to cache only\n" );
 		}
 
 		// even if the file supposedly doesn't exist, force any cached information
@@ -221,7 +213,7 @@ class WikiFilePage extends WikiPage {
 		$file = $this->mFile;
 
 		if ( !$file instanceof LocalFile ) {
-			wfDebug( __CLASS__ . '::' . __METHOD__ . " is not supported for this file" );
+			wfDebug( __CLASS__ . '::' . __METHOD__ . " is not supported for this file\n" );
 			return TitleArray::newFromResult( new FakeResultWrapper( [] ) );
 		}
 
@@ -241,7 +233,7 @@ class WikiFilePage extends WikiPage {
 			],
 			__METHOD__,
 			[],
-			[ 'categorylinks' => [ 'JOIN', 'page_id = cl_from' ] ]
+			[ 'categorylinks' => [ 'INNER JOIN', 'page_id = cl_from' ] ]
 		);
 
 		return TitleArray::newFromResult( $res );

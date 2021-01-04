@@ -32,13 +32,11 @@ namespace Wikimedia;
  * @param int $destBase Desired base of the output
  * @param int $pad Minimum number of digits in the output (pad with zeroes)
  * @param bool $lowercase Whether to output in lowercase or uppercase
- * @param string $engine Either "gmp", "bcmath", "php" or "auto" (default).
- *  In the case of "auto", the other engines ("gmp" and "bcmath") are used in
- *  the listed order in terms of preference if that PHP extension is actually loaded.
+ * @param string $engine Either "gmp", "bcmath", or "php"
  * @return string|bool The output number as a string, or false on error
  */
 function base_convert( $input, $sourceBase, $destBase, $pad = 1,
-	$lowercase = true, $engine = 'auto'
+						$lowercase = true, $engine = 'auto'
 ) {
 	$input = (string)$input;
 	if (
@@ -57,7 +55,7 @@ function base_convert( $input, $sourceBase, $destBase, $pad = 1,
 		return false;
 	}
 
-	static $baseChars = [
+	static $baseChars = array(
 		10 => 'a', 11 => 'b', 12 => 'c', 13 => 'd', 14 => 'e', 15 => 'f',
 		16 => 'g', 17 => 'h', 18 => 'i', 19 => 'j', 20 => 'k', 21 => 'l',
 		22 => 'm', 23 => 'n', 24 => 'o', 25 => 'p', 26 => 'q', 27 => 'r',
@@ -70,10 +68,13 @@ function base_convert( $input, $sourceBase, $destBase, $pad = 1,
 		'i' => 18, 'j' => 19, 'k' => 20, 'l' => 21, 'm' => 22, 'n' => 23,
 		'o' => 24, 'p' => 25, 'q' => 26, 'r' => 27, 's' => 28, 't' => 29,
 		'u' => 30, 'v' => 31, 'w' => 32, 'x' => 33, 'y' => 34, 'z' => 35
-	];
+	);
 
 	if ( extension_loaded( 'gmp' ) && ( $engine == 'auto' || $engine == 'gmp' ) ) {
-		$result = gmp_strval( gmp_init( $input, $sourceBase ), $destBase );
+		// Removing leading zeros works around broken base detection code in
+		// some PHP versions (see <https://bugs.php.net/bug.php?id=50175> and
+		// <https://bugs.php.net/bug.php?id=55398>).
+		$result = gmp_strval( gmp_init( ltrim( $input, '0' ) ?: '0', $sourceBase ), $destBase );
 	} elseif ( extension_loaded( 'bcmath' ) && ( $engine == 'auto' || $engine == 'bcmath' ) ) {
 		$decimal = '0';
 		foreach ( str_split( strtolower( $input ) ) as $char ) {
@@ -83,14 +84,13 @@ function base_convert( $input, $sourceBase, $destBase, $pad = 1,
 
 		// @codingStandardsIgnoreStart Generic.CodeAnalysis.ForLoopWithTestFunctionCall.NotAllowed
 		for ( $result = ''; bccomp( $decimal, 0 ); $decimal = bcdiv( $decimal, $destBase, 0 ) ) {
-			// As of PHP 7.2, bcmod can return a floating point value if bcscale is nonzero
-			$result .= $baseChars[(int)bcmod( $decimal, $destBase )];
+			$result .= $baseChars[bcmod( $decimal, $destBase )];
 		}
 		// @codingStandardsIgnoreEnd
 
 		$result = strrev( $result );
 	} else {
-		$inDigits = [];
+		$inDigits = array();
 		foreach ( str_split( strtolower( $input ) ) as $char ) {
 			$inDigits[] = $baseChars[$char];
 		}
@@ -100,7 +100,7 @@ function base_convert( $input, $sourceBase, $destBase, $pad = 1,
 		$result = '';
 		while ( $inDigits ) {
 			$work = 0;
-			$workDigits = [];
+			$workDigits = array();
 
 			// Long division...
 			foreach ( $inDigits as $digit ) {

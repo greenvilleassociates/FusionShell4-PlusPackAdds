@@ -21,12 +21,11 @@
  * @since 1.27
  */
 
+use MediaWiki\Auth\AuthManager;
 use MediaWiki\Auth\AuthenticationRequest;
 use MediaWiki\Auth\AuthenticationResponse;
-use MediaWiki\Auth\AuthManager;
 use MediaWiki\Auth\CreateFromLoginAuthenticationRequest;
 use MediaWiki\Logger\LoggerFactory;
-use MediaWiki\MediaWikiServices;
 
 /**
  * Helper class for AuthManager-using API modules. Intended for use via
@@ -42,29 +41,23 @@ class ApiAuthManagerHelper {
 	/** @var string Message output format */
 	private $messageFormat;
 
-	/** @var AuthManager */
-	private $authManager;
-
 	/**
 	 * @param ApiBase $module API module, for context and parameters
-	 * @param AuthManager|null $authManager
 	 */
-	public function __construct( ApiBase $module, AuthManager $authManager = null ) {
+	public function __construct( ApiBase $module ) {
 		$this->module = $module;
 
 		$params = $module->extractRequestParams();
-		$this->messageFormat = $params['messageformat'] ?? 'wikitext';
-		$this->authManager = $authManager ?: MediaWikiServices::getInstance()->getAuthManager();
+		$this->messageFormat = isset( $params['messageformat'] ) ? $params['messageformat'] : 'wikitext';
 	}
 
 	/**
 	 * Static version of the constructor, for chaining
 	 * @param ApiBase $module API module, for context and parameters
-	 * @param AuthManager|null $authManager
 	 * @return ApiAuthManagerHelper
 	 */
-	public static function newForModule( ApiBase $module, AuthManager $authManager = null ) {
-		return new self( $module, $authManager );
+	public static function newForModule( ApiBase $module ) {
+		return new self( $module );
 	}
 
 	/**
@@ -88,12 +81,11 @@ class ApiAuthManagerHelper {
 				break;
 
 			case 'raw':
-				$params = $message->getParams();
 				$res[$key] = [
 					'key' => $message->getKey(),
-					'params' => $params,
+					'params' => $message->getParams(),
 				];
-				ApiResult::setIndexedTagName( $params, 'param' );
+				ApiResult::setIndexedTagName( $res[$key]['params'], 'param' );
 				break;
 		}
 	}
@@ -104,7 +96,7 @@ class ApiAuthManagerHelper {
 	 * @throws ApiUsageException
 	 */
 	public function securitySensitiveOperation( $operation ) {
-		$status = $this->authManager->securitySensitiveOperationStatus( $operation );
+		$status = AuthManager::singleton()->securitySensitiveOperationStatus( $operation );
 		switch ( $status ) {
 			case AuthManager::SEC_OK:
 				return;
@@ -144,7 +136,8 @@ class ApiAuthManagerHelper {
 	public function loadAuthenticationRequests( $action ) {
 		$params = $this->module->extractRequestParams();
 
-		$reqs = $this->authManager->getAuthenticationRequests( $action, $this->module->getUser() );
+		$manager = AuthManager::singleton();
+		$reqs = $manager->getAuthenticationRequests( $action, $this->module->getUser() );
 
 		// Filter requests, if requested to do so
 		$wantedRequests = null;
@@ -154,12 +147,9 @@ class ApiAuthManagerHelper {
 			$wantedRequests = [ $params['request'] => true ];
 		}
 		if ( $wantedRequests !== null ) {
-			$reqs = array_filter(
-				$reqs,
-				function ( AuthenticationRequest $req ) use ( $wantedRequests ) {
-					return isset( $wantedRequests[$req->getUniqueId()] );
-				}
-			);
+			$reqs = array_filter( $reqs, function ( $req ) use ( $wantedRequests ) {
+				return isset( $wantedRequests[$req->getUniqueId()] );
+			} );
 		}
 
 		// Collect the fields for all the requests
@@ -316,10 +306,9 @@ class ApiAuthManagerHelper {
 
 	/**
 	 * Clean up a field array for output
+	 * @param ApiBase $module For context and parameters 'mergerequestfields'
+	 *  and 'messageformat'
 	 * @param array $fields
-	 * @codingStandardsIgnoreStart
-	 * @phan-param array{type:string,options:array,value:string,label:Message,help:Message,optional:bool,sensitive:bool,skippable:bool} $fields
-	 * @codingStandardsIgnoreEnd
 	 * @return array
 	 */
 	private function formatFields( array $fields ) {
@@ -356,10 +345,10 @@ class ApiAuthManagerHelper {
 	/**
 	 * Fetch the standard parameters this helper recognizes
 	 * @param string $action AuthManager action
-	 * @param string ...$wantedParams Parameters to use
+	 * @param string $param,... Parameters to use
 	 * @return array
 	 */
-	public static function getStandardParams( $action, ...$wantedParams ) {
+	public static function getStandardParams( $action, $param /* ... */ ) {
 		$params = [
 			'requests' => [
 				ApiBase::PARAM_TYPE => 'string',
@@ -395,6 +384,8 @@ class ApiAuthManagerHelper {
 		];
 
 		$ret = [];
+		$wantedParams = func_get_args();
+		array_shift( $wantedParams );
 		foreach ( $wantedParams as $name ) {
 			if ( isset( $params[$name] ) ) {
 				$ret[$name] = $params[$name];

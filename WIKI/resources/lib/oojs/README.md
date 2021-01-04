@@ -1,4 +1,4 @@
-[![npm](https://img.shields.io/npm/v/oojs.svg?style=flat)](https://www.npmjs.com/package/oojs)
+[![npm](https://img.shields.io/npm/v/oojs.svg?style=flat)](https://www.npmjs.com/package/oojs) [![David](https://img.shields.io/david/dev/wikimedia/oojs.svg?style=flat)](https://david-dm.org/wikimedia/oojs#info=devDependencies)
 
 OOjs
 =================
@@ -29,7 +29,7 @@ This library is available as an [npm](https://npmjs.org/) package! Install it ri
 npm install oojs
 </pre>
 
-Or clone the repo, `git clone https://gerrit.wikimedia.org/r/oojs/core`.
+Or clone the repo, `git clone https://phabricator.wikimedia.org/diffusion/GOJS/oojs.git`.
 
 ECMAScript 5
 ----------
@@ -71,7 +71,7 @@ $ git remote update
 $ git checkout -B release -t origin/master
 
 # Ensure tests pass
-$ npm install-test
+$ npm install && npm test
 
 # Avoid using "npm version patch" because that creates
 # both a commit and a tag, and we shouldn't tag until after

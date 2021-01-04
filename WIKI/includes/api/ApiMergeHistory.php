@@ -1,5 +1,9 @@
 <?php
 /**
+ *
+ *
+ * Created on Dec 29, 2015
+ *
  * Copyright © 2015 Geoffrey Mon <geofbot@gmail.com>
  *
  * This program is free software; you can redistribute it and/or modify
@@ -19,8 +23,6 @@
  *
  * @file
  */
-
-use MediaWiki\MediaWikiServices;
 
 /**
  * API Module to merge page histories
@@ -89,8 +91,7 @@ class ApiMergeHistory extends ApiBase {
 	 * @return Status
 	 */
 	protected function merge( Title $from, Title $to, $timestamp, $reason ) {
-		$factory = MediaWikiServices::getInstance()->getMergeHistoryFactory();
-		$mh = $factory->newMergeHistory( $from, $to, $timestamp );
+		$mh = new MergeHistory( $from, $to, $timestamp );
 
 		return $mh->merge( $this->getUser(), $reason );
 	}

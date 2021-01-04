@@ -21,18 +21,14 @@
  * @ingroup SpecialPage
  */
 
-use MediaWiki\MediaWikiServices;
-use Wikimedia\Rdbms\IDatabase;
-use Wikimedia\Rdbms\IResultWrapper;
-
 /**
  * Special page for listing the articles with the fewest revisions.
  *
  * @ingroup SpecialPage
  * @author Martin Drashkov
  */
-class SpecialFewestRevisions extends QueryPage {
-	public function __construct( $name = 'Fewestrevisions' ) {
+class FewestrevisionsPage extends QueryPage {
+	function __construct( $name = 'Fewestrevisions' ) {
 		parent::__construct( $name );
 	}
 
@@ -40,7 +36,7 @@ class SpecialFewestRevisions extends QueryPage {
 		return true;
 	}
 
-	public function isSyndicated() {
+	function isSyndicated() {
 		return false;
 	}
 
@@ -51,20 +47,18 @@ class SpecialFewestRevisions extends QueryPage {
 				'namespace' => 'page_namespace',
 				'title' => 'page_title',
 				'value' => 'COUNT(*)',
+				'redirect' => 'page_is_redirect'
 			],
 			'conds' => [
-				'page_namespace' => MediaWikiServices::getInstance()->getNamespaceInfo()->
-					getContentNamespaces(),
-				'page_id = rev_page',
-				'page_is_redirect = 0',
-			],
+				'page_namespace' => MWNamespace::getContentNamespaces(),
+				'page_id = rev_page' ],
 			'options' => [
-				'GROUP BY' => [ 'page_namespace', 'page_title' ]
+				'GROUP BY' => [ 'page_namespace', 'page_title', 'page_is_redirect' ]
 			]
 		];
 	}
 
-	protected function sortDescending() {
+	function sortDescending() {
 		return false;
 	}
 
@@ -73,7 +67,9 @@ class SpecialFewestRevisions extends QueryPage {
 	 * @param object $result Database row
 	 * @return string
 	 */
-	public function formatResult( $skin, $result ) {
+	function formatResult( $skin, $result ) {
+		global $wgContLang;
+
 		$nt = Title::makeTitleSafe( $result->namespace, $result->title );
 		if ( !$nt ) {
 			return Html::element(
@@ -87,9 +83,8 @@ class SpecialFewestRevisions extends QueryPage {
 			);
 		}
 		$linkRenderer = $this->getLinkRenderer();
-
-		$text = $this->getLanguageConverter()->convertHtml( $nt->getPrefixedText() );
-		$plink = $linkRenderer->makeLink( $nt, new HtmlArmor( $text ) );
+		$text = $wgContLang->convert( $nt->getPrefixedText() );
+		$plink = $linkRenderer->makeLink( $nt, $text );
 
 		$nl = $this->msg( 'nrevisions' )->numParams( $result->value )->text();
 		$redirect = isset( $result->redirect ) && $result->redirect ?
@@ -102,16 +97,6 @@ class SpecialFewestRevisions extends QueryPage {
 		) . $redirect;
 
 		return $this->getLanguage()->specialList( $plink, $nlink );
-	}
-
-	/**
-	 * Cache page existence for performance
-	 *
-	 * @param IDatabase $db
-	 * @param IResultWrapper $res
-	 */
-	protected function preprocessResults( $db, $res ) {
-		$this->executeLBFromResultWrapper( $res );
 	}
 
 	protected function getGroupName() {

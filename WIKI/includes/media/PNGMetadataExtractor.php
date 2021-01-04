@@ -40,10 +40,10 @@ class PNGMetadataExtractor {
 	/** @var array */
 	private static $textChunks;
 
-	public const VERSION = 1;
-	private const MAX_CHUNK_SIZE = 3145728; // 3 megabytes
+	const VERSION = 1;
+	const MAX_CHUNK_SIZE = 3145728; // 3 megabytes
 
-	public static function getMetadata( $filename ) {
+	static function getMetadata( $filename ) {
 		self::$pngSig = pack( "C8", 137, 80, 78, 71, 13, 10, 26, 10 );
 		self::$crcSize = 4;
 		/* based on list at http://owl.phy.queensu.ca/~phil/exiftool/TagNames/PNG.html#TextualData
@@ -202,19 +202,19 @@ class PNGMetadataExtractor {
 					// if compressed
 					if ( $items[2] == "\x01" ) {
 						if ( function_exists( 'gzuncompress' ) && $items[4] === "\x00" ) {
-							Wikimedia\suppressWarnings();
+							MediaWiki\suppressWarnings();
 							$items[5] = gzuncompress( $items[5] );
-							Wikimedia\restoreWarnings();
+							MediaWiki\restoreWarnings();
 
 							if ( $items[5] === false ) {
 								// decompression failed
-								wfDebug( __METHOD__ . ' Error decompressing iTxt chunk - ' . $items[1] );
+								wfDebug( __METHOD__ . ' Error decompressing iTxt chunk - ' . $items[1] . "\n" );
 								fseek( $fh, self::$crcSize, SEEK_CUR );
 								continue;
 							}
 						} else {
 							wfDebug( __METHOD__ . ' Skipping compressed png iTXt chunk due to lack of zlib,'
-								. " or potentially invalid compression method" );
+								. " or potentially invalid compression method\n" );
 							fseek( $fh, self::$crcSize, SEEK_CUR );
 							continue;
 						}
@@ -246,9 +246,9 @@ class PNGMetadataExtractor {
 					fseek( $fh, self::$crcSize, SEEK_CUR );
 					continue;
 				}
-				Wikimedia\suppressWarnings();
+				MediaWiki\suppressWarnings();
 				$content = iconv( 'ISO-8859-1', 'UTF-8', $content );
-				Wikimedia\restoreWarnings();
+				MediaWiki\restoreWarnings();
 
 				if ( $content === false ) {
 					throw new Exception( __METHOD__ . ": Read error (error with iconv)" );
@@ -281,25 +281,25 @@ class PNGMetadataExtractor {
 					$compression = substr( $postKeyword, 0, 1 );
 					$content = substr( $postKeyword, 1 );
 					if ( $compression !== "\x00" ) {
-						wfDebug( __METHOD__ . " Unrecognized compression method in zTXt ($keyword). Skipping." );
+						wfDebug( __METHOD__ . " Unrecognized compression method in zTXt ($keyword). Skipping.\n" );
 						fseek( $fh, self::$crcSize, SEEK_CUR );
 						continue;
 					}
 
-					Wikimedia\suppressWarnings();
+					MediaWiki\suppressWarnings();
 					$content = gzuncompress( $content );
-					Wikimedia\restoreWarnings();
+					MediaWiki\restoreWarnings();
 
 					if ( $content === false ) {
 						// decompression failed
-						wfDebug( __METHOD__ . ' Error decompressing zTXt chunk - ' . $keyword );
+						wfDebug( __METHOD__ . ' Error decompressing zTXt chunk - ' . $keyword . "\n" );
 						fseek( $fh, self::$crcSize, SEEK_CUR );
 						continue;
 					}
 
-					Wikimedia\suppressWarnings();
+					MediaWiki\suppressWarnings();
 					$content = iconv( 'ISO-8859-1', 'UTF-8', $content );
-					Wikimedia\restoreWarnings();
+					MediaWiki\restoreWarnings();
 
 					if ( $content === false ) {
 						throw new Exception( __METHOD__ . ": Read error (error with iconv)" );
@@ -309,7 +309,7 @@ class PNGMetadataExtractor {
 					$text[$finalKeyword]['x-default'] = $content;
 					$text[$finalKeyword]['_type'] = 'lang';
 				} else {
-					wfDebug( __METHOD__ . " Cannot decompress zTXt chunk due to lack of zlib. Skipping." );
+					wfDebug( __METHOD__ . " Cannot decompress zTXt chunk due to lack of zlib. Skipping.\n" );
 					fseek( $fh, $chunk_size, SEEK_CUR );
 				}
 			} elseif ( $chunk_type == 'tIME' ) {

@@ -21,20 +21,18 @@
  * @ingroup SpecialPage
  */
 
-use MediaWiki\MediaWikiServices;
-
 /**
  * A special page that list pages that contain no link to other pages
  *
  * @ingroup SpecialPage
  */
-class SpecialDeadendPages extends PageQueryPage {
+class DeadendPagesPage extends PageQueryPage {
 
-	public function __construct( $name = 'Deadendpages' ) {
+	function __construct( $name = 'Deadendpages' ) {
 		parent::__construct( $name );
 	}
 
-	protected function getPageHeader() {
+	function getPageHeader() {
 		return $this->msg( 'deadendpagestext' )->parseAsBlock();
 	}
 
@@ -43,22 +41,22 @@ class SpecialDeadendPages extends PageQueryPage {
 	 *
 	 * @return bool
 	 */
-	public function isExpensive() {
+	function isExpensive() {
 		return true;
 	}
 
-	public function isSyndicated() {
+	function isSyndicated() {
 		return false;
 	}
 
 	/**
 	 * @return bool
 	 */
-	protected function sortDescending() {
+	function sortDescending() {
 		return false;
 	}
 
-	public function getQueryInfo() {
+	function getQueryInfo() {
 		return [
 			'tables' => [ 'page', 'pagelinks' ],
 			'fields' => [
@@ -68,8 +66,7 @@ class SpecialDeadendPages extends PageQueryPage {
 			],
 			'conds' => [
 				'pl_from IS NULL',
-				'page_namespace' => MediaWikiServices::getInstance()->getNamespaceInfo()->
-					getContentNamespaces(),
+				'page_namespace' => MWNamespace::getContentNamespaces(),
 				'page_is_redirect' => 0
 			],
 			'join_conds' => [
@@ -81,12 +78,10 @@ class SpecialDeadendPages extends PageQueryPage {
 		];
 	}
 
-	protected function getOrderFields() {
+	function getOrderFields() {
 		// For some crazy reason ordering by a constant
 		// causes a filesort
-		if ( count( MediaWikiServices::getInstance()->getNamespaceInfo()->
-			getContentNamespaces() ) > 1
-		) {
+		if ( count( MWNamespace::getContentNamespaces() ) > 1 ) {
 			return [ 'page_namespace', 'page_title' ];
 		} else {
 			return [ 'page_title' ];

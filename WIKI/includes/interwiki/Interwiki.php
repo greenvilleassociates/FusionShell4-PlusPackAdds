@@ -19,6 +19,7 @@
  *
  * @file
  */
+use MediaWiki\MediaWikiServices;
 
 /**
  * Value object for representing interwiki records.
@@ -31,11 +32,11 @@ class Interwiki {
 	/** @var string The URL of the wiki, with "$1" as a placeholder for an article name. */
 	protected $mURL;
 
-	/** @var string The URL of the file api.php */
+	/** @var string The URL of the file api.php  */
 	protected $mAPI;
 
 	/** @var string The name of the database (for a connection to be established
-	 *    with LBFactory::getMainLB( 'domainId' ))
+	 *    with wfGetLB( 'wikiid' ))
 	 */
 	protected $mWikiID;
 
@@ -57,9 +58,56 @@ class Interwiki {
 	}
 
 	/**
+	 * Check whether an interwiki prefix exists
+	 *
+	 * @deprecated since 1.28, use InterwikiLookup instead
+	 *
+	 * @param string $prefix Interwiki prefix to use
+	 * @return bool Whether it exists
+	 */
+	public static function isValidInterwiki( $prefix ) {
+		return MediaWikiServices::getInstance()->getInterwikiLookup()->isValidInterwiki( $prefix );
+	}
+
+	/**
+	 * Fetch an Interwiki object
+	 *
+	 * @deprecated since 1.28, use InterwikiLookup instead
+	 *
+	 * @param string $prefix Interwiki prefix to use
+	 * @return Interwiki|null|bool
+	 */
+	public static function fetch( $prefix ) {
+		return MediaWikiServices::getInstance()->getInterwikiLookup()->fetch( $prefix );
+	}
+
+	/**
+	 * Purge the cache (local and persistent) for an interwiki prefix.
+	 *
+	 * @param string $prefix
+	 * @since 1.26
+	 */
+	public static function invalidateCache( $prefix ) {
+		MediaWikiServices::getInstance()->getInterwikiLookup()->invalidateCache( $prefix );
+	}
+
+	/**
+	 * Returns all interwiki prefix definitions.
+	 *
+	 * @deprecated since 1.28, unused. Use InterwikiLookup instead.
+	 *
+	 * @param string|null $local If set, limits output to local/non-local interwikis
+	 * @return array[] List of interwiki rows
+	 * @since 1.19
+	 */
+	public static function getAllPrefixes( $local = null ) {
+		return MediaWikiServices::getInstance()->getInterwikiLookup()->getAllPrefixes( $local );
+	}
+
+	/**
 	 * Get the URL for a particular title (or with $1 if no title given)
 	 *
-	 * @param string|null $title What text to put for the article name
+	 * @param string $title What text to put for the article name
 	 * @return string The URL
 	 * @note Prior to 1.19 The getURL with an argument was broken.
 	 *       If you if you use this arg in an extension that supports MW earlier

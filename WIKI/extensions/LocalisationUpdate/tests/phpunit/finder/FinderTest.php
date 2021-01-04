@@ -2,19 +2,19 @@
 /**
  * @file
  * @author Niklas Laxström
- * @license GPL-2.0-or-later
+ * @license GPL-2.0+
  */
 
 namespace LocalisationUpdate;
 
-/**
- * @covers \LocalisationUpdate\Finder
- */
-class FinderTest extends \PHPUnit\Framework\TestCase {
+class FinderTest extends \PHPUnit_Framework_TestCase {
 	public function testGetComponents() {
 		$finder = new Finder(
 			[
-				'core' => '/IP/languages/i18n',
+				'TranslateSearch' => '/IP/extensions/Translate/TranslateSearch.i18n.php',
+				'Babel' => '/IP/extensions/Babel/Babel.i18n.php',
+			],
+			[
 				'Babel' => '/IP/extensions/Babel/i18n',
 				'Door' => [
 					'core' => '/IP/extensions/Door/i18n/core',
@@ -28,11 +28,21 @@ class FinderTest extends \PHPUnit\Framework\TestCase {
 
 		$expected = [
 			'repo' => 'mediawiki',
-			'orig' => "file:///IP/languages/i18n/*.json",
-			'path' => 'languages/i18n/*.json',
+			'orig' => "file:///IP/languages/messages/Messages*.php",
+			'path' => 'languages/messages/i18n/*.json',
 		];
-		$this->assertArrayHasKey( 'core-0', $observed );
-		$this->assertEquals( $expected, $observed['core-0'], 'Core JSON file' );
+
+		$this->assertArrayHasKey( 'core', $observed );
+		$this->assertEquals( $expected, $observed['core'], 'Core php file' );
+
+		$expected = [
+			'repo' => 'extension',
+			'name' => 'Translate',
+			'orig' => 'file:///IP/extensions/Translate/TranslateSearch.i18n.php',
+			'path' => 'TranslateSearch.i18n.php'
+		];
+		$this->assertArrayHasKey( 'TranslateSearch', $observed );
+		$this->assertEquals( $expected, $observed['TranslateSearch'], 'PHP only extension' );
 
 		$expected = [
 			'repo' => 'extension',
@@ -41,7 +51,7 @@ class FinderTest extends \PHPUnit\Framework\TestCase {
 			'path' => 'i18n/*.json'
 		];
 		$this->assertArrayHasKey( 'Babel-0', $observed );
-		$this->assertEquals( $expected, $observed['Babel-0'], 'JSON extension' );
+		$this->assertEquals( $expected, $observed['Babel-0'], 'PHP&JSON extension' );
 
 		$expected = [
 			'repo' => 'extension',

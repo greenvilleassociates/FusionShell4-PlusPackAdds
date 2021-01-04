@@ -25,23 +25,20 @@
  * @file
  */
 
-use MediaWiki\Shell\Shell;
-
 /**
  * @ingroup Dump
  */
 class DumpPipeOutput extends DumpFileOutput {
 	protected $command, $filename;
-	/** @var resource|bool */
 	protected $procOpenResource = false;
 
 	/**
 	 * @param string $command
-	 * @param string|null $file
+	 * @param string $file
 	 */
-	public function __construct( $command, $file = null ) {
-		if ( $file !== null ) {
-			$command .= " > " . Shell::escape( $file );
+	function __construct( $command, $file = null ) {
+		if ( !is_null( $file ) ) {
+			$command .= " > " . wfEscapeShellArg( $file );
 		}
 
 		$this->startCommand( $command );
@@ -52,7 +49,7 @@ class DumpPipeOutput extends DumpFileOutput {
 	/**
 	 * @param string $string
 	 */
-	public function writeCloseStream( $string ) {
+	function writeCloseStream( $string ) {
 		parent::writeCloseStream( $string );
 		if ( $this->procOpenResource ) {
 			proc_close( $this->procOpenResource );
@@ -63,7 +60,7 @@ class DumpPipeOutput extends DumpFileOutput {
 	/**
 	 * @param string $command
 	 */
-	public function startCommand( $command ) {
+	function startCommand( $command ) {
 		$spec = [
 			0 => [ "pipe", "r" ],
 		];
@@ -73,16 +70,17 @@ class DumpPipeOutput extends DumpFileOutput {
 	}
 
 	/**
-	 * @inheritDoc
+	 * @param string $newname
 	 */
-	public function closeRenameAndReopen( $newname ) {
+	function closeRenameAndReopen( $newname ) {
 		$this->closeAndRename( $newname, true );
 	}
 
 	/**
-	 * @inheritDoc
+	 * @param string $newname
+	 * @param bool $open
 	 */
-	public function closeAndRename( $newname, $open = false ) {
+	function closeAndRename( $newname, $open = false ) {
 		$newname = $this->checkRenameArgCount( $newname );
 		if ( $newname ) {
 			if ( $this->handle ) {
@@ -96,7 +94,7 @@ class DumpPipeOutput extends DumpFileOutput {
 			$this->renameOrException( $newname );
 			if ( $open ) {
 				$command = $this->command;
-				$command .= " > " . Shell::escape( $this->filename );
+				$command .= " > " . wfEscapeShellArg( $this->filename );
 				$this->startCommand( $command );
 			}
 		}

@@ -5,11 +5,10 @@ namespace Wikimedia\Purtle;
 /**
  * RdfWriter implementation for generating Turtle output.
  *
- * @license GPL-2.0-or-later
+ * @license GPL-2.0+
  * @author Daniel Kinzler
  */
 class TurtleRdfWriter extends N3RdfWriterBase {
-
 	/**
 	 * @var bool
 	 */
@@ -29,11 +28,6 @@ class TurtleRdfWriter extends N3RdfWriterBase {
 		$this->trustIRIs = $trustIRIs;
 	}
 
-	/**
-	 * @param string $role
-	 * @param BNodeLabeler|null $labeler
-	 * @param N3Quoter|null $quoter
-	 */
 	public function __construct(
 		$role = parent::DOCUMENT_ROLE,
 		BNodeLabeler $labeler = null,

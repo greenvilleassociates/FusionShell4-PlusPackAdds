@@ -1,23 +1,18 @@
 /*!
- * jQuery Migrate - v3.1.0 - 2019-06-08
- * Copyright OpenJS Foundation and other contributors
+ * jQuery Migrate - v3.0.1-pre - 2017-08-17
+ * Copyright jQuery Foundation and other contributors
  *
  * Patched for MediaWiki:
- - Qualify the global lookup for 'jQuery' as 'window.jQuery',
- *   because within mw.loader.implement() for 'jquery', the closure
- *   specifies '$' and 'jQuery', which are undefined.
+ * - Preserve handler of uncaught exceptions in promise chains
+ *   https://gerrit.wikimedia.org/r/#/c/360999/
+ *   https://github.com/jquery/jquery-migrate/pull/262
  * - Add mw.track instrumentation for statistics.
- * - Disable jQuery.migrateTrace by default. They are slow and
- *   redundant given console.warn() already provides a trace.
- * - Don't warn for using features which have no plans for removal.
  */
 ;( function( factory ) {
 	if ( typeof define === "function" && define.amd ) {
 
 		// AMD. Register as an anonymous module.
-		define( [ "jquery" ], function ( jQuery ) {
-			return factory( jQuery, window );
-		} );
+		define( [ "jquery" ], window, factory );
 	} else if ( typeof module === "object" && module.exports ) {
 
 		// Node/CommonJS
@@ -26,37 +21,13 @@
 	} else {
 
 		// Browser globals
-		// PATCH: Qualify jQuery lookup as window.jQuery. --Krinkle
-		factory( window.jQuery, window );
+		factory( jQuery, window );
 	}
 } )( function( jQuery, window ) {
 "use strict";
 
 
-jQuery.migrateVersion = "3.1.0";
-
-/* exported jQueryVersionSince, compareVersions */
-
-// Returns 0 if v1 == v2, -1 if v1 < v2, 1 if v1 > v2
-function compareVersions( v1, v2 ) {
-	var rVersionParts = /^(\d+)\.(\d+)\.(\d+)/,
-		v1p = rVersionParts.exec( v1 ) || [ ],
-		v2p = rVersionParts.exec( v2 ) || [ ];
-
-	for ( var i = 1; i <= 3; i++ ) {
-		if ( +v1p[ i ] > +v2p[ i ] ) {
-			return 1;
-		}
-		if ( +v1p[ i ] < +v2p[ i ] ) {
-			return -1;
-		}
-	}
-	return 0;
-}
-
-function jQueryVersionSince( version ) {
-	return compareVersions( jQuery.fn.jquery, version ) >= 0;
-}
+jQuery.migrateVersion = "3.0.1-pre";
 
 /* exported migrateWarn, migrateWarnFunc, migrateWarnProp */
 
@@ -64,21 +35,27 @@ function jQueryVersionSince( version ) {
 
 	// Support: IE9 only
 	// IE9 only creates console object when dev tools are first opened
-	// IE9 console is a host object, callable but doesn't have .apply()
-	if ( !window.console || !window.console.log ) {
+	// Also, avoid Function#bind here to simplify PhantomJS usage
+	var log = window.console && window.console.log &&
+		function() {
+			window.console.log.apply( window.console, arguments );
+		},
+		rbadVersions = /^[12]\./;
+
+	if ( !log ) {
 		return;
 	}
 
 	// Need jQuery 3.0.0+ and no older Migrate loaded
-	if ( !jQuery || !jQueryVersionSince( "3.0.0" ) ) {
-		window.console.log( "JQMIGRATE: jQuery 3.0.0+ REQUIRED" );
+	if ( !jQuery || rbadVersions.test( jQuery.fn.jquery ) ) {
+		log( "JQMIGRATE: jQuery 3.0.0+ REQUIRED" );
 	}
 	if ( jQuery.migrateWarnings ) {
-		window.console.log( "JQMIGRATE: Migrate plugin loaded multiple times" );
+		log( "JQMIGRATE: Migrate plugin loaded multiple times" );
 	}
 
 	// Show a message on the console so devs know we're active
-	window.console.log( "JQMIGRATE: Migrate is installed" +
+	log( "JQMIGRATE: Migrate is installed" +
 		( jQuery.migrateMute ? "" : " with logging active" ) +
 		", version " + jQuery.migrateVersion );
 
@@ -91,8 +68,7 @@ jQuery.migrateWarnings = [];
 
 // Set to false to disable traces that appear with warnings
 if ( jQuery.migrateTrace === undefined ) {
-	// PATCH: Disable extra console.trace() call --Krinkle
-	jQuery.migrateTrace = false;
+	jQuery.migrateTrace = true;
 }
 
 // Forget any warnings we've already given; public
@@ -238,18 +214,6 @@ jQuery.isNumeric = function( val ) {
 	return oldValue;
 };
 
-if ( jQueryVersionSince( "3.3.0" ) ) {
-	migrateWarnFunc( jQuery, "isWindow",
-		function( obj ) {
-			return obj != null && obj === obj.window;
-		},
-		"jQuery.isWindow() is deprecated"
-	);
-}
-
-migrateWarnFunc( jQuery, "holdReady", jQuery.holdReady,
-	"jQuery.holdReady is deprecated" );
-
 migrateWarnFunc( jQuery, "unique", jQuery.uniqueSort,
 	"jQuery.unique is deprecated; use jQuery.uniqueSort" );
 
@@ -258,12 +222,6 @@ migrateWarnProp( jQuery.expr, "filters", jQuery.expr.pseudos,
 	"jQuery.expr.filters is deprecated; use jQuery.expr.pseudos" );
 migrateWarnProp( jQuery.expr, ":", jQuery.expr.pseudos,
 	"jQuery.expr[':'] is deprecated; use jQuery.expr.pseudos" );
-
-// Prior to jQuery 3.2 there were internal refs so we don't warn there
-if ( jQueryVersionSince( "3.2.0" ) ) {
-	migrateWarnFunc( jQuery, "nodeName", jQuery.nodeName,
-	"jQuery.nodeName is deprecated" );
-}
 
 
 var oldAjax = jQuery.ajax;
@@ -292,7 +250,7 @@ var oldRemoveAttr = jQuery.fn.removeAttr,
 jQuery.fn.removeAttr = function( name ) {
 	var self = this;
 
-	jQuery.each( name.match( rmatchNonSpace ), function( _i, attr ) {
+	jQuery.each( name.match( rmatchNonSpace ), function( i, attr ) {
 		if ( jQuery.expr.match.bool.test( attr ) ) {
 			migrateWarn( "jQuery.fn.removeAttr no longer sets boolean properties: " + attr );
 			self.prop( attr, false );
@@ -417,43 +375,31 @@ jQuery.data = function( elem, name, value ) {
 };
 
 var oldTweenRun = jQuery.Tween.prototype.run;
-var linearEasing = function( pct ) {
-		return pct;
-	};
 
 jQuery.Tween.prototype.run = function( ) {
 	if ( jQuery.easing[ this.easing ].length > 1 ) {
 		migrateWarn(
-			"'jQuery.easing." + this.easing.toString() + "' should use only one argument"
+			"easing function " +
+			"\"jQuery.easing." + this.easing.toString() +
+			"\" should use only first argument"
 		);
 
-		jQuery.easing[ this.easing ] = linearEasing;
+		var oldEasing = jQuery.easing[ this.easing ];
+		jQuery.easing[ this.easing ] = function( percent ) {
+			return oldEasing.call( jQuery.easing, percent, percent, 0, 1, 1 );
+		}.bind( this );
 	}
 
 	oldTweenRun.apply( this, arguments );
 };
 
-var intervalValue = jQuery.fx.interval || 13,
-	intervalMsg = "jQuery.fx.interval is deprecated";
+jQuery.fx.interval = jQuery.fx.interval || 13;
 
 // Support: IE9, Android <=4.4
 // Avoid false positives on browsers that lack rAF
-// Don't warn if document is hidden, jQuery uses setTimeout (#292)
 if ( window.requestAnimationFrame ) {
-	Object.defineProperty( jQuery.fx, "interval", {
-		configurable: true,
-		enumerable: true,
-		get: function() {
-			if ( !window.document.hidden ) {
-				migrateWarn( intervalMsg );
-			}
-			return intervalValue;
-		},
-		set: function( newValue ) {
-			migrateWarn( intervalMsg );
-			intervalValue = newValue;
-		}
-	} );
+	migrateWarnProp( jQuery.fx, "interval", jQuery.fx.interval,
+		"jQuery.fx.interval is deprecated" );
 }
 
 var oldLoad = jQuery.fn.load,
@@ -533,8 +479,6 @@ jQuery.each( [ "load", "unload", "error" ], function( _, name ) {
 
 } );
 
-// PATCH: Don't warn for using features which have no plans for removal. --Krinkle
-
 // Trigger "ready" event only once, on document ready
 jQuery( function() {
 	jQuery( window.document ).triggerHandler( "ready" );
@@ -567,10 +511,6 @@ jQuery.fn.extend( {
 		return arguments.length === 1 ?
 			this.off( selector, "**" ) :
 			this.off( types, selector || "**", fn );
-	},
-	hover: function( fnOver, fnOut ) {
-		migrateWarn( "jQuery.fn.hover() is deprecated" );
-		return this.on( "mouseenter", fnOver ).on( "mouseleave", fnOut || fnOver );
 	}
 } );
 

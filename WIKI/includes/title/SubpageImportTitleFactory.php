@@ -16,9 +16,8 @@
  * http://www.gnu.org/copyleft/gpl.html
  *
  * @file
+ * @license GPL 2+
  */
-
-use MediaWiki\MediaWikiServices;
 
 /**
  * A class to convert page titles on a foreign wiki (ForeignTitle objects) into
@@ -34,10 +33,7 @@ class SubpageImportTitleFactory implements ImportTitleFactory {
 	 * created
 	 */
 	public function __construct( Title $rootPage ) {
-		if (
-			!MediaWikiServices::getInstance()->getNamespaceInfo()->
-				hasSubpages( $rootPage->getNamespace() )
-		) {
+		if ( !MWNamespace::hasSubpages( $rootPage->getNamespace() ) ) {
 			throw new MWException( "The root page you specified, $rootPage, is in a " .
 				"namespace where subpages are not allowed" );
 		}

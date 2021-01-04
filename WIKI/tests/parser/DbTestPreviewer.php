@@ -32,7 +32,7 @@ class DbTestPreviewer extends TestRecorder {
 	 * @param IDatabase $db
 	 * @param bool|string $filter
 	 */
-	public function __construct( $db, $filter = false ) {
+	function __construct( $db, $filter = false ) {
 		$this->db = $db;
 		$this->filter = $filter;
 	}
@@ -41,7 +41,7 @@ class DbTestPreviewer extends TestRecorder {
 	 * Set up result recording; insert a record for the run with the date
 	 * and all that fun stuff
 	 */
-	public function start() {
+	function start() {
 		if ( !$this->db->tableExists( 'testrun', __METHOD__ )
 			|| !$this->db->tableExists( 'testitem', __METHOD__ )
 		) {
@@ -55,11 +55,11 @@ class DbTestPreviewer extends TestRecorder {
 		$this->results = [];
 	}
 
-	public function record( $test, ParserTestResult $result ) {
+	function record( $test, ParserTestResult $result ) {
 		$this->results[$test['desc']] = $result->isSuccess() ? 1 : 0;
 	}
 
-	public function report() {
+	function report() {
 		if ( $this->prevRun ) {
 			// f = fail, p = pass, n = nonexistent
 			// codes show before then after
@@ -170,7 +170,7 @@ class DbTestPreviewer extends TestRecorder {
 		$changedRun = $this->db->selectField( 'testitem', 'MAX(ti_run)', $conds, __METHOD__ );
 
 		// If no record of ever having had a different result.
-		if ( $changedRun === null ) {
+		if ( is_null( $changedRun ) ) {
 			if ( $after == "f" ) {
 				return "Has never passed";
 			} else {

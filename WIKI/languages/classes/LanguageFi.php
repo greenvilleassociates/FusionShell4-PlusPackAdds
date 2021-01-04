@@ -36,7 +36,7 @@ class LanguageFi extends Language {
 	 * @param string $case
 	 * @return string
 	 */
-	public function convertGrammar( $word, $case ) {
+	function convertGrammar( $word, $case ) {
 		global $wgGrammarForms;
 		if ( isset( $wgGrammarForms['fi'][$case][$word] ) ) {
 			return $wgGrammarForms['fi'][$case][$word];
@@ -73,7 +73,7 @@ class LanguageFi extends Language {
 				break;
 			case 'illative':
 				# Double the last letter and add 'n'
-				$word .= mb_substr( $word, -1 ) . 'n';
+				$word = $word . mb_substr( $word, -1 ) . 'n';
 				break;
 			case 'inessive':
 				$word .= ( $aou ? 'ssa' : 'ssä' );
@@ -84,11 +84,11 @@ class LanguageFi extends Language {
 
 	/**
 	 * @param string $str
-	 * @param User|null $user User object to use timezone from or null for $wgUser
+	 * @param User $user User object to use timezone from or null for $wgUser
 	 * @param int $now Current timestamp, for formatting relative block durations
 	 * @return string
 	 */
-	public function translateBlockExpiry( $str, User $user = null, $now = 0 ) {
+	function translateBlockExpiry( $str, User $user = null, $now = 0 ) {
 		/*
 			'ago', 'now', 'today', 'this', 'next',
 			'first', 'third', 'fourth', 'fifth', 'sixth', 'seventh', 'eighth', 'ninth',
@@ -144,9 +144,8 @@ class LanguageFi extends Language {
 			'month' => 'kuukausi',
 			'years' => 'vuotta',
 			'year' => 'vuosi',
-			'infinite' => 'ikuinen',
-			'indefinite' => 'ikuinen',
-			'infinity' => 'ikuinen'
+			'infinite' => 'ikuisesti',
+			'indefinite' => 'ikuisesti'
 		];
 
 		$final = '';
@@ -167,6 +166,6 @@ class LanguageFi extends Language {
 			$final .= ' ' . $item;
 		}
 
-		return trim( $final );
+		return htmlspecialchars( trim( $final ) );
 	}
 }

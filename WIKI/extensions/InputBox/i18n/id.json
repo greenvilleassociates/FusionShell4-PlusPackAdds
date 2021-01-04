@@ -3,7 +3,6 @@
 		"authors": [
 			"-iNu-",
 			"Aldnonymous",
-			"Gombang",
 			"IvanLanin",
 			"Rex"
 		]
@@ -14,8 +13,5 @@
 	"inputbox-tryexact": "Coba pencocokan eksak",
 	"inputbox-searchfulltext": "Cari di teks lengkap",
 	"inputbox-createarticle": "Buat halaman",
-	"inputbox-movearticle": "Pindahkan halaman",
-	"inputbox-postcomment": "Bagian baru",
-	"inputbox-postcommenttitle": "Bagian baru",
 	"inputbox-ns-main": "Utama"
 }

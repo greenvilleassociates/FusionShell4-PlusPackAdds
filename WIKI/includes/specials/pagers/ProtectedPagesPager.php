@@ -19,16 +19,22 @@
  * @ingroup Pager
  */
 
-use MediaWiki\Linker\LinkRenderer;
-use MediaWiki\MediaWikiServices;
+use \MediaWiki\Linker\LinkRenderer;
 
+/**
+ * @todo document
+ */
 class ProtectedPagesPager extends TablePager {
-
-	public $mConds;
+	public $mForm, $mConds;
 	private $type, $level, $namespace, $sizetype, $size, $indefonly, $cascadeonly, $noredirect;
 
 	/**
-	 * @param SpecialPage $form
+	 * @var LinkRenderer
+	 */
+	private $linkRenderer;
+
+	/**
+	 * @param SpecialProtectedpages $form
 	 * @param array $conds
 	 * @param string $type
 	 * @param string $level
@@ -40,13 +46,13 @@ class ProtectedPagesPager extends TablePager {
 	 * @param bool $noredirect
 	 * @param LinkRenderer $linkRenderer
 	 */
-	public function __construct( $form, $conds, $type, $level, $namespace,
-		$sizetype, $size, $indefonly, $cascadeonly, $noredirect,
+	function __construct( $form, $conds = [], $type, $level, $namespace,
+		$sizetype = '', $size = 0, $indefonly = false, $cascadeonly = false, $noredirect = false,
 		LinkRenderer $linkRenderer
 	) {
-		parent::__construct( $form->getContext(), $linkRenderer );
+		$this->mForm = $form;
 		$this->mConds = $conds;
-		$this->type = $type ?: 'edit';
+		$this->type = ( $type ) ? $type : 'edit';
 		$this->level = $level;
 		$this->namespace = $namespace;
 		$this->sizetype = $sizetype;
@@ -54,9 +60,11 @@ class ProtectedPagesPager extends TablePager {
 		$this->indefonly = (bool)$indefonly;
 		$this->cascadeonly = (bool)$cascadeonly;
 		$this->noredirect = (bool)$noredirect;
+		$this->linkRenderer = $linkRenderer;
+		parent::__construct( $form->getContext() );
 	}
 
-	public function preprocessResults( $result ) {
+	function preprocessResults( $result ) {
 		# Do a link batch query
 		$lb = new LinkBatch;
 		$userids = [];
@@ -85,7 +93,7 @@ class ProtectedPagesPager extends TablePager {
 		$lb->execute();
 	}
 
-	protected function getFieldNames() {
+	function getFieldNames() {
 		static $headers = null;
 
 		if ( $headers == [] ) {
@@ -111,10 +119,9 @@ class ProtectedPagesPager extends TablePager {
 	 * @return string HTML
 	 * @throws MWException
 	 */
-	public function formatValue( $field, $value ) {
+	function formatValue( $field, $value ) {
 		/** @var object $row */
 		$row = $this->mCurrentRow;
-		$linkRenderer = $this->getLinkRenderer();
 
 		switch ( $field ) {
 			case 'log_timestamp':
@@ -144,9 +151,9 @@ class ProtectedPagesPager extends TablePager {
 						)
 					);
 				} else {
-					$formatted = $linkRenderer->makeLink( $title );
+					$formatted = $this->linkRenderer->makeLink( $title );
 				}
-				if ( $row->page_len !== null ) {
+				if ( !is_null( $row->page_len ) ) {
 					$formatted .= $this->getLanguage()->getDirMark() .
 						' ' . Html::rawElement(
 							'span',
@@ -160,11 +167,8 @@ class ProtectedPagesPager extends TablePager {
 				$formatted = htmlspecialchars( $this->getLanguage()->formatExpiry(
 					$value, /* User preference timezone */true ) );
 				$title = Title::makeTitleSafe( $row->page_namespace, $row->page_title );
-				if ( $title && MediaWikiServices::getInstance()
-						 ->getPermissionManager()
-						 ->userHasRight( $this->getUser(), 'protect' )
-				) {
-					$changeProtection = $linkRenderer->makeKnownLink(
+				if ( $this->getUser()->isAllowed( 'protect' ) && $title ) {
+					$changeProtection = $this->linkRenderer->makeKnownLink(
 						$title,
 						$this->msg( 'protect_change' )->text(),
 						[],
@@ -232,8 +236,8 @@ class ProtectedPagesPager extends TablePager {
 						LogPage::DELETED_COMMENT,
 						$this->getUser()
 					) ) {
-						$value = CommentStore::getStore()->getComment( 'log_comment', $row )->text;
-						$formatted = Linker::formatComment( $value ?? '' );
+						$value = CommentStore::newKey( 'log_comment' )->getComment( $row )->text;
+						$formatted = Linker::formatComment( $value !== null ? $value : '' );
 					} else {
 						$formatted = $this->msg( 'rev-deleted-comment' )->escaped();
 					}
@@ -250,7 +254,7 @@ class ProtectedPagesPager extends TablePager {
 		return $formatted;
 	}
 
-	public function getQueryInfo() {
+	function getQueryInfo() {
 		$conds = $this->mConds;
 		$conds[] = 'pr_expiry > ' . $this->mDb->addQuotes( $this->mDb->timestamp() ) .
 			' OR pr_expiry IS NULL';
@@ -277,18 +281,14 @@ class ProtectedPagesPager extends TablePager {
 		if ( $this->level ) {
 			$conds[] = 'pr_level=' . $this->mDb->addQuotes( $this->level );
 		}
-		if ( $this->namespace !== null ) {
+		if ( !is_null( $this->namespace ) ) {
 			$conds[] = 'page_namespace=' . $this->mDb->addQuotes( $this->namespace );
 		}
 
-		$commentQuery = CommentStore::getStore()->getJoin( 'log_comment' );
-		$actorQuery = ActorMigration::newMigration()->getJoin( 'log_user' );
+		$commentQuery = CommentStore::newKey( 'log_comment' )->getJoin();
 
 		return [
-			'tables' => [
-				'page', 'page_restrictions', 'log_search',
-				'logparen' => [ 'logging' ] + $commentQuery['tables'] + $actorQuery['tables'],
-			],
+			'tables' => [ 'page', 'page_restrictions', 'log_search', 'logging' ] + $commentQuery['tables'],
 			'fields' => [
 				'pr_id',
 				'page_namespace',
@@ -299,8 +299,9 @@ class ProtectedPagesPager extends TablePager {
 				'pr_expiry',
 				'pr_cascade',
 				'log_timestamp',
+				'log_user',
 				'log_deleted',
-			] + $commentQuery['fields'] + $actorQuery['fields'],
+			] + $commentQuery['fields'],
 			'conds' => $conds,
 			'join_conds' => [
 				'log_search' => [
@@ -308,12 +309,12 @@ class ProtectedPagesPager extends TablePager {
 						'ls_field' => 'pr_id', 'ls_value = ' . $this->mDb->buildStringCast( 'pr_id' )
 					]
 				],
-				'logparen' => [
+				'logging' => [
 					'LEFT JOIN', [
 						'ls_log_id = log_id'
 					]
 				]
-			] + $commentQuery['joins'] + $actorQuery['joins']
+			] + $commentQuery['joins']
 		];
 	}
 
@@ -321,15 +322,15 @@ class ProtectedPagesPager extends TablePager {
 		return parent::getTableClass() . ' mw-protectedpages';
 	}
 
-	public function getIndexField() {
+	function getIndexField() {
 		return 'pr_id';
 	}
 
-	public function getDefaultSort() {
+	function getDefaultSort() {
 		return 'pr_id';
 	}
 
-	protected function isFieldSortable( $field ) {
+	function isFieldSortable( $field ) {
 		// no index for sorting exists
 		return false;
 	}

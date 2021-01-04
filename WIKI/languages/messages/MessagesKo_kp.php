@@ -1,5 +1,5 @@
 <?php
-/** Korean (Democratic People's Republic of Korea) (조선말)
+/** Korean (한국어(조선))
  *
  * To improve a translation please visit https://translatewiki.net
  *

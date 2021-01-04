@@ -48,12 +48,12 @@ use Monolog\Logger;
 class SyslogHandler extends SyslogUdpHandler {
 
 	/**
-	 * @var string
+	 * @var string $appname
 	 */
 	private $appname;
 
 	/**
-	 * @var string
+	 * @var string $hostname
 	 */
 	private $hostname;
 
@@ -62,7 +62,7 @@ class SyslogHandler extends SyslogUdpHandler {
 	 * @param string $host Syslog host
 	 * @param int $port Syslog port
 	 * @param int $facility Syslog message facility
-	 * @param int $level The minimum logging level at which this handler
+	 * @param string $level The minimum logging level at which this handler
 	 *   will be triggered
 	 * @param bool $bubble Whether the messages that are handled can bubble up
 	 *   the stack or not

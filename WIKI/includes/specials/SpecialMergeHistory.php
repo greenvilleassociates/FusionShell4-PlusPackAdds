@@ -21,9 +21,6 @@
  * @ingroup SpecialPage
  */
 
-use MediaWiki\MediaWikiServices;
-use MediaWiki\Revision\RevisionRecord;
-
 /**
  * Special page allowing users with the appropriate permissions to
  * merge article histories, with some restrictions
@@ -158,7 +155,7 @@ class SpecialMergeHistory extends SpecialPage {
 		}
 	}
 
-	private function showMergeForm() {
+	function showMergeForm() {
 		$out = $this->getOutput();
 		$out->addWikiMsg( 'mergehistory-header' );
 
@@ -197,7 +194,7 @@ class SpecialMergeHistory extends SpecialPage {
 		$revisions = new MergeHistoryPager(
 			$this, [], $this->mTargetObj, $this->mDestObj
 		);
-		$haveRevisions = $revisions->getNumRows() > 0;
+		$haveRevisions = $revisions && $revisions->getNumRows() > 0;
 
 		$out = $this->getOutput();
 		$titleObj = $this->getPageTitle();
@@ -227,11 +224,11 @@ class SpecialMergeHistory extends SpecialPage {
 					'</td>
 					<td class="mw-input">' .
 					Xml::input( 'wpComment', 50, $this->mComment, [ 'id' => 'wpComment' ] ) .
-					"</td>
+					'</td>
 					</tr>
 					<tr>
-						<td>\u{00A0}</td>
-						<td class=\"mw-submit\">" .
+						<td>&#160;</td>
+						<td class="mw-submit">' .
 					Xml::submitButton(
 						$this->msg( 'mergehistory-submit' )->text(),
 						[ 'name' => 'merge', 'id' => 'mw-merge-submit' ]
@@ -277,10 +274,8 @@ class SpecialMergeHistory extends SpecialPage {
 		return true;
 	}
 
-	public function formatRevisionRow( $row ) {
-		$revRecord = MediaWikiServices::getInstance()
-			->getRevisionFactory()
-			->newRevisionFromRow( $row );
+	function formatRevisionRow( $row ) {
+		$rev = new Revision( $row );
 
 		$linkRenderer = $this->getLinkRenderer();
 
@@ -293,25 +288,21 @@ class SpecialMergeHistory extends SpecialPage {
 		$user = $this->getUser();
 
 		$pageLink = $linkRenderer->makeKnownLink(
-			$revRecord->getPageAsLinkTarget(),
+			$rev->getTitle(),
 			$this->getLanguage()->userTimeAndDate( $ts, $user ),
 			[],
-			[ 'oldid' => $revRecord->getId() ]
+			[ 'oldid' => $rev->getId() ]
 		);
-		if ( $revRecord->isDeleted( RevisionRecord::DELETED_TEXT ) ) {
+		if ( $rev->isDeleted( Revision::DELETED_TEXT ) ) {
 			$pageLink = '<span class="history-deleted">' . $pageLink . '</span>';
 		}
 
 		# Last link
-		if ( !RevisionRecord::userCanBitfield(
-			$revRecord->getVisibility(),
-			RevisionRecord::DELETED_TEXT,
-			$user
-		) ) {
+		if ( !$rev->userCan( Revision::DELETED_TEXT, $user ) ) {
 			$last = $this->msg( 'last' )->escaped();
 		} elseif ( isset( $this->prevId[$row->rev_id] ) ) {
 			$last = $linkRenderer->makeKnownLink(
-				$revRecord->getPageAsLinkTarget(),
+				$rev->getTitle(),
 				$this->msg( 'last' )->text(),
 				[],
 				[
@@ -321,13 +312,13 @@ class SpecialMergeHistory extends SpecialPage {
 			);
 		}
 
-		$userLink = Linker::revUserTools( $revRecord );
+		$userLink = Linker::revUserTools( $rev );
 
 		$size = $row->rev_len;
-		if ( $size !== null ) {
+		if ( !is_null( $size ) ) {
 			$stxt = Linker::formatRevisionSize( $size );
 		}
-		$comment = Linker::revComment( $revRecord );
+		$comment = Linker::revComment( $rev );
 
 		return Html::rawElement( 'li', [],
 			$this->msg( 'mergehistory-revisionrow' )
@@ -346,13 +337,13 @@ class SpecialMergeHistory extends SpecialPage {
 	 *
 	 * @return bool Success
 	 */
-	private function merge() {
+	function merge() {
 		# Get the titles directly from the IDs, in case the target page params
 		# were spoofed. The queries are done based on the IDs, so it's best to
 		# keep it consistent...
 		$targetTitle = Title::newFromID( $this->mTargetID );
 		$destTitle = Title::newFromID( $this->mDestID );
-		if ( $targetTitle === null || $destTitle === null ) {
+		if ( is_null( $targetTitle ) || is_null( $destTitle ) ) {
 			return false; // validate these
 		}
 		if ( $targetTitle->getArticleID() == $destTitle->getArticleID() ) {
@@ -360,8 +351,7 @@ class SpecialMergeHistory extends SpecialPage {
 		}
 
 		// MergeHistory object
-		$factory = MediaWikiServices::getInstance()->getMergeHistoryFactory();
-		$mh = $factory->newMergeHistory( $targetTitle, $destTitle, $this->mTimestamp );
+		$mh = new MergeHistory( $targetTitle, $destTitle, $this->mTimestamp );
 
 		// Merge!
 		$mergeStatus = $mh->merge( $this->getUser(), $this->mComment );

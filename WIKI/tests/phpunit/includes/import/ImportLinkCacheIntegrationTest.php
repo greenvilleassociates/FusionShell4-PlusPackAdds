@@ -1,23 +1,20 @@
 <?php
-
 use MediaWiki\MediaWikiServices;
 
 /**
  * Integration test that checks import success and
  * LinkCache integration.
  *
- * @group large
+ * @group medium
  * @group Database
- * @covers ImportStreamSource
- * @covers ImportReporter
  *
  * @author mwjames
  */
-class ImportLinkCacheIntegrationTest extends MediaWikiIntegrationTestCase {
+class ImportLinkCacheIntegrationTest extends MediaWikiTestCase {
 
 	private $importStreamSource;
 
-	protected function setUp() : void {
+	protected function setUp() {
 		parent::setUp();
 
 		$file = dirname( __DIR__ ) . '/../data/import/ImportLinkCacheIntegrationTest.xml';
@@ -47,13 +44,11 @@ class ImportLinkCacheIntegrationTest extends MediaWikiIntegrationTestCase {
 			$categoryLoremIpsum->getArticleID( Title::GAID_FOR_UPDATE )
 		);
 
-		$user = $this->getTestSysop()->getUser();
-
 		$page = new WikiPage( $loremIpsum );
-		$page->doDeleteArticleReal( 'import test: delete page', $user );
+		$page->doDeleteArticle( 'import test: delete page' );
 
 		$page = new WikiPage( $categoryLoremIpsum );
-		$page->doDeleteArticleReal( 'import test: delete page', $user );
+		$page->doDeleteArticle( 'import test: delete page' );
 	}
 
 	/**
@@ -94,10 +89,19 @@ class ImportLinkCacheIntegrationTest extends MediaWikiIntegrationTestCase {
 
 		$reporter->setContext( new RequestContext() );
 		$reporter->open();
+		$exception = false;
 
-		$importer->doImport();
+		try {
+			$importer->doImport();
+		} catch ( Exception $e ) {
+			$exception = $e;
+		}
 
 		$result = $reporter->close();
+
+		$this->assertFalse(
+			$exception
+		);
 
 		$this->assertTrue(
 			$result->isGood()

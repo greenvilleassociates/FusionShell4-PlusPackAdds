@@ -21,8 +21,6 @@
  * @ingroup FileBackend
  */
 
-use Wikimedia\AtEase\AtEase;
-
 /**
  * Store a file into the backend from a file on the file system.
  * Parameters for this operation are outlined in FileBackend::doOperations().
@@ -38,57 +36,50 @@ class StoreFileOp extends FileOp {
 
 	protected function doPrecheck( array &$predicates ) {
 		$status = StatusValue::newGood();
-
-		// Check if the source file exists in the file system and is not too big
+		// Check if the source file exists on the file system
 		if ( !is_file( $this->params['src'] ) ) {
 			$status->fatal( 'backend-fail-notexists', $this->params['src'] );
 
 			return $status;
-		}
-		// Check if the source file is too big
-		$maxBytes = $this->backend->maxFileSizeInternal();
-		if ( filesize( $this->params['src'] ) > $maxBytes ) {
-			$status->fatal( 'backend-fail-maxsize', $this->params['dst'], $maxBytes );
+			// Check if the source file is too big
+		} elseif ( filesize( $this->params['src'] ) > $this->backend->maxFileSizeInternal() ) {
+			$status->fatal( 'backend-fail-maxsize',
+				$this->params['dst'], $this->backend->maxFileSizeInternal() );
+			$status->fatal( 'backend-fail-store', $this->params['src'], $this->params['dst'] );
+
+			return $status;
+			// Check if a file can be placed/changed at the destination
+		} elseif ( !$this->backend->isPathUsableInternal( $this->params['dst'] ) ) {
+			$status->fatal( 'backend-fail-usable', $this->params['dst'] );
+			$status->fatal( 'backend-fail-store', $this->params['src'], $this->params['dst'] );
 
 			return $status;
 		}
-		// Check if an incompatible destination file exists
+		// Check if destination file exists
 		$status->merge( $this->precheckDestExistence( $predicates ) );
 		$this->params['dstExists'] = $this->destExists; // see FileBackendStore::setFileCache()
-
-		// Update file existence predicates if the operation is expected to be allowed to run
 		if ( $status->isOK() ) {
-			$predicates[self::ASSUMED_EXISTS][$this->params['dst']] = true;
-			$predicates[self::ASSUMED_SIZE][$this->params['dst']] = $this->sourceSize;
-			$predicates[self::ASSUMED_SHA1][$this->params['dst']] = $this->sourceSha1;
+			// Update file existence predicates
+			$predicates['exists'][$this->params['dst']] = true;
+			$predicates['sha1'][$this->params['dst']] = $this->sourceSha1;
 		}
 
 		return $status; // safe to call attempt()
 	}
 
 	protected function doAttempt() {
-		if ( $this->overwriteSameCase ) {
-			$status = StatusValue::newGood(); // nothing to do
-		} else {
+		if ( !$this->overwriteSameCase ) {
 			// Store the file at the destination
-			$status = $this->backend->storeInternal( $this->setFlags( $this->params ) );
+			return $this->backend->storeInternal( $this->setFlags( $this->params ) );
 		}
 
-		return $status;
-	}
-
-	protected function getSourceSize() {
-		AtEase::suppressWarnings();
-		$size = filesize( $this->params['src'] );
-		AtEase::restoreWarnings();
-
-		return $size;
+		return StatusValue::newGood();
 	}
 
 	protected function getSourceSha1Base36() {
-		AtEase::suppressWarnings();
+		MediaWiki\suppressWarnings();
 		$hash = sha1_file( $this->params['src'] );
-		AtEase::restoreWarnings();
+		MediaWiki\restoreWarnings();
 		if ( $hash !== false ) {
 			$hash = Wikimedia\base_convert( $hash, 16, 36, 31 );
 		}

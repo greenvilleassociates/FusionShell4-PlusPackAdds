@@ -18,61 +18,45 @@
  * @file
  */
 
-use MediaWiki\MediaWikiServices;
-use Wikimedia\AtEase;
 use Wikimedia\Rdbms\DBConnectionError;
-use Wikimedia\Rdbms\DBExpectedError;
+use Wikimedia\Rdbms\DBError;
 use Wikimedia\Rdbms\DBReadOnlyError;
+use Wikimedia\Rdbms\DBExpectedError;
 
 /**
  * Class to expose exceptions to the client (API bots, users, admins using CLI scripts)
  * @since 1.28
  */
 class MWExceptionRenderer {
-	public const AS_RAW = 1; // show as text
-	public const AS_PRETTY = 2; // show as HTML
+	const AS_RAW = 1; // show as text
+	const AS_PRETTY = 2; // show as HTML
 
 	/**
-	 * @param Throwable $e Original exception
+	 * @param Exception|Throwable $e Original exception
 	 * @param int $mode MWExceptionExposer::AS_* constant
-	 * @param Throwable|null $eNew New throwable from attempting to show the first
+	 * @param Exception|Throwable|null $eNew New exception from attempting to show the first
 	 */
-	public static function output( Throwable $e, $mode, Throwable $eNew = null ) {
-		global $wgMimeType, $wgShowExceptionDetails;
-
-		if ( function_exists( 'apache_setenv' ) ) {
-			// The client should not be blocked on "post-send" updates. If apache decides that
-			// a response should be gzipped, it will wait for PHP to finish since it cannot gzip
-			// anything until it has the full response (even with "Transfer-Encoding: chunked").
-			AtEase\AtEase::suppressWarnings();
-			apache_setenv( 'no-gzip', '1' );
-			AtEase\AtEase::restoreWarnings();
-		}
+	public static function output( $e, $mode, $eNew = null ) {
+		global $wgMimeType;
 
 		if ( defined( 'MW_API' ) ) {
+			// Unhandled API exception, we can't be sure that format printer is alive
 			self::header( 'MediaWiki-API-Error: internal_api_error_' . get_class( $e ) );
-		}
-
-		if ( self::isCommandLine() ) {
+			wfHttpError( 500, 'Internal Server Error', self::getText( $e ) );
+		} elseif ( self::isCommandLine() ) {
 			self::printError( self::getText( $e ) );
 		} elseif ( $mode === self::AS_PRETTY ) {
 			self::statusHeader( 500 );
-			self::header( "Content-Type: $wgMimeType; charset=UTF-8" );
-			ob_start();
 			if ( $e instanceof DBConnectionError ) {
 				self::reportOutageHTML( $e );
 			} else {
+				self::header( "Content-Type: $wgMimeType; charset=utf-8" );
 				self::reportHTML( $e );
 			}
-			self::header( "Content-Length: " . ob_get_length() );
-			ob_end_flush();
 		} else {
-			ob_start();
-			self::statusHeader( 500 );
-			self::header( "Content-Type: $wgMimeType; charset=UTF-8" );
 			if ( $eNew ) {
 				$message = "MediaWiki internal error.\n\n";
-				if ( $wgShowExceptionDetails ) {
+				if ( self::showBackTrace( $e ) ) {
 					$message .= 'Original exception: ' .
 						MWExceptionHandler::getLogMessage( $e ) .
 						"\nBacktrace:\n" . MWExceptionHandler::getRedactedTraceAsString( $e ) .
@@ -86,27 +70,27 @@ class MWExceptionRenderer {
 						self::getShowBacktraceError( $e );
 				}
 				$message .= "\n";
-			} elseif ( $wgShowExceptionDetails ) {
-				$message = MWExceptionHandler::getLogMessage( $e ) .
-					"\nBacktrace:\n" .
-					MWExceptionHandler::getRedactedTraceAsString( $e ) . "\n";
 			} else {
-				$message = MWExceptionHandler::getPublicLogMessage( $e );
+				if ( self::showBackTrace( $e ) ) {
+					$message = MWExceptionHandler::getLogMessage( $e ) .
+						"\nBacktrace:\n" .
+						MWExceptionHandler::getRedactedTraceAsString( $e ) . "\n";
+				} else {
+					$message = MWExceptionHandler::getPublicLogMessage( $e );
+				}
 			}
-			print nl2br( htmlspecialchars( $message ) ) . "\n";
-			self::header( "Content-Length: " . ob_get_length() );
-			ob_end_flush();
+			echo nl2br( htmlspecialchars( $message ) ) . "\n";
 		}
 	}
 
 	/**
-	 * @param Throwable $e
-	 * @return bool Should the throwable use $wgOut to output the error?
+	 * @param Exception|Throwable $e
+	 * @return bool Should the exception use $wgOut to output the error?
 	 */
-	private static function useOutputPage( Throwable $e ) {
+	private static function useOutputPage( $e ) {
 		// Can the extension use the Message class/wfMessage to get i18n-ed messages?
 		foreach ( $e->getTrace() as $frame ) {
-			if ( isset( $frame['class'] ) && $frame['class'] === LocalisationCache::class ) {
+			if ( isset( $frame['class'] ) && $frame['class'] === 'LocalisationCache' ) {
 				return false;
 			}
 		}
@@ -119,18 +103,16 @@ class MWExceptionRenderer {
 			!empty( $GLOBALS['wgFullyInitialised'] ) &&
 			!empty( $GLOBALS['wgOut'] ) &&
 			RequestContext::getMain()->getTitle() &&
-			!defined( 'MEDIAWIKI_INSTALL' ) &&
-			// Don't send a skinned HTTP 500 page to API clients.
-			!defined( 'MW_API' )
+			!defined( 'MEDIAWIKI_INSTALL' )
 		);
 	}
 
 	/**
-	 * Output the throwable report using HTML
+	 * Output the exception report using HTML
 	 *
-	 * @param Throwable $e
+	 * @param Exception|Throwable $e
 	 */
-	private static function reportHTML( Throwable $e ) {
+	private static function reportHTML( $e ) {
 		global $wgOut, $wgSitename;
 
 		if ( self::useOutputPage( $e ) ) {
@@ -146,7 +128,7 @@ class MWExceptionRenderer {
 
 			// Show any custom GUI message before the details
 			if ( $e instanceof MessageSpecifier ) {
-				$wgOut->addHTML( Html::element( 'p', [], Message::newFromSpecifier( $e )->text() ) );
+				$wgOut->addHTML( Message::newFromSpecifier( $e )->escaped() );
 			}
 			$wgOut->addHTML( self::getHTML( $e ) );
 
@@ -174,13 +156,11 @@ class MWExceptionRenderer {
 	 * backtrace to the error, otherwise show a message to ask to set it to true
 	 * to show that information.
 	 *
-	 * @param Throwable $e
+	 * @param Exception|Throwable $e
 	 * @return string Html to output
 	 */
-	public static function getHTML( Throwable $e ) {
-		global $wgShowExceptionDetails;
-
-		if ( $wgShowExceptionDetails ) {
+	public static function getHTML( $e ) {
+		if ( self::showBackTrace( $e ) ) {
 			$html = "<div class=\"errorbox mw-content-ltr\"><p>" .
 				nl2br( htmlspecialchars( MWExceptionHandler::getLogMessage( $e ) ) ) .
 				'</p><p>Backtrace:</p><p>' .
@@ -197,7 +177,8 @@ class MWExceptionRenderer {
 						get_class( $e ),
 						$logId,
 						MWExceptionHandler::getURL()
-				) ) . "</div>\n" .
+					)
+				) . "</div>\n" .
 				"<!-- " . wordwrap( self::getShowBacktraceError( $e ), 50 ) . " -->";
 		}
 
@@ -210,34 +191,24 @@ class MWExceptionRenderer {
 	 * @param string $key Message name
 	 * @param string $fallback Default message if the message cache can't be
 	 *                  called by the exception
-	 * @param mixed ...$params To pass to wfMessage()
+	 * The function also has other parameters that are arguments for the message
 	 * @return string Message with arguments replaced
 	 */
-	private static function msg( $key, $fallback, ...$params ) {
-		global $wgSitename;
-
-		// FIXME: Keep logic in sync with MWException::msg.
+	private static function msg( $key, $fallback /*[, params...] */ ) {
+		$args = array_slice( func_get_args(), 2 );
 		try {
-			$res = wfMessage( $key, ...$params )->text();
+			return wfMessage( $key, $args )->text();
 		} catch ( Exception $e ) {
-			$res = wfMsgReplaceArgs( $fallback, $params );
-			// If an exception happens inside message rendering,
-			// {{SITENAME}} sometimes won't be replaced.
-			$res = strtr( $res, [
-				'{{SITENAME}}' => $wgSitename,
-			] );
+			return wfMsgReplaceArgs( $fallback, $args );
 		}
-		return $res;
 	}
 
 	/**
-	 * @param Throwable $e
+	 * @param Exception|Throwable $e
 	 * @return string
 	 */
-	private static function getText( Throwable $e ) {
-		global $wgShowExceptionDetails;
-
-		if ( $wgShowExceptionDetails ) {
+	private static function getText( $e ) {
+		if ( self::showBackTrace( $e ) ) {
 			return MWExceptionHandler::getLogMessage( $e ) .
 				"\nBacktrace:\n" .
 				MWExceptionHandler::getRedactedTraceAsString( $e ) . "\n";
@@ -247,12 +218,33 @@ class MWExceptionRenderer {
 	}
 
 	/**
-	 * @param Throwable $e
+	 * @param Exception|Throwable $e
+	 * @return bool
+	 */
+	private static function showBackTrace( $e ) {
+		global $wgShowExceptionDetails, $wgShowDBErrorBacktrace;
+
+		return (
+			$wgShowExceptionDetails &&
+			( !( $e instanceof DBError ) || $wgShowDBErrorBacktrace )
+		);
+	}
+
+	/**
+	 * @param Exception|Throwable $e
 	 * @return string
 	 */
-	private static function getShowBacktraceError( Throwable $e ) {
-		$var = '$wgShowExceptionDetails = true;';
-		return "Set $var at the bottom of LocalSettings.php to show detailed debugging information.";
+	private static function getShowBacktraceError( $e ) {
+		global $wgShowExceptionDetails, $wgShowDBErrorBacktrace;
+		$vars = [];
+		if ( !$wgShowExceptionDetails ) {
+			$vars[] = '$wgShowExceptionDetails = true;';
+		}
+		if ( $e instanceof DBError && !$wgShowDBErrorBacktrace ) {
+			$vars[] = '$wgShowDBErrorBacktrace = true;';
+		}
+		$vars = implode( ' and ', $vars );
+		return "Set $vars at the bottom of LocalSettings.php to show detailed debugging information.";
 	}
 
 	/**
@@ -284,12 +276,11 @@ class MWExceptionRenderer {
 	 * Print a message, if possible to STDERR.
 	 * Use this in command line mode only (see isCommandLine)
 	 *
-	 * @suppress SecurityCheck-XSS
 	 * @param string $message Failure text
 	 */
 	private static function printError( $message ) {
 		// NOTE: STDERR may not be available, especially if php-cgi is used from the
-		// command line (T17602). Try to produce meaningful output anyway. Using
+		// command line (bug #15602). Try to produce meaningful output anyway. Using
 		// echo may corrupt output to STDOUT though.
 		if ( defined( 'STDERR' ) ) {
 			fwrite( STDERR, $message );
@@ -299,10 +290,10 @@ class MWExceptionRenderer {
 	}
 
 	/**
-	 * @param Throwable $e
+	 * @param Exception|Throwable $e
 	 */
-	private static function reportOutageHTML( Throwable $e ) {
-		global $wgShowExceptionDetails, $wgShowHostnames, $wgSitename;
+	private static function reportOutageHTML( $e ) {
+		global $wgShowDBErrorBacktrace, $wgShowHostnames, $wgShowSQLErrors;
 
 		$sorry = htmlspecialchars( self::msg(
 			'dberr-problems',
@@ -313,7 +304,7 @@ class MWExceptionRenderer {
 			'Try waiting a few minutes and reloading.'
 		) );
 
-		if ( $wgShowHostnames ) {
+		if ( $wgShowHostnames || $wgShowSQLErrors ) {
 			$info = str_replace(
 				'$1',
 				Html::element( 'span', [ 'dir' => 'ltr' ], $e->getMessage() ),
@@ -326,21 +317,56 @@ class MWExceptionRenderer {
 			) );
 		}
 
-		MediaWikiServices::getInstance()->getMessageCache()->disable(); // no DB access
-		$html = "<!DOCTYPE html>\n" .
-				'<html><head>' .
-				'<title>' .
-				htmlspecialchars( $wgSitename ) .
-				'</title>' .
-				'<style>body { font-family: sans-serif; margin: 0; padding: 0.5em 2em; }</style>' .
-				"</head><body><h1>$sorry</h1><p>$again</p><p><small>$info</small></p>";
+		MessageCache::singleton()->disable(); // no DB access
 
-		if ( $wgShowExceptionDetails ) {
+		$html = "<h1>$sorry</h1><p>$again</p><p><small>$info</small></p>";
+
+		if ( $wgShowDBErrorBacktrace ) {
 			$html .= '<p>Backtrace:</p><pre>' .
 				htmlspecialchars( $e->getTraceAsString() ) . '</pre>';
 		}
 
-		$html .= '</body></html>';
+		$html .= '<hr />';
+		$html .= self::googleSearchForm();
+
 		echo $html;
+	}
+
+	/**
+	 * @return string
+	 */
+	private static function googleSearchForm() {
+		global $wgSitename, $wgCanonicalServer, $wgRequest;
+
+		$usegoogle = htmlspecialchars( self::msg(
+			'dberr-usegoogle',
+			'You can try searching via Google in the meantime.'
+		) );
+		$outofdate = htmlspecialchars( self::msg(
+			'dberr-outofdate',
+			'Note that their indexes of our content may be out of date.'
+		) );
+		$googlesearch = htmlspecialchars( self::msg( 'searchbutton', 'Search' ) );
+		$search = htmlspecialchars( $wgRequest->getVal( 'search' ) );
+		$server = htmlspecialchars( $wgCanonicalServer );
+		$sitename = htmlspecialchars( $wgSitename );
+		$trygoogle = <<<EOT
+<div style="margin: 1.5em">$usegoogle<br />
+<small>$outofdate</small>
+</div>
+<form method="get" action="//www.google.com/search" id="googlesearch">
+	<input type="hidden" name="domains" value="$server" />
+	<input type="hidden" name="num" value="50" />
+	<input type="hidden" name="ie" value="UTF-8" />
+	<input type="hidden" name="oe" value="UTF-8" />
+	<input type="text" name="q" size="31" maxlength="255" value="$search" />
+	<input type="submit" name="btnG" value="$googlesearch" />
+	<p>
+		<label><input type="radio" name="sitesearch" value="$server" checked="checked" />$sitename</label>
+		<label><input type="radio" name="sitesearch" value="" />WWW</label>
+	</p>
+</form>
+EOT;
+		return $trygoogle;
 	}
 }

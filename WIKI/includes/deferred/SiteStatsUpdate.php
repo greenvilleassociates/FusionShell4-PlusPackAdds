@@ -36,17 +36,10 @@ class SiteStatsUpdate implements DeferrableUpdate, MergeableUpdate {
 	/** @var int */
 	protected $images = 0;
 
-	/** @var string[] Map of (table column => counter type) */
-	private const COUNTERS = [
-		'ss_total_edits'   => 'edits',
-		'ss_total_pages'   => 'pages',
-		'ss_good_articles' => 'articles',
-		'ss_users'         => 'users',
-		'ss_images'        => 'images'
-	];
+	private static $counters = [ 'edits', 'pages', 'articles', 'users', 'images' ];
 
 	// @todo deprecate this constructor
-	public function __construct( $views, $edits, $good, $pages = 0, $users = 0 ) {
+	function __construct( $views, $edits, $good, $pages = 0, $users = 0 ) {
 		$this->edits = $edits;
 		$this->articles = $good;
 		$this->pages = $pages;
@@ -56,74 +49,90 @@ class SiteStatsUpdate implements DeferrableUpdate, MergeableUpdate {
 	public function merge( MergeableUpdate $update ) {
 		/** @var SiteStatsUpdate $update */
 		Assert::parameterType( __CLASS__, $update, '$update' );
-		'@phan-var SiteStatsUpdate $update';
 
-		foreach ( self::COUNTERS as $field ) {
+		foreach ( self::$counters as $field ) {
 			$this->$field += $update->$field;
 		}
 	}
 
 	/**
-	 * @param int[] $deltas Map of (counter type => integer delta)
+	 * @param array $deltas
 	 * @return SiteStatsUpdate
-	 * @throws UnexpectedValueException
 	 */
 	public static function factory( array $deltas ) {
 		$update = new self( 0, 0, 0 );
 
-		foreach ( $deltas as $name => $unused ) {
-			if ( !in_array( $name, self::COUNTERS ) ) { // T187585
-				throw new UnexpectedValueException( __METHOD__ . ": no field called '$name'" );
+		foreach ( self::$counters as $field ) {
+			if ( isset( $deltas[$field] ) && $deltas[$field] ) {
+				$update->$field = $deltas[$field];
 			}
-		}
-
-		foreach ( self::COUNTERS as $field ) {
-			$update->$field = $deltas[$field] ?? 0;
 		}
 
 		return $update;
 	}
 
 	public function doUpdate() {
-		$services = MediaWikiServices::getInstance();
-		$stats = $services->getStatsdDataFactory();
+		global $wgSiteStatsAsyncFactor;
 
-		$deltaByType = [];
-		foreach ( self::COUNTERS as $type ) {
-			$delta = $this->$type;
-			if ( $delta !== 0 ) {
-				$stats->updateCount( "site.$type", $delta );
+		$this->doUpdateContextStats();
+
+		$rate = $wgSiteStatsAsyncFactor; // convenience
+		// If set to do so, only do actual DB updates 1 every $rate times.
+		// The other times, just update "pending delta" values in memcached.
+		if ( $rate && ( $rate < 0 || mt_rand( 0, $rate - 1 ) != 0 ) ) {
+			$this->doUpdatePendingDeltas();
+		} else {
+			// Need a separate transaction because this a global lock
+			DeferredUpdates::addCallableUpdate( [ $this, 'tryDBUpdateInternal' ] );
+		}
+	}
+
+	/**
+	 * Do not call this outside of SiteStatsUpdate
+	 */
+	public function tryDBUpdateInternal() {
+		global $wgSiteStatsAsyncFactor;
+
+		$dbw = wfGetDB( DB_MASTER );
+		$lockKey = wfWikiID() . ':site_stats'; // prepend wiki ID
+		$pd = [];
+		if ( $wgSiteStatsAsyncFactor ) {
+			// Lock the table so we don't have double DB/memcached updates
+			if ( !$dbw->lockIsFree( $lockKey, __METHOD__ )
+				|| !$dbw->lock( $lockKey, __METHOD__, 1 ) // 1 sec timeout
+			) {
+				$this->doUpdatePendingDeltas();
+
+				return;
 			}
-			$deltaByType[$type] = $delta;
+			$pd = $this->getPendingDeltas();
+			// Piggy-back the async deltas onto those of this stats update....
+			$this->edits += ( $pd['ss_total_edits']['+'] - $pd['ss_total_edits']['-'] );
+			$this->articles += ( $pd['ss_good_articles']['+'] - $pd['ss_good_articles']['-'] );
+			$this->pages += ( $pd['ss_total_pages']['+'] - $pd['ss_total_pages']['-'] );
+			$this->users += ( $pd['ss_users']['+'] - $pd['ss_users']['-'] );
+			$this->images += ( $pd['ss_images']['+'] - $pd['ss_images']['-'] );
 		}
 
-		( new AutoCommitUpdate(
-			$services->getDBLoadBalancer()->getConnectionRef( DB_MASTER ),
-			__METHOD__,
-			function ( IDatabase $dbw, $fname ) use ( $deltaByType ) {
-				$set = [];
-				foreach ( self::COUNTERS as $field => $type ) {
-					$delta = (int)$deltaByType[$type];
-					if ( $delta > 0 ) {
-						$set[] = "$field=" . $dbw->buildGreatest(
-							[ $field => $dbw->addIdentifierQuotes( $field ) . '+' . abs( $delta ) ],
-							0
-						);
-					} elseif ( $delta < 0 ) {
-						$set[] = "$field=" . $dbw->buildGreatest(
-							[ 'new' => $dbw->addIdentifierQuotes( $field ) . '-' . abs( $delta ) ],
-							0
-						);
-					}
-				}
+		// Build up an SQL query of deltas and apply them...
+		$updates = '';
+		$this->appendUpdate( $updates, 'ss_total_edits', $this->edits );
+		$this->appendUpdate( $updates, 'ss_good_articles', $this->articles );
+		$this->appendUpdate( $updates, 'ss_total_pages', $this->pages );
+		$this->appendUpdate( $updates, 'ss_users', $this->users );
+		$this->appendUpdate( $updates, 'ss_images', $this->images );
+		if ( $updates != '' ) {
+			$dbw->update( 'site_stats', [ $updates ], [], __METHOD__ );
+		}
 
-				if ( $set ) {
-					$dbw->update( 'site_stats', $set, [ 'ss_row_id' => 1 ], $fname );
-				}
-			}
-		) )->doUpdate();
+		if ( $wgSiteStatsAsyncFactor ) {
+			// Decrement the async deltas now that we applied them
+			$this->removePendingDeltas( $pd );
+			// Commit the updates and unlock the table
+			$dbw->unlock( $lockKey, __METHOD__ );
+		}
 
-		// Invalidate cache used by parser functions
+		// Invalid cache used by parser functions
 		SiteStats::unload();
 	}
 
@@ -131,28 +140,22 @@ class SiteStatsUpdate implements DeferrableUpdate, MergeableUpdate {
 	 * @param IDatabase $dbw
 	 * @return bool|mixed
 	 */
-	public static function cacheUpdate( IDatabase $dbw ) {
-		$services = MediaWikiServices::getInstance();
-		$config = $services->getMainConfig();
-
-		$dbr = $services->getDBLoadBalancer()->getConnectionRef( DB_REPLICA, 'vslow' );
+	public static function cacheUpdate( $dbw ) {
+		global $wgActiveUserDays;
+		$dbr = wfGetDB( DB_REPLICA, 'vslow' );
 		# Get non-bot users than did some recent action other than making accounts.
 		# If account creation is included, the number gets inflated ~20+ fold on enwiki.
-		$rcQuery = RecentChange::getQueryInfo();
 		$activeUsers = $dbr->selectField(
-			$rcQuery['tables'],
-			'COUNT( DISTINCT ' . $rcQuery['fields']['rc_user_text'] . ' )',
+			'recentchanges',
+			'COUNT( DISTINCT rc_user_text )',
 			[
-				'rc_type != ' . $dbr->addQuotes( RC_EXTERNAL ), // Exclude external (Wikidata)
-				ActorMigration::newMigration()->isNotAnon( $rcQuery['fields']['rc_user'] ),
+				'rc_user != 0',
 				'rc_bot' => 0,
 				'rc_log_type != ' . $dbr->addQuotes( 'newusers' ) . ' OR rc_log_type IS NULL',
-				'rc_timestamp >= ' . $dbr->addQuotes(
-					$dbr->timestamp( time() - $config->get( 'ActiveUserDays' ) * 24 * 3600 ) ),
+				'rc_timestamp >= ' . $dbr->addQuotes( $dbr->timestamp( wfTimestamp( TS_UNIX )
+					- $wgActiveUserDays * 24 * 3600 ) ),
 			],
-			__METHOD__,
-			[],
-			$rcQuery['joins']
+			__METHOD__
 		);
 		$dbw->update(
 			'site_stats',
@@ -165,5 +168,104 @@ class SiteStatsUpdate implements DeferrableUpdate, MergeableUpdate {
 		SiteStats::unload();
 
 		return $activeUsers;
+	}
+
+	protected function doUpdateContextStats() {
+		$stats = MediaWikiServices::getInstance()->getStatsdDataFactory();
+		foreach ( [ 'edits', 'articles', 'pages', 'users', 'images' ] as $type ) {
+			$delta = $this->$type;
+			if ( $delta !== 0 ) {
+				$stats->updateCount( "site.$type", $delta );
+			}
+		}
+	}
+
+	protected function doUpdatePendingDeltas() {
+		$this->adjustPending( 'ss_total_edits', $this->edits );
+		$this->adjustPending( 'ss_good_articles', $this->articles );
+		$this->adjustPending( 'ss_total_pages', $this->pages );
+		$this->adjustPending( 'ss_users', $this->users );
+		$this->adjustPending( 'ss_images', $this->images );
+	}
+
+	/**
+	 * @param string &$sql
+	 * @param string $field
+	 * @param int $delta
+	 */
+	protected function appendUpdate( &$sql, $field, $delta ) {
+		if ( $delta ) {
+			if ( $sql ) {
+				$sql .= ',';
+			}
+			if ( $delta < 0 ) {
+				$sql .= "$field=$field-" . abs( $delta );
+			} else {
+				$sql .= "$field=$field+" . abs( $delta );
+			}
+		}
+	}
+
+	/**
+	 * @param BagOStuff $cache
+	 * @param string $type
+	 * @param string $sign ('+' or '-')
+	 * @return string
+	 */
+	private function getTypeCacheKey( BagOStuff $cache, $type, $sign ) {
+		return $cache->makeKey( 'sitestatsupdate', 'pendingdelta', $type, $sign );
+	}
+
+	/**
+	 * Adjust the pending deltas for a stat type.
+	 * Each stat type has two pending counters, one for increments and decrements
+	 * @param string $type
+	 * @param int $delta Delta (positive or negative)
+	 */
+	protected function adjustPending( $type, $delta ) {
+		$cache = MediaWikiServices::getInstance()->getMainObjectStash();
+		if ( $delta < 0 ) { // decrement
+			$key = $this->getTypeCacheKey( $cache, $type, '-' );
+		} else { // increment
+			$key = $this->getTypeCacheKey( $cache, $type, '+' );
+		}
+
+		$magnitude = abs( $delta );
+		$cache->incrWithInit( $key, 0, $magnitude, $magnitude );
+	}
+
+	/**
+	 * Get pending delta counters for each stat type
+	 * @return array Positive and negative deltas for each type
+	 */
+	protected function getPendingDeltas() {
+		$cache = MediaWikiServices::getInstance()->getMainObjectStash();
+
+		$pending = [];
+		foreach ( [ 'ss_total_edits',
+			'ss_good_articles', 'ss_total_pages', 'ss_users', 'ss_images' ] as $type
+		) {
+			// Get pending increments and pending decrements
+			$flg = BagOStuff::READ_LATEST;
+			$pending[$type]['+'] = (int)$cache->get( $this->getTypeCacheKey( $cache, $type, '+' ), $flg );
+			$pending[$type]['-'] = (int)$cache->get( $this->getTypeCacheKey( $cache, $type, '-' ), $flg );
+		}
+
+		return $pending;
+	}
+
+	/**
+	 * Reduce pending delta counters after updates have been applied
+	 * @param array $pd Result of getPendingDeltas(), used for DB update
+	 */
+	protected function removePendingDeltas( array $pd ) {
+		$cache = MediaWikiServices::getInstance()->getMainObjectStash();
+
+		foreach ( $pd as $type => $deltas ) {
+			foreach ( $deltas as $sign => $magnitude ) {
+				// Lower the pending counter now that we applied these changes
+				$cache->decr( $this->getTypeCacheKey( $cache, $type, $sign ), $magnitude );
+			}
+		}
 	}
 }

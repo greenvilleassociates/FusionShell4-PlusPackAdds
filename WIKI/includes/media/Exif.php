@@ -20,7 +20,7 @@
  * @ingroup Media
  * @author Ævar Arnfjörð Bjarmason <avarab@gmail.com>
  * @copyright Copyright © 2005, Ævar Arnfjörð Bjarmason, 2009 Brent Garber
- * @license GPL-2.0-or-later
+ * @license http://www.gnu.org/copyleft/gpl.html GNU General Public License
  * @see http://exif.org/Exif2-2.PDF The Exif 2.2 specification
  * @file
  */
@@ -31,40 +31,40 @@
  */
 class Exif {
 	/** An 8-bit (1-byte) unsigned integer. */
-	private const BYTE = 1;
+	const BYTE = 1;
 
 	/** An 8-bit byte containing one 7-bit ASCII code.
 	 *  The final byte is terminated with NULL.
 	 */
-	private const ASCII = 2;
+	const ASCII = 2;
 
 	/** A 16-bit (2-byte) unsigned integer. */
-	private const SHORT = 3;
+	const SHORT = 3;
 
 	/** A 32-bit (4-byte) unsigned integer. */
-	private const LONG = 4;
+	const LONG = 4;
 
 	/** Two LONGs. The first LONG is the numerator and the second LONG expresses
 	 *  the denominator
 	 */
-	private const RATIONAL = 5;
+	const RATIONAL = 5;
 
 	/** A 16-bit (2-byte) or 32-bit (4-byte) unsigned integer. */
-	private const SHORT_OR_LONG = 6;
+	const SHORT_OR_LONG = 6;
 
 	/** An 8-bit byte that can take any value depending on the field definition */
-	private const UNDEFINED = 7;
+	const UNDEFINED = 7;
 
 	/** A 32-bit (4-byte) signed integer (2's complement notation), */
-	private const SLONG = 9;
+	const SLONG = 9;
 
 	/** Two SLONGs. The first SLONG is the numerator and the second SLONG is
 	 *  the denominator.
 	 */
-	private const SRATIONAL = 10;
+	const SRATIONAL = 10;
 
 	/** A fake value for things we don't want or don't support. */
-	private const IGNORE = -1;
+	const IGNORE = -1;
 
 	/** @var array Exif tags grouped by category, the tagname itself is the key
 	 *    and the type is the value, in the case of more than one possible value
@@ -105,7 +105,7 @@ class Exif {
 	 *   DigitalZoomRatio = 0/0 is rejected. need to determine if that's valid.
 	 *   Possibly should treat 0/0 = 0. need to read exif spec on that.
 	 */
-	public function __construct( $file, $byteOrder = '' ) {
+	function __construct( $file, $byteOrder = '' ) {
 		/**
 		 * Page numbers here refer to pages in the Exif 2.2 standard
 		 *
@@ -290,11 +290,11 @@ class Exif {
 			$this->byteOrder = 'BE'; // BE seems about twice as popular as LE in jpg's.
 		}
 
-		$this->debugFile( __FUNCTION__, true );
+		$this->debugFile( $this->basename, __FUNCTION__, true );
 		if ( function_exists( 'exif_read_data' ) ) {
-			Wikimedia\suppressWarnings();
+			MediaWiki\suppressWarnings();
 			$data = exif_read_data( $this->file, 0, true );
-			Wikimedia\restoreWarnings();
+			MediaWiki\restoreWarnings();
 		} else {
 			throw new MWException( "Internal error: exif_read_data not present. " .
 				"\$wgShowEXIF may be incorrectly set or not checked by an extension." );
@@ -313,7 +313,7 @@ class Exif {
 	/**
 	 * Make $this->mFilteredExifData
 	 */
-	private function makeFilteredData() {
+	function makeFilteredData() {
 		$this->mFilteredExifData = [];
 
 		foreach ( array_keys( $this->mRawExifData ) as $section ) {
@@ -359,7 +359,7 @@ class Exif {
 	 * As an alternative approach, some of this could be done in the validate phase
 	 * if we make up our own types like Exif::DATE.
 	 */
-	private function collapseData() {
+	function collapseData() {
 		$this->exifGPStoNumber( 'GPSLatitude' );
 		$this->exifGPStoNumber( 'GPSDestLatitude' );
 		$this->exifGPStoNumber( 'GPSLongitude' );
@@ -455,7 +455,8 @@ class Exif {
 			$val = substr( $this->mFilteredExifData[$prop], 8 );
 
 			switch ( $charCode ) {
-				case "JIS\x00\x00\x00\x00\x00":
+				case "\x4A\x49\x53\x00\x00\x00\x00\x00":
+					// JIS
 					$charset = "Shift-JIS";
 					break;
 				case "UNICODE\x00":
@@ -466,17 +467,17 @@ class Exif {
 					break;
 			}
 			if ( $charset ) {
-				Wikimedia\suppressWarnings();
+				MediaWiki\suppressWarnings();
 				$val = iconv( $charset, 'UTF-8//IGNORE', $val );
-				Wikimedia\restoreWarnings();
+				MediaWiki\restoreWarnings();
 			} else {
 				// if valid utf-8, assume that, otherwise assume windows-1252
 				$valCopy = $val;
 				UtfNormal\Validator::quickIsNFCVerify( $valCopy ); // validates $valCopy.
 				if ( $valCopy !== $val ) {
-					Wikimedia\suppressWarnings();
+					MediaWiki\suppressWarnings();
 					$val = iconv( 'Windows-1252', 'UTF-8//IGNORE', $val );
-					Wikimedia\restoreWarnings();
+					MediaWiki\restoreWarnings();
 				}
 			}
 
@@ -543,17 +544,16 @@ class Exif {
 		}
 	}
 
-	/** #@- */
+	/**#@-*/
 
-	/** #@+
+	/**#@+
 	 * @return array
 	 */
-
 	/**
 	 * Get $this->mRawExifData
 	 * @return array
 	 */
-	public function getData() {
+	function getData() {
 		return $this->mRawExifData;
 	}
 
@@ -561,11 +561,11 @@ class Exif {
 	 * Get $this->mFilteredExifData
 	 * @return array
 	 */
-	public function getFilteredData() {
+	function getFilteredData() {
 		return $this->mFilteredExifData;
 	}
 
-	/** #@- */
+	/**#@-*/
 
 	/**
 	 * The version of the output format
@@ -721,7 +721,7 @@ class Exif {
 		}
 	}
 
-	/** #@- */
+	/**#@-*/
 
 	/**
 	 * Validates if a tag has a legal value according to the Exif spec
@@ -742,16 +742,12 @@ class Exif {
 				$ecount = 1; // checking individual elements
 			}
 		}
+		$count = count( $val );
+		if ( $ecount != $count ) {
+			$this->debug( $val, __FUNCTION__, "Expected $ecount elements for $tag but got $count" );
 
-		$count = 1;
-		if ( is_array( $val ) ) {
-			$count = count( $val );
-			if ( $ecount != $count ) {
-				$this->debug( $val, __FUNCTION__, "Expected $ecount elements for $tag but got $count" );
-				return false;
-			}
+			return false;
 		}
-		// If there are multiple values, recursively validate each of them.
 		if ( $count > 1 ) {
 			foreach ( $val as $v ) {
 				if ( !$this->validate( $section, $tag, $v, true ) ) {

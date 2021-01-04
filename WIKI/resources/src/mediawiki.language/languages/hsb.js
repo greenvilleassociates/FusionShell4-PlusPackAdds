@@ -2,8 +2,8 @@
  * Upper Sorbian (Hornjoserbsce) language functions
  */
 
-mw.language.convertGrammar = function ( word, form ) {
-	var grammarForms = mw.language.getData( 'hsb', 'grammarForms' );
+mediaWiki.language.convertGrammar = function ( word, form ) {
+	var grammarForms = mediaWiki.language.getData( 'hsb', 'grammarForms' );
 	if ( grammarForms && grammarForms[ form ] ) {
 		return grammarForms[ form ][ word ];
 	}

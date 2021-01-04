@@ -6,9 +6,9 @@ use MediaWiki\MediaWikiServices;
  * @group GlobalFunctions
  * @covers ::wfThumbIsStandard
  */
-class WfThumbIsStandardTest extends MediaWikiIntegrationTestCase {
+class WfThumbIsStandardTest extends MediaWikiTestCase {
 
-	protected function setUp() : void {
+	protected function setUp() {
 		parent::setUp();
 
 		$this->setMwGlobals( [

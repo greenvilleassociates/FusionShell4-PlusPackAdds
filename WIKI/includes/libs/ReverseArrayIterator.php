@@ -27,7 +27,7 @@
  * @since 1.27
  */
 class ReverseArrayIterator implements Iterator, Countable {
-	/** @var array */
+	/** @var array $array */
 	protected $array;
 
 	/**

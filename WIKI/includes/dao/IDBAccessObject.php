@@ -50,27 +50,22 @@
  *   - e) otherwise, do the updates
  *   - f) Commit transaction
  *
- * @stable to implement
- *
  * @since 1.20
  */
 interface IDBAccessObject {
 	/** Constants for object loading bitfield flags (higher => higher QoS) */
 	/** @var int Read from a replica DB/non-quorum */
-	public const READ_NORMAL = 0;
-
+	const READ_NORMAL = 0;
 	/** @var int Read from the master/quorum */
-	public const READ_LATEST = 1;
-
+	const READ_LATEST = 1;
 	/* @var int Read from the master/quorum and lock out other writers */
-	public const READ_LOCKING = self::READ_LATEST | 2; // READ_LATEST (1) and "LOCK IN SHARE MODE" (2)
-
+	const READ_LOCKING = 3; // READ_LATEST (1) and "LOCK IN SHARE MODE" (2)
 	/** @var int Read from the master/quorum and lock out other writers and locking readers */
-	public const READ_EXCLUSIVE = self::READ_LOCKING | 4; // READ_LOCKING (3) and "FOR UPDATE" (4)
+	const READ_EXCLUSIVE = 7; // READ_LOCKING (3) and "FOR UPDATE" (4)
 
 	/** @var int Read from a replica DB or without a quorum, using the master/quorum on miss */
-	public const READ_LATEST_IMMUTABLE = 8;
+	const READ_LATEST_IMMUTABLE = 8;
 
 	// Convenience constant for tracking how data was loaded (higher => higher QoS)
-	public const READ_NONE = -1; // not loaded yet (or the object was cleared)
+	const READ_NONE = -1; // not loaded yet (or the object was cleared)
 }

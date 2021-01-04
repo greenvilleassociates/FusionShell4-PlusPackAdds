@@ -2,29 +2,21 @@
 
 use MediaWiki\Session\SessionManager;
 
-class FauxRequestTest extends MediaWikiIntegrationTestCase {
-
-	protected function setUp() : void {
-		parent::setUp();
-		$this->setMwGlobals( 'wgServer', '//wiki.test' );
-	}
-
+class FauxRequestTest extends PHPUnit_Framework_TestCase {
 	/**
 	 * @covers FauxRequest::__construct
 	 */
 	public function testConstructInvalidData() {
-		$this->expectException( MWException::class );
-		$this->expectExceptionMessage( 'bogus data' );
-		new FauxRequest( 'x' );
+		$this->setExpectedException( MWException::class, 'bogus data' );
+		$req = new FauxRequest( 'x' );
 	}
 
 	/**
 	 * @covers FauxRequest::__construct
 	 */
 	public function testConstructInvalidSession() {
-		$this->expectException( MWException::class );
-		$this->expectExceptionMessage( 'bogus session' );
-		new FauxRequest( [], false, 'x' );
+		$this->setExpectedException( MWException::class, 'bogus session' );
+		$req = new FauxRequest( [], false, 'x' );
 	}
 
 	/**
@@ -43,23 +35,17 @@ class FauxRequestTest extends MediaWikiIntegrationTestCase {
 	 */
 	public function testGetText() {
 		$req = new FauxRequest( [ 'x' => 'Value' ] );
-		$this->assertSame( 'Value', $req->getText( 'x' ) );
-		$this->assertSame( '', $req->getText( 'z' ) );
+		$this->assertEquals( 'Value', $req->getText( 'x' ) );
+		$this->assertEquals( '', $req->getText( 'z' ) );
 	}
 
-	/**
-	 * Integration test for parent method
-	 * @covers FauxRequest::getVal
-	 */
+	// Integration test for parent method.
 	public function testGetVal() {
 		$req = new FauxRequest( [ 'crlf' => "A\r\nb" ] );
 		$this->assertSame( "A\r\nb", $req->getVal( 'crlf' ), 'CRLF' );
 	}
 
-	/**
-	 * Integration test for parent method
-	 * @covers FauxRequest::getRawVal
-	 */
+	// Integration test for parent method.
 	public function testGetRawVal() {
 		$req = new FauxRequest( [
 			'x' => 'Value',
@@ -78,7 +64,7 @@ class FauxRequestTest extends MediaWikiIntegrationTestCase {
 	public function testGetValues() {
 		$values = [ 'x' => 'Value', 'y' => '' ];
 		$req = new FauxRequest( $values );
-		$this->assertSame( $values, $req->getValues() );
+		$this->assertEquals( $values, $req->getValues() );
 	}
 
 	/**
@@ -88,9 +74,9 @@ class FauxRequestTest extends MediaWikiIntegrationTestCase {
 		$values = [ 'x' => 'Value', 'y' => '' ];
 
 		$req = new FauxRequest( $values );
-		$this->assertSame( $values, $req->getQueryValues() );
+		$this->assertEquals( $values, $req->getQueryValues() );
 		$req = new FauxRequest( $values, /*wasPosted*/ true );
-		$this->assertSame( [], $req->getQueryValues() );
+		$this->assertEquals( [], $req->getQueryValues() );
 	}
 
 	/**
@@ -98,9 +84,9 @@ class FauxRequestTest extends MediaWikiIntegrationTestCase {
 	 */
 	public function testGetMethod() {
 		$req = new FauxRequest( [] );
-		$this->assertSame( 'GET', $req->getMethod() );
+		$this->assertEquals( 'GET', $req->getMethod() );
 		$req = new FauxRequest( [], /*wasPosted*/ true );
-		$this->assertSame( 'POST', $req->getMethod() );
+		$this->assertEquals( 'POST', $req->getMethod() );
 	}
 
 	/**
@@ -123,11 +109,11 @@ class FauxRequestTest extends MediaWikiIntegrationTestCase {
 		$this->assertSame( null, $req->getCookie( 'z', '' ) );
 
 		$req->setCookie( 'x', 'Value', '' );
-		$this->assertSame( 'Value', $req->getCookie( 'x', '' ) );
+		$this->assertEquals( 'Value', $req->getCookie( 'x', '' ) );
 
 		$req->setCookies( [ 'x' => 'One', 'y' => 'Two' ], '' );
-		$this->assertSame( 'One', $req->getCookie( 'x', '' ) );
-		$this->assertSame( 'Two', $req->getCookie( 'y', '' ) );
+		$this->assertEquals( 'One', $req->getCookie( 'x', '' ) );
+		$this->assertEquals( 'Two', $req->getCookie( 'y', '' ) );
 	}
 
 	/**
@@ -144,7 +130,7 @@ class FauxRequestTest extends MediaWikiIntegrationTestCase {
 		$this->assertSame( null, $req->getCookie( 'z' ) );
 
 		$req->setCookie( 'x', 'Value' );
-		$this->assertSame( 'Value', $req->getCookie( 'x' ) );
+		$this->assertEquals( 'Value', $req->getCookie( 'x' ) );
 
 		$wgCookiePrefix = $oldPrefix;
 	}
@@ -152,9 +138,9 @@ class FauxRequestTest extends MediaWikiIntegrationTestCase {
 	/**
 	 * @covers FauxRequest::getRequestURL
 	 */
-	public function testGetRequestURL_disallowed() {
+	public function testGetRequestURL() {
 		$req = new FauxRequest();
-		$this->expectException( MWException::class );
+		$this->setExpectedException( MWException::class );
 		$req->getRequestURL();
 	}
 
@@ -165,43 +151,7 @@ class FauxRequestTest extends MediaWikiIntegrationTestCase {
 	public function testSetRequestURL() {
 		$req = new FauxRequest();
 		$req->setRequestURL( 'https://example.org' );
-		$this->assertSame( 'https://example.org', $req->getRequestURL() );
-	}
-
-	/**
-	 * @covers FauxRequest::getFullRequestURL
-	 */
-	public function testGetFullRequestURL_disallowed() {
-		$req = new FauxRequest();
-
-		$this->expectException( MWException::class );
-		$req->getFullRequestURL();
-	}
-
-	/**
-	 * @covers FauxRequest::getFullRequestURL
-	 */
-	public function testGetFullRequestURL_http() {
-		$req = new FauxRequest();
-		$req->setRequestURL( '/path' );
-
-		$this->assertSame(
-			'http://wiki.test/path',
-			$req->getFullRequestURL()
-		);
-	}
-
-	/**
-	 * @covers FauxRequest::getFullRequestURL
-	 */
-	public function testGetFullRequestURL_https() {
-		$req = new FauxRequest( [], false, null, 'https' );
-		$req->setRequestURL( '/path' );
-
-		$this->assertSame(
-			'https://wiki.test/path',
-			$req->getFullRequestURL()
-		);
+		$this->assertEquals( 'https://example.org', $req->getRequestURL() );
 	}
 
 	/**
@@ -210,11 +160,11 @@ class FauxRequestTest extends MediaWikiIntegrationTestCase {
 	 */
 	public function testProtocol() {
 		$req = new FauxRequest();
-		$this->assertSame( 'http', $req->getProtocol() );
+		$this->assertEquals( 'http', $req->getProtocol() );
 		$req = new FauxRequest( [], false, null, 'http' );
-		$this->assertSame( 'http', $req->getProtocol() );
+		$this->assertEquals( 'http', $req->getProtocol() );
 		$req = new FauxRequest( [], false, null, 'https' );
-		$this->assertSame( 'https', $req->getProtocol() );
+		$this->assertEquals( 'https', $req->getProtocol() );
 	}
 
 	/**
@@ -228,13 +178,13 @@ class FauxRequestTest extends MediaWikiIntegrationTestCase {
 		$request = new FauxRequest();
 		$request->setHeader( 'Accept', $value );
 
-		$this->assertSame( false, $request->getHeader( 'Nonexistent' ) );
-		$this->assertSame( $value, $request->getHeader( 'Accept' ) );
-		$this->assertSame( $value, $request->getHeader( 'ACCEPT' ) );
-		$this->assertSame( $value, $request->getHeader( 'accept' ) );
-		$this->assertSame(
-			[ 'text/plain', 'text/html' ],
-			$request->getHeader( 'Accept', WebRequest::GETHEADER_LIST )
+		$this->assertEquals( $request->getHeader( 'Nonexistent' ), false );
+		$this->assertEquals( $request->getHeader( 'Accept' ), $value );
+		$this->assertEquals( $request->getHeader( 'ACCEPT' ), $value );
+		$this->assertEquals( $request->getHeader( 'accept' ), $value );
+		$this->assertEquals(
+			$request->getHeader( 'Accept', WebRequest::GETHEADER_LIST ),
+			[ 'text/plain', 'text/html' ]
 		);
 	}
 
@@ -246,8 +196,15 @@ class FauxRequestTest extends MediaWikiIntegrationTestCase {
 
 		$request = new FauxRequest();
 
-		$this->assertSame( [], $request->getAllHeaders() );
-		$this->assertSame( false, $request->getHeader( 'test' ) );
+		$this->assertEquals(
+			[],
+			$request->getAllHeaders()
+		);
+
+		$this->assertEquals(
+			false,
+			$request->getHeader( 'test' )
+		);
 	}
 
 	/**
@@ -258,7 +215,7 @@ class FauxRequestTest extends MediaWikiIntegrationTestCase {
 		$values = [ 'x' => 'Value', 'y' => '' ];
 
 		$req = new FauxRequest( [], false, /*session*/ $values );
-		$this->assertSame( $values, $req->getSessionArray() );
+		$this->assertEquals( $values, $req->getSessionArray() );
 
 		$req = new FauxRequest();
 		$this->assertSame( null, $req->getSessionArray() );
@@ -271,8 +228,8 @@ class FauxRequestTest extends MediaWikiIntegrationTestCase {
 	 */
 	public function testDummies() {
 		$req = new FauxRequest();
-		$this->assertSame( '', $req->getRawQueryString() );
-		$this->assertSame( '', $req->getRawPostString() );
-		$this->assertSame( '', $req->getRawInput() );
+		$this->assertEquals( '', $req->getRawQueryString() );
+		$this->assertEquals( '', $req->getRawPostString() );
+		$this->assertEquals( '', $req->getRawInput() );
 	}
 }

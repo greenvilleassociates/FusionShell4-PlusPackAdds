@@ -26,53 +26,46 @@
  * @ingroup FileJournal
  */
 
-use Wikimedia\ObjectFactory;
-use Wikimedia\Timestamp\ConvertibleTimestamp;
-
 /**
  * @brief Class for handling file operation journaling.
  *
  * Subclasses should avoid throwing exceptions at all costs.
  *
- * @stable to extend
  * @ingroup FileJournal
  * @since 1.20
  */
 abstract class FileJournal {
 	/** @var string */
 	protected $backend;
-	/** @var int|false */
+
+	/** @var int */
 	protected $ttlDays;
 
 	/**
 	 * Construct a new instance from configuration.
-	 * @stable to call
 	 *
 	 * @param array $config Includes:
-	 *   - 'backend': The name of a registered file backend
-	 *   - 'ttlDays': Days to keep log entries around (false means "forever")
+	 *     'ttlDays' : days to keep log entries around (false means "forever")
 	 */
-	public function __construct( array $config ) {
-		$this->backend = $config['backend'];
-		$this->ttlDays = $config['ttlDays'] ?? false;
+	protected function __construct( array $config ) {
+		$this->ttlDays = isset( $config['ttlDays'] ) ? $config['ttlDays'] : false;
 	}
 
 	/**
 	 * Create an appropriate FileJournal object from config
 	 *
-	 * @deprecated since 1.35, only FileBackendGroup should need to create FileJournals
 	 * @param array $config
 	 * @param string $backend A registered file backend name
 	 * @throws Exception
 	 * @return FileJournal
 	 */
 	final public static function factory( array $config, $backend ) {
-		wfDeprecated( __METHOD__, '1.35' );
-
-		$jrn = ObjectFactory::getObjectFromSpec(
-			[ 'backend' => $backend ] + $config,
-			[ 'specIsArg' => true, 'assertClass' => __CLASS__ ]
-		);
+		$class = $config['class'];
+		$jrn = new $class( $config );
+		if ( !$jrn instanceof self ) {
+			throw new InvalidArgumentException( "Class given is not an instance of FileJournal." );
+		}
+		$jrn->backend = $backend;
 
 		return $jrn;
 	}
@@ -89,9 +82,7 @@ abstract class FileJournal {
 		}
 		$s = Wikimedia\base_convert( sha1( $s ), 16, 36, 31 );
 
-		$timestamp = ConvertibleTimestamp::convert( TS_MW, time() );
-
-		return substr( Wikimedia\base_convert( $timestamp, 10, 36, 9 ) . $s, 0, 31 );
+		return substr( Wikimedia\base_convert( wfTimestamp( TS_MW ), 10, 36, 9 ) . $s, 0, 31 );
 	}
 
 	/**
@@ -106,7 +97,7 @@ abstract class FileJournal {
 	 * @return StatusValue
 	 */
 	final public function logChangeBatch( array $entries, $batchId ) {
-		if ( $entries === [] ) {
+		if ( !count( $entries ) ) {
 			return StatusValue::newGood();
 		}
 
@@ -158,10 +149,10 @@ abstract class FileJournal {
 	 * Get an array of file change log entries.
 	 * A starting change ID and/or limit can be specified.
 	 *
-	 * @param int|null $start Starting change ID or null
-	 * @param int $limit Maximum number of items to return (0 = unlimited)
-	 * @param string|null &$next Updated to the ID of the next entry.
-	 * @return array[] List of associative arrays, each having:
+	 * @param int $start Starting change ID or null
+	 * @param int $limit Maximum number of items to return
+	 * @param string &$next Updated to the ID of the next entry.
+	 * @return array List of associative arrays, each having:
 	 *     id         : unique, monotonic, ID for this change
 	 *     batch_uuid : UUID for an operation batch
 	 *     backend    : the backend name
@@ -170,7 +161,6 @@ abstract class FileJournal {
 	 *     new_sha1   : base 36 sha1 of the new file had the operation succeeded
 	 *     timestamp  : TS_MW timestamp of the batch change
 	 *   Also, $next is updated to the ID of the next entry.
-	 * @phan-return array<int,array{id:int,batch_uuid:string,backend:string,op:string,path:string,new_sha1:string,timestamp:string}>
 	 */
 	final public function getChangeEntries( $start = null, $limit = 0, &$next = null ) {
 		$entries = $this->doGetChangeEntries( $start, $limit ? $limit + 1 : 0 );

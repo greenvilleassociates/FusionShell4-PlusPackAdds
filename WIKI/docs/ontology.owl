@@ -1,7 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 
 <!DOCTYPE rdf:RDF [
-  <!ENTITY cc "http://creativecommons.org/ns#">
   <!ENTITY xsd "http://www.w3.org/2001/XMLSchema#">
   <!ENTITY rdf "http://www.w3.org/1999/02/22-rdf-syntax-ns#">
   <!ENTITY rdfs "http://www.w3.org/2000/01/rdf-schema#">
@@ -14,13 +13,11 @@
   xmlns:rdf="&rdf;"
   xmlns:rdfs="&rdfs;"
   xmlns:owl="&owl;"
-  xmlns:cc="&cc;"
 >
 
   <owl:Ontology rdf:about="&mediawiki;">
     <rdfs:label>MediaWiki ontology</rdfs:label>
     <rdfs:comment>The ontology of MediaWiki</rdfs:comment>
-    <cc:licence rdf:resource="http://creativecommons.org/publicdomain/zero/1.0/" />
   </owl:Ontology>
 
   <!--
@@ -41,11 +38,6 @@
     <rdfs:comment>MediaWiki category.</rdfs:comment>
   </owl:Class>
 
-  <owl:Class rdf:about="&mediawiki;HiddenCategory">
-    <rdfs:label>HiddenCategory</rdfs:label>
-    <rdfs:comment>MediaWiki hidden category.</rdfs:comment>
-  </owl:Class>
-
   <!--
   ///////////////////////////////////////////////////////////////////////////////////////
   //
@@ -60,19 +52,5 @@
       <rdfs:range rdf:resource="&mediawiki;Category"/>
       <rdfs:domain rdf:resource="&mediawiki;Category"/>
   </owl:ObjectProperty>
-
-  <owl:DatatypeProperty rdf:about="&mediawiki;pages">
-      <rdfs:label>pages</rdfs:label>
-      <rdfs:comment>Number of articles belonging to this category.</rdfs:comment>
-      <rdfs:range rdf:resource="&mediawiki;Category"/>
-      <rdfs:range rdf:resource="&xsd;integer"/>
-  </owl:DatatypeProperty>
-
-  <owl:DatatypeProperty rdf:about="&mediawiki;subcategories">
-      <rdfs:label>subcategories</rdfs:label>
-      <rdfs:comment>Number of subcategories belonging to this category.</rdfs:comment>
-      <rdfs:range rdf:resource="&mediawiki;Category"/>
-      <rdfs:range rdf:resource="&xsd;integer"/>
-  </owl:DatatypeProperty>
 
 </rdf:RDF>

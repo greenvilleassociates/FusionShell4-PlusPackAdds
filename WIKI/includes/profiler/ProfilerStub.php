@@ -1,5 +1,7 @@
 <?php
 /**
+ * Stub profiling functions.
+ *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
  * the Free Software Foundation; either version 2 of the License, or
@@ -16,10 +18,11 @@
  * http://www.gnu.org/copyleft/gpl.html
  *
  * @file
+ * @ingroup Profiler
  */
 
 /**
- * Stub profiler that does nothing.
+ * Stub profiler that does nothing
  *
  * @ingroup Profiler
  */
@@ -29,11 +32,9 @@ class ProfilerStub extends Profiler {
 	}
 
 	public function getFunctionStats() {
-		return [];
 	}
 
 	public function getOutput() {
-		return '';
 	}
 
 	public function close() {

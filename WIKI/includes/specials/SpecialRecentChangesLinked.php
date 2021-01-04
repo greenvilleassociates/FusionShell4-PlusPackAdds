@@ -30,7 +30,7 @@ class SpecialRecentChangesLinked extends SpecialRecentChanges {
 	/** @var bool|Title */
 	protected $rclTargetTitle;
 
-	public function __construct() {
+	function __construct() {
 		parent::__construct( 'Recentchangeslinked' );
 	}
 
@@ -62,9 +62,9 @@ class SpecialRecentChangesLinked extends SpecialRecentChanges {
 		$outputPage = $this->getOutput();
 		$title = Title::newFromText( $target );
 		if ( !$title || $title->isExternal() ) {
-			$outputPage->addHTML(
-				Html::errorBox( $this->msg( 'allpagesbadtitle' )->parse() )
-			);
+			$outputPage->addHTML( '<div class="errorbox">' . $this->msg( 'allpagesbadtitle' )
+					->parse() . '</div>' );
+
 			return false;
 		}
 
@@ -84,13 +84,20 @@ class SpecialRecentChangesLinked extends SpecialRecentChanges {
 		$ns = $title->getNamespace();
 		$dbkey = $title->getDBkey();
 
-		$rcQuery = RecentChange::getQueryInfo();
-		$tables = array_merge( $tables, $rcQuery['tables'] );
-		$select = array_merge( $rcQuery['fields'], $select );
-		$join_conds = array_merge( $join_conds, $rcQuery['joins'] );
+		$tables[] = 'recentchanges';
+		$select = array_merge( RecentChange::selectFields(), $select );
 
-		// Join with watchlist and watchlist_expiry tables to highlight watched rows.
-		$this->addWatchlistJoins( $dbr, $tables, $select, $join_conds, $conds );
+		// left join with watchlist table to highlight watched rows
+		$uid = $this->getUser()->getId();
+		if ( $uid && $this->getUser()->isAllowed( 'viewmywatchlist' ) ) {
+			$tables[] = 'watchlist';
+			$select[] = 'wl_user';
+			$join_conds['watchlist'] = [ 'LEFT JOIN', [
+				'wl_user' => $uid,
+				'wl_title=rc_title',
+				'wl_namespace=rc_namespace'
+			] ];
+		}
 
 		// JOIN on page, used for 'last revision' filter highlight
 		$tables[] = 'page';
@@ -113,8 +120,8 @@ class SpecialRecentChangesLinked extends SpecialRecentChanges {
 				// To prevent this from causing query performance problems, we need to add
 				// a GROUP BY, and add rc_id to the ORDER BY.
 				$order = [
-					'GROUP BY' => [ 'rc_timestamp', 'rc_id' ],
-					'ORDER BY' => [ 'rc_timestamp DESC', 'rc_id DESC' ]
+					'GROUP BY' => 'rc_timestamp, rc_id',
+					'ORDER BY' => 'rc_timestamp DESC, rc_id DESC'
 				];
 			} else {
 				$order = [ 'ORDER BY' => 'rc_timestamp DESC' ];
@@ -198,7 +205,7 @@ class SpecialRecentChangesLinked extends SpecialRecentChanges {
 				$conds + $subconds,
 				__METHOD__,
 				$order + $query_options,
-				$join_conds + [ $link_table => [ 'JOIN', $subjoin ] ]
+				$join_conds + [ $link_table => [ 'INNER JOIN', $subjoin ] ]
 			);
 
 			if ( $dbr->unionSupportsOrderAndLimit() ) {
@@ -215,15 +222,20 @@ class SpecialRecentChangesLinked extends SpecialRecentChanges {
 			$sql = $subsql[0];
 		} else {
 			// need to resort and relimit after union
-			$sql = $dbr->unionQueries( $subsql, $dbr::UNION_DISTINCT ) .
-				' ORDER BY rc_timestamp DESC';
+			$sql = $dbr->unionQueries( $subsql, false ) . ' ORDER BY rc_timestamp DESC';
 			$sql = $dbr->limitResult( $sql, $limit, false );
 		}
 
-		return $dbr->query( $sql, __METHOD__ );
+		$res = $dbr->query( $sql, __METHOD__ );
+
+		if ( $res->numRows() == 0 ) {
+			$this->mResultEmpty = true;
+		}
+
+		return $res;
 	}
 
-	public function setTopText( FormOptions $opts ) {
+	function setTopText( FormOptions $opts ) {
 		$target = $this->getTargetTitle();
 		if ( $target ) {
 			$this->getOutput()->addBacklinkSubtitle( $target );
@@ -237,7 +249,7 @@ class SpecialRecentChangesLinked extends SpecialRecentChanges {
 	 * @param FormOptions $opts
 	 * @return array
 	 */
-	public function getExtraOptions( $opts ) {
+	function getExtraOptions( $opts ) {
 		$extraOpts = parent::getExtraOptions( $opts );
 
 		$opts->consumeValues( [ 'showlinkedto', 'target' ] );
@@ -254,7 +266,7 @@ class SpecialRecentChangesLinked extends SpecialRecentChanges {
 	/**
 	 * @return Title
 	 */
-	private function getTargetTitle() {
+	function getTargetTitle() {
 		if ( $this->rclTargetTitle === null ) {
 			$opts = $this->getOptions();
 			if ( isset( $opts['target'] ) && $opts['target'] !== '' ) {
@@ -277,28 +289,5 @@ class SpecialRecentChangesLinked extends SpecialRecentChanges {
 	 */
 	public function prefixSearchSubpages( $search, $limit, $offset ) {
 		return $this->prefixSearchString( $search, $limit, $offset );
-	}
-
-	protected function outputNoResults() {
-		$targetTitle = $this->getTargetTitle();
-		if ( $targetTitle === false ) {
-			$this->getOutput()->addHTML(
-				Html::rawElement(
-					'div',
-					[ 'class' => 'mw-changeslist-empty mw-changeslist-notargetpage' ],
-					$this->msg( 'recentchanges-notargetpage' )->parse()
-				)
-			);
-		} elseif ( !$targetTitle || $targetTitle->isExternal() ) {
-			$this->getOutput()->addHTML(
-				Html::rawElement(
-					'div',
-					[ 'class' => 'mw-changeslist-empty mw-changeslist-invalidtargetpage' ],
-					$this->msg( 'allpagesbadtitle' )->parse()
-				)
-			);
-		} else {
-			parent::outputNoResults();
-		}
 	}
 }

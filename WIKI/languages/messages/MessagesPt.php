@@ -110,7 +110,7 @@ $dateFormats = [
 	'dmy both' => 'H\hi\m\i\n \d\e j \d\e F \d\e Y',
 ];
 
-$separatorTransformTable = [ ',' => "\u{00A0}", '.' => ',' ];
+$separatorTransformTable = [ ',' => "\xc2\xa0", '.' => ',' ];
 $linkTrail = '/^([áâãàéêẽçíòóôõq̃úüűũa-z]+)(.*)$/sDu'; # T23168, T29633
 
 $specialPageAliases = [

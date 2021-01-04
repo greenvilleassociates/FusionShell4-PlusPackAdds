@@ -21,8 +21,6 @@
  * @ingroup JobQueue
  */
 
-use MediaWiki\MediaWikiServices;
-
 /**
  * Job for asynchronous rendering of thumbnails.
  *
@@ -38,26 +36,36 @@ class ThumbnailRenderJob extends Job {
 
 		$transformParams = $this->params['transformParams'];
 
-		$file = MediaWikiServices::getInstance()->getRepoGroup()->getLocalRepo()
-			->newFile( $this->title );
+		$file = wfLocalFile( $this->title );
 		$file->load( File::READ_LATEST );
 
 		if ( $file && $file->exists() ) {
 			if ( $wgUploadThumbnailRenderMethod === 'jobqueue' ) {
 				$thumb = $file->transform( $transformParams, File::RENDER_NOW );
 
-				if ( !$thumb || $thumb->isError() ) {
-					if ( $thumb instanceof MediaTransformError ) {
-						$this->setLastError( __METHOD__ . ': thumbnail couln\'t be generated:' .
-							$thumb->toText() );
-					} else {
-						$this->setLastError( __METHOD__ . ': thumbnail couln\'t be generated' );
-					}
+				if ( $thumb && !$thumb->isError() ) {
+					return true;
+				} else {
+					$this->setLastError( __METHOD__ . ': thumbnail couln\'t be generated' );
 					return false;
 				}
-				return true;
 			} elseif ( $wgUploadThumbnailRenderMethod === 'http' ) {
-				return $this->hitThumbUrl( $file, $transformParams );
+				$thumbUrl = '';
+				$status = $this->hitThumbUrl( $file, $transformParams, $thumbUrl );
+
+				wfDebug( __METHOD__ . ": received status {$status}\n" );
+
+				// 400 happens when requesting a size greater or equal than the original
+				if ( $status === 200 || $status === 301 || $status === 302 || $status === 400 ) {
+					return true;
+				} elseif ( $status ) {
+					$this->setLastError( __METHOD__ . ': incorrect HTTP status ' .
+						$status . ' when hitting ' . $thumbUrl );
+					return false;
+				} else {
+					$this->setLastError( __METHOD__ . ': HTTP request failure' );
+					return false;
+				}
 			} else {
 				$this->setLastError( __METHOD__ . ': unknown thumbnail render method ' .
 					$wgUploadThumbnailRenderMethod );
@@ -69,48 +77,26 @@ class ThumbnailRenderJob extends Job {
 		}
 	}
 
-	/**
-	 * @param LocalFile $file
-	 * @param array $transformParams
-	 * @return bool Success status (error will be set via setLastError() when false)
-	 */
-	protected function hitThumbUrl( LocalFile $file, $transformParams ) {
+	protected function hitThumbUrl( LocalFile $file, $transformParams, &$thumbUrl ) {
 		global $wgUploadThumbnailRenderHttpCustomHost, $wgUploadThumbnailRenderHttpCustomDomain;
 
-		$handler = $file->getHandler();
-		if ( !$handler ) {
-			$this->setLastError( __METHOD__ . ': could not get handler' );
-			return false;
-		} elseif ( !$handler->normaliseParams( $file, $transformParams ) ) {
-			$this->setLastError( __METHOD__ . ': failed to normalize' );
-			return false;
-		}
 		$thumbName = $file->thumbName( $transformParams );
 		$thumbUrl = $file->getThumbUrl( $thumbName );
-
-		if ( $thumbUrl === null ) {
-			$this->setLastError( __METHOD__ . ': could not get thumb URL' );
-			return false;
-		}
 
 		if ( $wgUploadThumbnailRenderHttpCustomDomain ) {
 			$parsedUrl = wfParseUrl( $thumbUrl );
 
-			if ( !isset( $parsedUrl['path'] ) || $parsedUrl['path'] === '' ) {
-				$this->setLastError( __METHOD__ . ": invalid thumb URL: $thumbUrl" );
+			if ( !$parsedUrl || !isset( $parsedUrl['path'] ) || !strlen( $parsedUrl['path'] ) ) {
 				return false;
 			}
 
 			$thumbUrl = '//' . $wgUploadThumbnailRenderHttpCustomDomain . $parsedUrl['path'];
 		}
 
-		wfDebug( __METHOD__ . ": hitting url {$thumbUrl}" );
+		wfDebug( __METHOD__ . ": hitting url {$thumbUrl}\n" );
 
-		// T203135 We don't wait for the request to complete, as this is mostly fire & forget.
-		// Looking at the HTTP status of requests that take less than 1s is a sanity check.
-		$request = MediaWikiServices::getInstance()->getHttpRequestFactory()->create(
-			$thumbUrl,
-			[ 'method' => 'HEAD', 'followRedirects' => true, 'timeout' => 1 ],
+		$request = MWHttpRequest::factory( $thumbUrl,
+			[ 'method' => 'HEAD', 'followRedirects' => true ],
 			__METHOD__
 		);
 
@@ -119,35 +105,7 @@ class ThumbnailRenderJob extends Job {
 		}
 
 		$status = $request->execute();
-		$statusCode = $request->getStatus();
-		wfDebug( __METHOD__ . ": received status {$statusCode}" );
 
-		// 400 happens when requesting a size greater or equal than the original
-		// TODO use proper error signaling. 400 could mean a number of other things.
-		if ( $statusCode === 200 || $statusCode === 301 || $statusCode === 302 || $statusCode === 400 ) {
-			return true;
-		} elseif ( $statusCode ) {
-			$this->setLastError( __METHOD__ . ": incorrect HTTP status $statusCode when hitting $thumbUrl" );
-		} elseif ( $status->hasMessage( 'http-timed-out' ) ) {
-			// T203135 we ignore timeouts, as it would be inefficient for this job to wait for
-			// minutes for the slower thumbnails to complete.
-			return true;
-		} else {
-			$this->setLastError( __METHOD__ . ': HTTP request failure: '
-				. Status::wrap( $status )->getWikiText( null, null, 'en' ) );
-		}
-		return false;
-	}
-
-	/**
-	 * Whether to retry the job.
-	 * @return bool
-	 */
-	public function allowRetries() {
-		// ThumbnailRenderJob is a warmup for the thumbnails cache,
-		// so loosing it is not a problem. Most times the job fails
-		// for non-renderable or missing images which will not be fixed
-		// by a retry, but will create additional load on the renderer.
-		return false;
+		return $request->getStatus();
 	}
 }

@@ -16,7 +16,7 @@
  * @author Санюн Вадик
  */
 
-$fallback = 'mrj, ru';
+$fallback = 'ru';
 
 $namespaceNames = [
 	NS_SPECIAL          => 'Лӱмын_ыштыме',

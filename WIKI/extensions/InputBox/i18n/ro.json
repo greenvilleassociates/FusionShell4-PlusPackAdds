@@ -2,13 +2,13 @@
 	"@metadata": {
 		"authors": [
 			"AdiJapan",
-			"Danutz",
 			"Emily",
 			"Firilacroco",
-			"ImGelu",
 			"KlaudiuMihaila",
 			"Mihai",
-			"Minisarm"
+			"Minisarm",
+			"Danutz",
+			"ImGelu"
 		]
 	},
 	"inputbox-desc": "Permite includerea formelor HTML predefinite",

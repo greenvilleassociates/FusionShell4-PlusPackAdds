@@ -2,7 +2,6 @@
 
 /**
  * Augment search results.
- * @stable to implement
  */
 interface ResultAugmentor {
 	/**

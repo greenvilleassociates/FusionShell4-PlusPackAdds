@@ -24,17 +24,16 @@
  * @author Ævar Arnfjörð Bjarmason <avarab@gmail.com>
  */
 
-use MediaWiki\MediaWikiServices;
+use Wikimedia\Rdbms\ResultWrapper;
 use Wikimedia\Rdbms\IDatabase;
-use Wikimedia\Rdbms\IResultWrapper;
 
 /**
  * A special page that list pages that have highest category count
  *
  * @ingroup SpecialPage
  */
-class SpecialMostCategories extends QueryPage {
-	public function __construct( $name = 'Mostcategories' ) {
+class MostcategoriesPage extends QueryPage {
+	function __construct( $name = 'Mostcategories' ) {
 		parent::__construct( $name );
 	}
 
@@ -42,7 +41,7 @@ class SpecialMostCategories extends QueryPage {
 		return true;
 	}
 
-	public function isSyndicated() {
+	function isSyndicated() {
 		return false;
 	}
 
@@ -54,8 +53,7 @@ class SpecialMostCategories extends QueryPage {
 				'title' => 'page_title',
 				'value' => 'COUNT(*)'
 			],
-			'conds' => [ 'page_namespace' =>
-				MediaWikiServices::getInstance()->getNamespaceInfo()->getContentNamespaces() ],
+			'conds' => [ 'page_namespace' => MWNamespace::getContentNamespaces() ],
 			'options' => [
 				'HAVING' => 'COUNT(*) > 1',
 				'GROUP BY' => [ 'page_namespace', 'page_title' ]
@@ -71,9 +69,9 @@ class SpecialMostCategories extends QueryPage {
 
 	/**
 	 * @param IDatabase $db
-	 * @param IResultWrapper $res
+	 * @param ResultWrapper $res
 	 */
-	public function preprocessResults( $db, $res ) {
+	function preprocessResults( $db, $res ) {
 		$this->executeLBFromResultWrapper( $res );
 	}
 
@@ -82,7 +80,7 @@ class SpecialMostCategories extends QueryPage {
 	 * @param object $result Result row
 	 * @return string
 	 */
-	public function formatResult( $skin, $result ) {
+	function formatResult( $skin, $result ) {
 		$title = Title::makeTitleSafe( $result->namespace, $result->title );
 		if ( !$title ) {
 			return Html::element(

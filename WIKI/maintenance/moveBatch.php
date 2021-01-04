@@ -35,8 +35,6 @@
  * e.g. immobile_namespace for namespaces which can't be moved
  */
 
-use MediaWiki\MediaWikiServices;
-
 require_once __DIR__ . '/Maintenance.php';
 
 /**
@@ -63,33 +61,34 @@ class MoveBatch extends Maintenance {
 		chdir( $oldCwd );
 
 		# Options processing
-		$username = $this->getOption( 'u', false );
+		$user = $this->getOption( 'u', false );
 		$reason = $this->getOption( 'r', '' );
 		$interval = $this->getOption( 'i', 0 );
 		$noredirects = $this->hasOption( 'noredirects' );
-		if ( $this->hasArg( 0 ) ) {
-			$file = fopen( $this->getArg( 0 ), 'r' );
+		if ( $this->hasArg() ) {
+			$file = fopen( $this->getArg(), 'r' );
 		} else {
 			$file = $this->getStdin();
 		}
 
 		# Setup
 		if ( !$file ) {
-			$this->fatalError( "Unable to read file, exiting" );
+			$this->error( "Unable to read file, exiting", true );
 		}
-		if ( $username === false ) {
-			$user = User::newSystemUser( 'Move page script', [ 'steal' => true ] );
+		if ( $user === false ) {
+			$wgUser = User::newSystemUser( 'Move page script', [ 'steal' => true ] );
 		} else {
-			$user = User::newFromName( $username );
+			$wgUser = User::newFromName( $user );
 		}
-		if ( !$user ) {
-			$this->fatalError( "Invalid username" );
+		if ( !$wgUser ) {
+			$this->error( "Invalid username", true );
 		}
-		$wgUser = $user;
 
 		# Setup complete, now start
 		$dbw = $this->getDB( DB_MASTER );
+		// @codingStandardsIgnoreStart Ignore avoid function calls in a FOR loop test part warning
 		for ( $linenum = 1; !feof( $file ); $linenum++ ) {
+			// @codingStandardsIgnoreEnd
 			$line = fgets( $file );
 			if ( $line === false ) {
 				break;
@@ -101,18 +100,17 @@ class MoveBatch extends Maintenance {
 			}
 			$source = Title::newFromText( $parts[0] );
 			$dest = Title::newFromText( $parts[1] );
-			if ( $source === null || $dest === null ) {
+			if ( is_null( $source ) || is_null( $dest ) ) {
 				$this->error( "Invalid title on line $linenum" );
 				continue;
 			}
 
 			$this->output( $source->getPrefixedText() . ' --> ' . $dest->getPrefixedText() );
 			$this->beginTransaction( $dbw, __METHOD__ );
-			$mp = MediaWikiServices::getInstance()->getMovePageFactory()
-				->newMovePage( $source, $dest );
-			$status = $mp->move( $user, $reason, !$noredirects );
+			$mp = new MovePage( $source, $dest );
+			$status = $mp->move( $wgUser, $reason, !$noredirects );
 			if ( !$status->isOK() ) {
-				$this->output( "\nFAILED: " . $status->getMessage( false, false, 'en' )->text() );
+				$this->output( "\nFAILED: " . $status->getWikiText( false, false, 'en' ) );
 			}
 			$this->commitTransaction( $dbw, __METHOD__ );
 			$this->output( "\n" );
@@ -120,9 +118,10 @@ class MoveBatch extends Maintenance {
 			if ( $interval ) {
 				sleep( $interval );
 			}
+			wfWaitForSlaves();
 		}
 	}
 }
 
-$maintClass = MoveBatch::class;
+$maintClass = "MoveBatch";
 require_once RUN_MAINTENANCE_IF_MAIN;

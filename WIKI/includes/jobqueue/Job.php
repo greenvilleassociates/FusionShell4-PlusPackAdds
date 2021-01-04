@@ -23,13 +23,12 @@
 
 /**
  * Class to both describe a background job and handle jobs.
- * To push jobs onto queues, use JobQueueGroup::singleton()->push();
- *
- * @stable to extend
+ * The queue aspects of this class are now deprecated.
+ * Using the class to push jobs onto queues is deprecated (use JobSpecification).
  *
  * @ingroup JobQueue
  */
-abstract class Job implements RunnableJob {
+abstract class Job implements IJobSpecification {
 	/** @var string */
 	public $command;
 
@@ -43,7 +42,7 @@ abstract class Job implements RunnableJob {
 	protected $title;
 
 	/** @var bool Expensive jobs may set this to true */
-	protected $removeDuplicates = false;
+	protected $removeDuplicates;
 
 	/** @var string Text for error that occurred last */
 	protected $error;
@@ -51,36 +50,23 @@ abstract class Job implements RunnableJob {
 	/** @var callable[] */
 	protected $teardownCallbacks = [];
 
-	/** @var int Bitfield of JOB_* class constants */
-	protected $executionFlags = 0;
+	/**
+	 * Run the job
+	 * @return bool Success
+	 */
+	abstract public function run();
 
 	/**
 	 * Create the appropriate object to handle a specific job
 	 *
 	 * @param string $command Job command
-	 * @param array|Title $params Job parameters
-	 * @throws InvalidArgumentException
+	 * @param Title $title Associated title
+	 * @param array $params Job parameters
+	 * @throws MWException
 	 * @return Job
 	 */
-	public static function factory( $command, $params = [] ) {
+	public static function factory( $command, Title $title, $params = [] ) {
 		global $wgJobClasses;
-
-		if ( $params instanceof Title ) {
-			// Backwards compatibility for old signature ($command, $title, $params)
-			$title = $params;
-			$params = func_num_args() >= 3 ? func_get_arg( 2 ) : [];
-		} elseif ( isset( $params['namespace'] ) && isset( $params['title'] ) ) {
-			// Handle job classes that take title as constructor parameter.
-			// If a newer classes like GenericParameterJob uses these parameters,
-			// then this happens in Job::__construct instead.
-			$title = Title::makeTitle( $params['namespace'], $params['title'] );
-		} else {
-			// Default title for job classes not implementing GenericParameterJob.
-			// This must be a valid title because it not directly passed to
-			// our Job constructor, but rather it's subclasses which may expect
-			// to be able to use it.
-			$title = Title::makeTitle( NS_SPECIAL, 'Blankpage' );
-		}
 
 		if ( isset( $wgJobClasses[$command] ) ) {
 			$handler = $wgJobClasses[$command];
@@ -88,23 +74,16 @@ abstract class Job implements RunnableJob {
 			if ( is_callable( $handler ) ) {
 				$job = call_user_func( $handler, $title, $params );
 			} elseif ( class_exists( $handler ) ) {
-				if ( is_subclass_of( $handler, GenericParameterJob::class ) ) {
-					$job = new $handler( $params );
-				} else {
-					$job = new $handler( $title, $params );
-				}
+				$job = new $handler( $title, $params );
 			} else {
 				$job = null;
 			}
 
 			if ( $job instanceof Job ) {
 				$job->command = $command;
-
 				return $job;
 			} else {
-				throw new InvalidArgumentException(
-					"Could not instantiate job '$command': bad spec!"
-				);
+				throw new InvalidArgumentException( "Cannot instantiate job '$command': bad spec!" );
 			}
 		}
 
@@ -112,60 +91,42 @@ abstract class Job implements RunnableJob {
 	}
 
 	/**
-	 * @stable to call
-	 *
 	 * @param string $command
-	 * @param array|Title|null $params
+	 * @param Title $title
+	 * @param array|bool $params Can not be === true
 	 */
-	public function __construct( $command, $params = null ) {
-		if ( $params instanceof Title ) {
-			// Backwards compatibility for old signature ($command, $title, $params)
-			$title = $params;
-			$params = func_num_args() >= 3 ? func_get_arg( 2 ) : [];
-		} else {
-			// Newer jobs may choose to not have a top-level title (e.g. GenericParameterJob)
-			$title = null;
-		}
-
-		if ( !is_array( $params ) ) {
-			throw new InvalidArgumentException( '$params must be an array' );
-		}
-
-		if (
-			$title &&
-			!isset( $params['namespace'] ) &&
-			!isset( $params['title'] )
-		) {
-			// When constructing this class for submitting to the queue,
-			// normalise the $title arg of old job classes as part of $params.
-			$params['namespace'] = $title->getNamespace();
-			$params['title'] = $title->getDBkey();
-		}
-
+	public function __construct( $command, $title, $params = false ) {
 		$this->command = $command;
-		$this->params = $params + [ 'requestId' => WebRequest::getRequestId() ];
+		$this->title = $title;
+		$this->params = is_array( $params ) ? $params : []; // sanity
 
-		if ( $this->title === null ) {
-			// Set this field for access via getTitle().
-			$this->title = ( isset( $params['namespace'] ) && isset( $params['title'] ) )
-				? Title::makeTitle( $params['namespace'], $params['title'] )
-				// GenericParameterJob classes without namespace/title params
-				// should not use getTitle(). Set an invalid title as placeholder.
-				: Title::makeTitle( NS_SPECIAL, '' );
+		// expensive jobs may set this to true
+		$this->removeDuplicates = false;
+
+		if ( !isset( $this->params['requestId'] ) ) {
+			$this->params['requestId'] = WebRequest::getRequestId();
 		}
 	}
 
 	/**
-	 * @inheritDoc
-	 * @stable to override
+	 * Batch-insert a group of jobs into the queue.
+	 * This will be wrapped in a transaction with a forced commit.
+	 *
+	 * This may add duplicate at insert time, but they will be
+	 * removed later on, when the first one is popped.
+	 *
+	 * @param Job[] $jobs Array of Job objects
+	 * @return bool
+	 * @deprecated since 1.21
 	 */
-	public function hasExecutionFlag( $flag ) {
-		return ( $this->executionFlags & $flag ) === $flag;
+	public static function batchInsert( $jobs ) {
+		wfDeprecated( __METHOD__, '1.21' );
+		JobQueueGroup::singleton()->push( $jobs );
+		return true;
 	}
 
 	/**
-	 * @inheritDoc
-	 * @stable to override
+	 * @return string
 	 */
 	public function getType() {
 		return $this->command;
@@ -174,52 +135,18 @@ abstract class Job implements RunnableJob {
 	/**
 	 * @return Title
 	 */
-	final public function getTitle() {
+	public function getTitle() {
 		return $this->title;
 	}
 
 	/**
-	 * @inheritDoc
-	 * @stable to override
+	 * @return array
 	 */
 	public function getParams() {
 		return $this->params;
 	}
 
 	/**
-	 * @stable to override
-	 * @param string|null $field Metadata field or null to get all the metadata
-	 * @return mixed|null Value; null if missing
-	 * @since 1.33
-	 */
-	public function getMetadata( $field = null ) {
-		if ( $field === null ) {
-			return $this->metadata;
-		}
-
-		return $this->metadata[$field] ?? null;
-	}
-
-	/**
-	 * @stable to override
-	 * @param string $field Key name to set the value for
-	 * @param mixed $value The value to set the field for
-	 * @return mixed|null The prior field value; null if missing
-	 * @since 1.33
-	 */
-	public function setMetadata( $field, $value ) {
-		$old = $this->getMetadata( $field );
-		if ( $value === null ) {
-			unset( $this->metadata[$field] );
-		} else {
-			$this->metadata[$field] = $value;
-		}
-
-		return $old;
-	}
-
-	/**
-	 * @stable to override
 	 * @return int|null UNIX timestamp to delay running this job until, otherwise null
 	 * @since 1.22
 	 */
@@ -240,16 +167,20 @@ abstract class Job implements RunnableJob {
 	}
 
 	/**
-	 * @inheritDoc
-	 * @stable to override
+	 * @return string|null Id of the request that created this job. Follows
+	 *  jobs recursively, allowing to track the id of the request that started a
+	 *  job when jobs insert jobs which insert other jobs.
+	 * @since 1.27
 	 */
 	public function getRequestId() {
-		return $this->params['requestId'] ?? null;
+		return isset( $this->params['requestId'] )
+			? $this->params['requestId']
+			: null;
 	}
 
 	/**
-	 * @inheritDoc
-	 * @stable to override
+	 * @return int|null UNIX timestamp of when the job was runnable, or null
+	 * @since 1.26
 	 */
 	public function getReadyTimestamp() {
 		return $this->getReleaseTimestamp() ?: $this->getQueuedTimestamp();
@@ -264,8 +195,6 @@ abstract class Job implements RunnableJob {
 	 * network partitions and fail-over. Thus, additional locking is needed to
 	 * enforce mutual exclusion if this is really needed.
 	 *
-	 * @stable to override
-	 *
 	 * @return bool
 	 */
 	public function ignoreDuplicates() {
@@ -273,16 +202,17 @@ abstract class Job implements RunnableJob {
 	}
 
 	/**
-	 * @inheritDoc
-	 * @stable to override
+	 * @return bool Whether this job can be retried on failure by job runners
+	 * @since 1.21
 	 */
 	public function allowRetries() {
 		return true;
 	}
 
 	/**
-	 * @stable to override
-	 * @return int
+	 * @return int Number of actually "work items" handled in this job
+	 * @see $wgJobBackoffThrottling
+	 * @since 1.23
 	 */
 	public function workItemCount() {
 		return 1;
@@ -294,13 +224,14 @@ abstract class Job implements RunnableJob {
 	 * only checked if ignoreDuplicates() returns true, meaning that duplicate
 	 * jobs are supposed to be ignored.
 	 *
-	 * @stable to override
 	 * @return array Map of key/values
 	 * @since 1.21
 	 */
 	public function getDeduplicationInfo() {
 		$info = [
 			'type' => $this->getType(),
+			'namespace' => $this->getTitle()->getNamespace(),
+			'title' => $this->getTitle()->getDBkey(),
 			'params' => $this->getParams()
 		];
 		if ( is_array( $info['params'] ) ) {
@@ -346,20 +277,22 @@ abstract class Job implements RunnableJob {
 	}
 
 	/**
-	 * @stable to override
 	 * @see JobQueue::deduplicateRootJob()
 	 * @return array
 	 * @since 1.21
 	 */
 	public function getRootJobParams() {
 		return [
-			'rootJobSignature' => $this->params['rootJobSignature'] ?? null,
-			'rootJobTimestamp' => $this->params['rootJobTimestamp'] ?? null
+			'rootJobSignature' => isset( $this->params['rootJobSignature'] )
+				? $this->params['rootJobSignature']
+				: null,
+			'rootJobTimestamp' => isset( $this->params['rootJobTimestamp'] )
+				? $this->params['rootJobTimestamp']
+				: null
 		];
 	}
 
 	/**
-	 * @stable to override
 	 * @see JobQueue::deduplicateRootJob()
 	 * @return bool
 	 * @since 1.22
@@ -370,7 +303,6 @@ abstract class Job implements RunnableJob {
 	}
 
 	/**
-	 * @stable to override
 	 * @see JobQueue::deduplicateRootJob()
 	 * @return bool Whether this is job is a root job
 	 */
@@ -389,8 +321,9 @@ abstract class Job implements RunnableJob {
 	}
 
 	/**
-	 * @inheritDoc
-	 * @stable to override
+	 * Do any final cleanup after run(), deferred updates, and all DB commits happen
+	 * @param bool $status Whether the job, its deferred updates, and DB commit all succeeded
+	 * @since 1.27
 	 */
 	public function teardown( $status ) {
 		foreach ( $this->teardownCallbacks as $callback ) {
@@ -399,8 +332,17 @@ abstract class Job implements RunnableJob {
 	}
 
 	/**
-	 * @inheritDoc
-	 * @stable to override
+	 * Insert a single job into the queue.
+	 * @return bool True on success
+	 * @deprecated since 1.21
+	 */
+	public function insert() {
+		JobQueueGroup::singleton()->push( $this );
+		return true;
+	}
+
+	/**
+	 * @return string
 	 */
 	public function toString() {
 		$paramString = '';
@@ -462,10 +404,6 @@ abstract class Job implements RunnableJob {
 		$this->error = $error;
 	}
 
-	/**
-	 * @inheritDoc
-	 * @stable to override
-	 */
 	public function getLastError() {
 		return $this->error;
 	}

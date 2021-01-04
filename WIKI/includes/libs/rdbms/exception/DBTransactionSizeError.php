@@ -22,7 +22,6 @@
 namespace Wikimedia\Rdbms;
 
 /**
- * @newable
  * @ingroup Database
  */
 class DBTransactionSizeError extends DBTransactionError {
@@ -31,7 +30,4 @@ class DBTransactionSizeError extends DBTransactionError {
 	}
 }
 
-/**
- * @deprecated since 1.29
- */
 class_alias( DBTransactionSizeError::class, 'DBTransactionSizeError' );

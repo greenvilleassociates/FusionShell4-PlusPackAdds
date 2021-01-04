@@ -24,8 +24,6 @@
 
 require_once __DIR__ . '/Maintenance.php';
 
-use MediaWiki\MediaWikiServices;
-
 /**
  * Maintenance script that deletes all pages in the MediaWiki namespace
  * which were last edited by "MediaWiki default".
@@ -45,19 +43,13 @@ class DeleteDefaultMessages extends Maintenance {
 
 		$this->output( "Checking existence of old default messages..." );
 		$dbr = $this->getDB( DB_REPLICA );
-
-		$actorQuery = ActorMigration::newMigration()
-			->getWhere( $dbr, 'rev_user', User::newFromName( 'MediaWiki default' ) );
-		$res = $dbr->select(
-			[ 'page', 'revision' ] + $actorQuery['tables'],
+		$res = $dbr->select( [ 'page', 'revision' ],
 			[ 'page_namespace', 'page_title' ],
 			[
 				'page_namespace' => NS_MEDIAWIKI,
-				$actorQuery['conds'],
-			],
-			__METHOD__,
-			[],
-			[ 'revision' => [ 'JOIN', 'page_latest=rev_id' ] ] + $actorQuery['joins']
+				'page_latest=rev_id',
+				'rev_user_text' => 'MediaWiki default',
+			]
 		);
 
 		if ( $dbr->numRows( $res ) == 0 ) {
@@ -78,9 +70,9 @@ class DeleteDefaultMessages extends Maintenance {
 
 		// Deletions will be made by $user temporarly added to the bot group
 		// in order to hide it in RecentChanges.
-		$user = User::newSystemUser( 'MediaWiki default', [ 'steal' => true ] );
+		$user = User::newFromName( 'MediaWiki default' );
 		if ( !$user ) {
-			$this->fatalError( "Invalid username" );
+			$this->error( "Invalid username", true );
 		}
 		$user->addGroup( 'bot' );
 		$wgUser = $user;
@@ -89,20 +81,19 @@ class DeleteDefaultMessages extends Maintenance {
 		$this->output( "\n...deleting old default messages (this may take a long time!)...", 'msg' );
 		$dbw = $this->getDB( DB_MASTER );
 
-		$lbFactory = MediaWikiServices::getInstance()->getDBLoadBalancerFactory();
-
 		foreach ( $res as $row ) {
-			$lbFactory->waitForReplication();
+			wfWaitForSlaves();
 			$dbw->ping();
 			$title = Title::makeTitle( $row->page_namespace, $row->page_title );
 			$page = WikiPage::factory( $title );
+			$error = ''; // Passed by ref
 			// FIXME: Deletion failures should be reported, not silently ignored.
-			$page->doDeleteArticleReal( 'No longer required', $user );
+			$page->doDeleteArticle( 'No longer required', false, 0, true, $error, $user );
 		}
 
 		$this->output( "done!\n", 'msg' );
 	}
 }
 
-$maintClass = DeleteDefaultMessages::class;
+$maintClass = "DeleteDefaultMessages";
 require_once RUN_MAINTENANCE_IF_MAIN;

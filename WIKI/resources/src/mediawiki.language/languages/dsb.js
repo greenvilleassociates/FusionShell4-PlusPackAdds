@@ -2,8 +2,8 @@
  * Lower Sorbian (Dolnoserbski) language functions
  */
 
-mw.language.convertGrammar = function ( word, form ) {
-	var grammarForms = mw.language.getData( 'dsb', 'grammarForms' );
+mediaWiki.language.convertGrammar = function ( word, form ) {
+	var grammarForms = mediaWiki.language.getData( 'dsb', 'grammarForms' );
 	if ( grammarForms && grammarForms[ form ] ) {
 		return grammarForms[ form ][ word ];
 	}

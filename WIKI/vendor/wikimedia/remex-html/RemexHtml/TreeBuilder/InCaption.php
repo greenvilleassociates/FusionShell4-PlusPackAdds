@@ -1,7 +1,6 @@
 <?php
 
 namespace RemexHtml\TreeBuilder;
-
 use RemexHtml\Tokenizer\Attributes;
 
 /**
@@ -56,7 +55,7 @@ class InCaption extends InsertionMode {
 				return;
 			}
 
-			$builder->generateImpliedEndTags( false, $sourceStart );
+			$builder->generateImpliedEndTags( null, $sourceStart );
 			if ( $stack->current->htmlName !== 'caption' ) {
 				$builder->error( "</caption> found but another element is open", $sourceStart );
 			}

@@ -1,6 +1,6 @@
 <?php
 
-class FileBackendDBRepoWrapperTest extends MediaWikiIntegrationTestCase {
+class FileBackendDBRepoWrapperTest extends MediaWikiTestCase {
 	protected $backendName = 'foo-backend';
 	protected $repoName = 'pureTestRepo';
 
@@ -112,19 +112,19 @@ class FileBackendDBRepoWrapperTest extends MediaWikiIntegrationTestCase {
 	}
 
 	protected function getMocks() {
-		$dbMock = $this->getMockBuilder( Wikimedia\Rdbms\IDatabase::class )
+		$dbMock = $this->getMockBuilder( 'DatabaseMysqli' )
 			->disableOriginalClone()
 			->disableOriginalConstructor()
 			->getMock();
 
-		$backendMock = $this->getMockBuilder( FSFileBackend::class )
+		$backendMock = $this->getMockBuilder( 'FSFileBackend' )
 			->setConstructorArgs( [ [
 					'name' => $this->backendName,
 					'wikiId' => wfWikiID()
 				] ] )
 			->getMock();
 
-		$wrapperMock = $this->getMockBuilder( FileBackendDBRepoWrapper::class )
+		$wrapperMock = $this->getMockBuilder( 'FileBackendDBRepoWrapper' )
 			->setMethods( [ 'getDB' ] )
 			->setConstructorArgs( [ [
 					'backend' => $backendMock,

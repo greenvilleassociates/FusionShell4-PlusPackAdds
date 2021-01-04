@@ -3,20 +3,17 @@
 /**
  * @group WebRequest
  */
-class WebRequestTest extends MediaWikiIntegrationTestCase {
+class WebRequestTest extends MediaWikiTestCase {
+	protected $oldServer;
 
-	protected function setUp() : void {
+	protected function setUp() {
 		parent::setUp();
 
 		$this->oldServer = $_SERVER;
-		$this->oldWgRequest = $GLOBALS['wgRequest'];
-		$this->oldWgServer = $GLOBALS['wgServer'];
 	}
 
-	protected function tearDown() : void {
+	protected function tearDown() {
 		$_SERVER = $this->oldServer;
-		$GLOBALS['wgRequest'] = $this->oldWgRequest;
-		$GLOBALS['wgServer'] = $this->oldWgServer;
 
 		parent::tearDown();
 	}
@@ -29,7 +26,7 @@ class WebRequestTest extends MediaWikiIntegrationTestCase {
 	public function testDetectServer( $expected, $input, $description ) {
 		$this->setMwGlobals( 'wgAssumeProxiesUseDefaultProtocolPorts', true );
 
-		$this->setServerVars( $input );
+		$_SERVER = $input;
 		$result = WebRequest::detectServer();
 		$this->assertEquals( $expected, $result, $description );
 	}
@@ -126,27 +123,19 @@ class WebRequestTest extends MediaWikiIntegrationTestCase {
 		];
 	}
 
-	/**
-	 * @param array $data Request data
-	 * @param array $config
-	 *  - float 'requestTime': Mock value for `$_SERVER['REQUEST_TIME_FLOAT']`.
-	 * @return WebRequest
-	 */
-	protected function mockWebRequest( array $data = [], array $config = [] ) {
+	protected function mockWebRequest( $data = [] ) {
 		// Cannot use PHPUnit getMockBuilder() as it does not support
 		// overriding protected properties afterwards
-		$reflection = new ReflectionClass( WebRequest::class );
+		$reflection = new ReflectionClass( 'WebRequest' );
 		$req = $reflection->newInstanceWithoutConstructor();
 
 		$prop = $reflection->getProperty( 'data' );
 		$prop->setAccessible( true );
 		$prop->setValue( $req, $data );
 
-		if ( isset( $config['requestTime'] ) ) {
-			$prop = $reflection->getProperty( 'requestTime' );
-			$prop->setAccessible( true );
-			$prop->setValue( $req, $config['requestTime'] );
-		}
+		$prop = $reflection->getProperty( 'requestTime' );
+		$prop->setAccessible( true );
+		$prop->setValue( $req, microtime( true ) );
 
 		return $req;
 	}
@@ -155,11 +144,9 @@ class WebRequestTest extends MediaWikiIntegrationTestCase {
 	 * @covers WebRequest::getElapsedTime
 	 */
 	public function testGetElapsedTime() {
-		$now = microtime( true ) - 10.0;
-		$req = $this->mockWebRequest( [], [ 'requestTime' => $now ] );
-		$this->assertGreaterThanOrEqual( 10.0, $req->getElapsedTime() );
-		// Catch common errors, but don't fail on slow hardware or VMs (T199764).
-		$this->assertEqualsWithDelta( 10.0, $req->getElapsedTime(), 60.0 );
+		$req = $this->mockWebRequest();
+		$this->assertGreaterThanOrEqual( 0.0, $req->getElapsedTime() );
+		$this->assertEquals( 0.0, $req->getElapsedTime(), '', /*delta*/ 0.2 );
 	}
 
 	/**
@@ -372,29 +359,11 @@ class WebRequestTest extends MediaWikiIntegrationTestCase {
 	}
 
 	/**
-	 * @covers WebRequest
-	 */
-	public function testGetFullRequestURL() {
-		// Stub this for wfGetServerUrl()
-		$GLOBALS['wgServer'] = '//wiki.test';
-		$req = $this->getMockBuilder( WebRequest::class )
-			->setMethods( [ 'getRequestURL', 'getProtocol' ] )
-			->getMock();
-		$req->method( 'getRequestURL' )->willReturn( '/path' );
-		$req->method( 'getProtocol' )->willReturn( 'https' );
-
-		$this->assertSame(
-			'https://wiki.test/path',
-			$req->getFullRequestURL()
-		);
-	}
-
-	/**
 	 * @dataProvider provideGetIP
 	 * @covers WebRequest::getIP
 	 */
-	public function testGetIP( $expected, $input, $cdn, $xffList, $private, $description ) {
-		$this->setServerVars( $input );
+	public function testGetIP( $expected, $input, $squid, $xffList, $private, $description ) {
+		$_SERVER = $input;
 		$this->setMwGlobals( [
 			'wgUsePrivateIPs' => $private,
 			'wgHooks' => [
@@ -407,7 +376,7 @@ class WebRequestTest extends MediaWikiIntegrationTestCase {
 			]
 		] );
 
-		$this->setService( 'ProxyLookup', new ProxyLookup( [], $cdn ) );
+		$this->setService( 'ProxyLookup', new ProxyLookup( [], $squid ) );
 
 		$request = new WebRequest();
 		$result = $request->getIP();
@@ -583,21 +552,21 @@ class WebRequestTest extends MediaWikiIntegrationTestCase {
 	}
 
 	/**
+	 * @expectedException MWException
 	 * @covers WebRequest::getIP
 	 */
 	public function testGetIpLackOfRemoteAddrThrowAnException() {
 		// ensure that local install state doesn't interfere with test
 		$this->setMwGlobals( [
-			'wgCdnServers' => [],
-			'wgCdnServersNoPurge' => [],
+			'wgSquidServersNoPurge' => [],
+			'wgSquidServers' => [],
 			'wgUsePrivateIPs' => false,
 			'wgHooks' => [],
 		] );
 		$this->setService( 'ProxyLookup', new ProxyLookup( [], [] ) );
 
 		$request = new WebRequest();
-		# Next call should throw an exception about lacking an IP
-		$this->expectException( MWException::class );
+		# Next call throw an exception about lacking an IP
 		$request->getIP();
 	}
 
@@ -605,9 +574,6 @@ class WebRequestTest extends MediaWikiIntegrationTestCase {
 		return [
 			[ '', [], 'Empty Accept-Language header' ],
 			[ 'en', [ 'en' => 1 ], 'One language' ],
-			[ 'en;q=', [ 'en' => 1 ], 'Empty q= defaults to 1' ],
-			[ 'en;q=0, de;q=0. pt;q=0.0 it;q=0.0000', [], 'Zeros to be skipped' ],
-			[ 'EN;Q=1.0009', [ 'en' => '1.000' ], 'Limited to max. 3 decimal places' ],
 			[ 'en, ar', [ 'en' => 1, 'ar' => 1 ], 'Two languages listed in appearance order.' ],
 			[
 				'zh-cn,zh-tw',
@@ -641,49 +607,9 @@ class WebRequestTest extends MediaWikiIntegrationTestCase {
 	 * @dataProvider provideLanguageData
 	 * @covers WebRequest::getAcceptLang
 	 */
-	public function testAcceptLang( $acceptLanguageHeader, array $expectedLanguages, $description ) {
-		$this->setServerVars( [ 'HTTP_ACCEPT_LANGUAGE' => $acceptLanguageHeader ] );
+	public function testAcceptLang( $acceptLanguageHeader, $expectedLanguages, $description ) {
+		$_SERVER = [ 'HTTP_ACCEPT_LANGUAGE' => $acceptLanguageHeader ];
 		$request = new WebRequest();
-		$this->assertSame( $expectedLanguages, $request->getAcceptLang(), $description );
-	}
-
-	/**
-	 * @covers WebRequest::getHeader
-	 */
-	public function testGetHeaderCanYieldSpecialCgiHeaders() {
-		$contentType = 'application/json; charset=utf-8';
-		$contentLength = '4711';
-		$contentMd5 = 'rL0Y20zC+Fzt72VPzMSk2A==';
-		$this->setServerVars( [
-			'HTTP_CONTENT_TYPE' => $contentType,
-			'HTTP_CONTENT_LENGTH' => $contentLength,
-			'HTTP_CONTENT_MD5' => $contentMd5,
-		] );
-		$request = new WebRequest();
-		$this->assertSame( $request->getHeader( 'Content-Type' ), $contentType );
-		$this->assertSame( $request->getHeader( 'Content-Length' ), $contentLength );
-		$this->assertSame( $request->getHeader( 'Content-Md5' ), $contentMd5 );
-	}
-
-	/**
-	 * @covers WebRequest::getHeader
-	 */
-	public function testGetHeaderKeyIsCaseInsensitive() {
-		$cacheControl = 'private, must-revalidate, max-age=0';
-		$this->setServerVars( [ 'HTTP_CACHE_CONTROL' => $cacheControl ] );
-		$request = new WebRequest();
-		$this->assertSame( $request->getHeader( 'Cache-Control' ), $cacheControl );
-		$this->assertSame( $request->getHeader( 'cache-control' ), $cacheControl );
-	}
-
-	protected function setServerVars( $vars ) {
-		// Don't remove vars which should be available in all SAPI.
-		if ( !isset( $vars['REQUEST_TIME_FLOAT'] ) ) {
-			$vars['REQUEST_TIME_FLOAT'] = $_SERVER['REQUEST_TIME_FLOAT'];
-		}
-		if ( !isset( $vars['REQUEST_TIME'] ) ) {
-			$vars['REQUEST_TIME'] = $_SERVER['REQUEST_TIME'];
-		}
-		$_SERVER = $vars;
+		$this->assertSame( $request->getAcceptLang(), $expectedLanguages, $description );
 	}
 }

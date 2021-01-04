@@ -1,10 +1,6 @@
 <?php
 
-use PHPUnit\Framework\MockObject\MockObject;
-use Wikimedia\TestingAccessWrapper;
-
 /**
- * @covers LinksUpdate
  * @group LinksUpdate
  * @group Database
  * ^--- make sure temporary tables are used.
@@ -12,7 +8,7 @@ use Wikimedia\TestingAccessWrapper;
 class LinksUpdateTest extends MediaWikiLangTestCase {
 	protected static $testingPageId;
 
-	public function __construct( $name = null, array $data = [], $dataName = '' ) {
+	function __construct( $name = null, array $data = [], $dataName = '' ) {
 		parent::__construct( $name, $data, $dataName );
 
 		$this->tablesUsed = array_merge( $this->tablesUsed,
@@ -31,7 +27,7 @@ class LinksUpdateTest extends MediaWikiLangTestCase {
 		);
 	}
 
-	protected function setUp() : void {
+	protected function setUp() {
 		parent::setUp();
 		$dbw = wfGetDB( DB_MASTER );
 		$dbw->replace(
@@ -57,21 +53,11 @@ class LinksUpdateTest extends MediaWikiLangTestCase {
 	}
 
 	protected function makeTitleAndParserOutput( $name, $id ) {
-		// Force the value returned by getArticleID, even is
-		// READ_LATEST is passed.
-
-		/** @var Title|MockObject $t */
-		$t = $this->getMockBuilder( Title::class )
-			->disableOriginalConstructor()
-			->onlyMethods( [ 'getArticleID' ] )
-			->getMock();
-		$t->method( 'getArticleID' )->willReturn( $id );
-
-		$tAccess = TestingAccessWrapper::newFromObject( $t );
-		$tAccess->secureAndSplit( $name );
+		$t = Title::newFromText( $name );
+		$t->mArticleID = $id; # XXX: this is fugly
 
 		$po = new ParserOutput();
-		$po->setTitleText( $name );
+		$po->setTitleText( $t->getPrefixedText() );
 
 		return [ $t, $po ];
 	}
@@ -131,8 +117,6 @@ class LinksUpdateTest extends MediaWikiLangTestCase {
 
 	/**
 	 * @covers ParserOutput::addExternalLink
-	 * @covers LinksUpdate::getAddedExternalLinks
-	 * @covers LinksUpdate::getRemovedExternalLinks
 	 */
 	public function testUpdate_externallinks() {
 		/** @var ParserOutput $po */
@@ -140,7 +124,7 @@ class LinksUpdateTest extends MediaWikiLangTestCase {
 
 		$po->addExternalLink( "http://testing.com/wiki/Foo" );
 
-		$update = $this->assertLinksUpdate(
+		$this->assertLinksUpdate(
 			$t,
 			$po,
 			'externallinks',
@@ -150,31 +134,6 @@ class LinksUpdateTest extends MediaWikiLangTestCase {
 				[ 'http://testing.com/wiki/Foo', 'http://com.testing./wiki/Foo' ],
 			]
 		);
-
-		$this->assertArrayEquals( [
-			"http://testing.com/wiki/Foo"
-		], $update->getAddedExternalLinks() );
-
-		$po = new ParserOutput();
-		$po->setTitleText( $t->getPrefixedText() );
-		$po->addExternalLink( 'http://testing.com/wiki/Bar' );
-		$update = $this->assertLinksUpdate(
-			$t,
-			$po,
-			'externallinks',
-			'el_to, el_index',
-			'el_from = ' . self::$testingPageId,
-			[
-				[ 'http://testing.com/wiki/Bar', 'http://com.testing./wiki/Bar' ],
-			]
-		);
-
-		$this->assertArrayEquals( [
-			"http://testing.com/wiki/Bar"
-		], $update->getAddedExternalLinks() );
-		$this->assertArrayEquals( [
-			"http://testing.com/wiki/Foo"
-		], $update->getRemovedExternalLinks() );
 	}
 
 	/**
@@ -208,7 +167,7 @@ class LinksUpdateTest extends MediaWikiLangTestCase {
 
 		$this->assertRecentChangeByCategorization(
 			$title,
-			$wikiPage->getParserOutput( ParserOptions::newCanonical( 'canonical' ) ),
+			$wikiPage->getParserOutput( ParserOptions::newCanonical() ),
 			Title::newFromText( 'Category:Foo' ),
 			[ [ 'Foo', '[[:Testing]] added to category' ] ]
 		);
@@ -218,7 +177,7 @@ class LinksUpdateTest extends MediaWikiLangTestCase {
 
 		$this->assertRecentChangeByCategorization(
 			$title,
-			$wikiPage->getParserOutput( ParserOptions::newCanonical( 'canonical' ) ),
+			$wikiPage->getParserOutput( ParserOptions::newCanonical() ),
 			Title::newFromText( 'Category:Foo' ),
 			[
 				[ 'Foo', '[[:Testing]] added to category' ],
@@ -228,7 +187,7 @@ class LinksUpdateTest extends MediaWikiLangTestCase {
 
 		$this->assertRecentChangeByCategorization(
 			$title,
-			$wikiPage->getParserOutput( ParserOptions::newCanonical( 'canonical' ) ),
+			$wikiPage->getParserOutput( ParserOptions::newCanonical() ),
 			Title::newFromText( 'Category:Bar' ),
 			[
 				[ 'Bar', '[[:Testing]] added to category' ],
@@ -252,7 +211,7 @@ class LinksUpdateTest extends MediaWikiLangTestCase {
 
 		$this->assertRecentChangeByCategorization(
 			$templateTitle,
-			$templatePage->getParserOutput( ParserOptions::newCanonical( 'canonical' ) ),
+			$templatePage->getParserOutput( ParserOptions::newCanonical() ),
 			Title::newFromText( 'Baz' ),
 			[]
 		);
@@ -262,7 +221,7 @@ class LinksUpdateTest extends MediaWikiLangTestCase {
 
 		$this->assertRecentChangeByCategorization(
 			$templateTitle,
-			$templatePage->getParserOutput( ParserOptions::newCanonical( 'canonical' ) ),
+			$templatePage->getParserOutput( ParserOptions::newCanonical() ),
 			Title::newFromText( 'Baz' ),
 			[ [
 				'Baz',
@@ -419,17 +378,33 @@ class LinksUpdateTest extends MediaWikiLangTestCase {
 	protected function assertRecentChangeByCategorization(
 		Title $pageTitle, ParserOutput $parserOutput, Title $categoryTitle, $expectedRows
 	) {
-		$this->assertSelect(
-			[ 'recentchanges', 'comment' ],
-			'rc_title, comment_text',
-			[
-				'rc_type' => RC_CATEGORIZE,
-				'rc_namespace' => NS_CATEGORY,
-				'rc_title' => $categoryTitle->getDBkey(),
-				'comment_id = rc_comment_id',
-			],
-			$expectedRows
-		);
+		global $wgCommentTableSchemaMigrationStage;
+
+		if ( $wgCommentTableSchemaMigrationStage <= MIGRATION_WRITE_BOTH ) {
+			$this->assertSelect(
+				'recentchanges',
+				'rc_title, rc_comment',
+				[
+					'rc_type' => RC_CATEGORIZE,
+					'rc_namespace' => NS_CATEGORY,
+					'rc_title' => $categoryTitle->getDBkey()
+				],
+				$expectedRows
+			);
+		}
+		if ( $wgCommentTableSchemaMigrationStage >= MIGRATION_WRITE_BOTH ) {
+			$this->assertSelect(
+				[ 'recentchanges', 'comment' ],
+				'rc_title, comment_text',
+				[
+					'rc_type' => RC_CATEGORIZE,
+					'rc_namespace' => NS_CATEGORY,
+					'rc_title' => $categoryTitle->getDBkey(),
+					'comment_id = rc_comment_id',
+				],
+				$expectedRows
+			);
+		}
 	}
 
 	private function runAllRelatedJobs() {
@@ -442,19 +417,5 @@ class LinksUpdateTest extends MediaWikiLangTestCase {
 			$job->run();
 			$queueGroup->ack( $job );
 		}
-	}
-
-	public function testIsRecursive() {
-		list( $title, $po ) = $this->makeTitleAndParserOutput( 'Test', 1 );
-		$linksUpdate = new LinksUpdate( $title, $po );
-		$this->assertTrue( $linksUpdate->isRecursive(), 'LinksUpdate is recursive by default' );
-
-		$linksUpdate = new LinksUpdate( $title, $po, true );
-		$this->assertTrue( $linksUpdate->isRecursive(),
-			'LinksUpdate is recursive when asked to be recursive' );
-
-		$linksUpdate = new LinksUpdate( $title, $po, false );
-		$this->assertFalse( $linksUpdate->isRecursive(),
-			'LinksUpdate is not recursive when asked to be not recursive' );
 	}
 }

@@ -19,8 +19,6 @@
  * @ingroup Testing
  */
 
-use MediaWiki\Shell\Shell;
-
 /**
  * This is a TestRecorder responsible for printing information about progress,
  * success and failure to the console. It is specific to the parserTests.php
@@ -39,7 +37,7 @@ class ParserTestPrinter extends TestRecorder {
 	private $markWhitespace;
 	private $xmlError;
 
-	public function __construct( $term, $options ) {
+	function __construct( $term, $options ) {
 		$this->term = $term;
 		$options += [
 			'showDiffs' => true,
@@ -129,8 +127,6 @@ class ParserTestPrinter extends TestRecorder {
 
 			print $this->term->color( '31' ) . 'FAILED!' . $this->term->reset() . "\n";
 
-			print "{$testResult->test['file']}:{$testResult->test['line']}\n";
-
 			if ( $this->showOutput ) {
 				print "--- Expected ---\n{$testResult->expected}\n";
 				print "--- Actual ---\n{$testResult->actual}\n";
@@ -170,11 +166,18 @@ class ParserTestPrinter extends TestRecorder {
 			$output = strtr( $output, $pairs );
 		}
 
-		$infile = tempnam( wfTempDir(), "mwParser-$inFileTail" );
+		# Windows, or at least the fc utility, is retarded
+		$slash = wfIsWindows() ? '\\' : '/';
+		$prefix = wfTempDir() . "{$slash}mwParser-" . mt_rand();
+
+		$infile = "$prefix-$inFileTail";
 		$this->dumpToFile( $input, $infile );
 
-		$outfile = tempnam( wfTempDir(), "mwParser-$outFileTail" );
+		$outfile = "$prefix-$outFileTail";
 		$this->dumpToFile( $output, $outfile );
+
+		$shellInfile = wfEscapeShellArg( $infile );
+		$shellOutfile = wfEscapeShellArg( $outfile );
 
 		global $wgDiff3;
 		// we assume that people with diff3 also have usual diff
@@ -184,11 +187,7 @@ class ParserTestPrinter extends TestRecorder {
 			$shellCommand = ( wfIsWindows() && !$wgDiff3 ) ? 'fc' : 'diff -au';
 		}
 
-		$result = Shell::command()
-			->unsafeParams( $shellCommand )
-			->params( $infile, $outfile )
-			->execute();
-		$diff = $result->getStdout();
+		$diff = wfShellExec( "$shellCommand $shellInfile $shellOutfile" );
 
 		unlink( $infile );
 		unlink( $outfile );

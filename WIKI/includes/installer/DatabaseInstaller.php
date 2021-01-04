@@ -18,26 +18,24 @@
  * http://www.gnu.org/copyleft/gpl.html
  *
  * @file
- * @ingroup Installer
+ * @ingroup Deployment
  */
-
-use Wikimedia\Rdbms\Database;
-use Wikimedia\Rdbms\DBConnectionError;
-use Wikimedia\Rdbms\DBExpectedError;
-use Wikimedia\Rdbms\IDatabase;
 use Wikimedia\Rdbms\LBFactorySingle;
+use Wikimedia\Rdbms\Database;
+use Wikimedia\Rdbms\IDatabase;
 
 /**
  * Base class for DBMS-specific installation helper classes.
  *
- * @stable to extend
- * @ingroup Installer
+ * @ingroup Deployment
  * @since 1.17
  */
 abstract class DatabaseInstaller {
 
 	/**
 	 * The Installer object.
+	 *
+	 * @todo Naming this parent is confusing, 'installer' would be clearer.
 	 *
 	 * @var WebInstaller
 	 */
@@ -51,7 +49,7 @@ abstract class DatabaseInstaller {
 	/**
 	 * @var string Set by subclasses
 	 */
-	protected static $notMinimumVersionMessage;
+	protected static $notMiniumumVerisonMessage;
 
 	/**
 	 * The database connection.
@@ -84,7 +82,7 @@ abstract class DatabaseInstaller {
 	public static function meetsMinimumRequirement( $serverVersion ) {
 		if ( version_compare( $serverVersion, static::$minimumVersion ) < 0 ) {
 			return Status::newFatal(
-				static::$notMinimumVersionMessage, static::$minimumVersion, $serverVersion
+				static::$notMiniumumVerisonMessage, static::$minimumVersion, $serverVersion
 			);
 		}
 
@@ -103,7 +101,6 @@ abstract class DatabaseInstaller {
 
 	/**
 	 * Checks for installation prerequisites other than those checked by isCompiled()
-	 * @stable to override
 	 * @since 1.19
 	 * @return Status
 	 */
@@ -136,8 +133,7 @@ abstract class DatabaseInstaller {
 	 * $this->parent can be assumed to be a WebInstaller.
 	 * If the DB type has no settings beyond those already configured with
 	 * getConnectForm(), this should return false.
-	 * @stable to override
-	 * @return string|bool
+	 * @return bool
 	 */
 	public function getSettingsForm() {
 		return false;
@@ -146,7 +142,6 @@ abstract class DatabaseInstaller {
 	/**
 	 * Set variables based on the request array, assuming it was submitted via
 	 * the form return by getSettingsForm().
-	 * @stable to override
 	 *
 	 * @return Status
 	 */
@@ -179,9 +174,7 @@ abstract class DatabaseInstaller {
 	 *
 	 * This will return a cached connection if one is available.
 	 *
-	 * @stable to override
 	 * @return Status
-	 * @suppress PhanUndeclaredMethod
 	 */
 	public function getConnection() {
 		if ( $this->db ) {
@@ -247,29 +240,16 @@ abstract class DatabaseInstaller {
 	}
 
 	/**
-	 * Create database tables from scratch from the automatically generated file
-	 * @stable to override
+	 * Create database tables from scratch.
 	 *
 	 * @return Status
 	 */
 	public function createTables() {
-		return $this->stepApplySourceFile( 'getGeneratedSchemaPath', 'install', true );
-	}
-
-	/**
-	 * Create database tables from scratch.
-	 * @stable to override
-	 *
-	 * @return Status
-	 */
-	public function createManualTables() {
-		// TODO: Set "archiveTableMustNotExist" to "false" when archive table is migrated to tables.json
-		return $this->stepApplySourceFile( 'getSchemaPath', 'install-manual', true );
+		return $this->stepApplySourceFile( 'getSchemaPath', 'install', true );
 	}
 
 	/**
 	 * Insert update keys into table to prevent running unneded updates.
-	 * @stable to override
 	 *
 	 * @return Status
 	 */
@@ -299,7 +279,6 @@ abstract class DatabaseInstaller {
 	/**
 	 * Return a path to the DBMS-specific schema file,
 	 * otherwise default to tables.sql
-	 * @stable to override
 	 *
 	 * @param IDatabase $db
 	 * @return string
@@ -309,20 +288,8 @@ abstract class DatabaseInstaller {
 	}
 
 	/**
-	 * Return a path to the DBMS-specific automatically generated schema file.
-	 * @stable to override
-	 *
-	 * @param IDatabase $db
-	 * @return string
-	 */
-	public function getGeneratedSchemaPath( $db ) {
-		return $this->getSqlFilePath( $db, 'tables-generated.sql' );
-	}
-
-	/**
 	 * Return a path to the DBMS-specific update key file,
 	 * otherwise default to update-keys.sql
-	 * @stable to override
 	 *
 	 * @param IDatabase $db
 	 * @return string
@@ -333,7 +300,6 @@ abstract class DatabaseInstaller {
 
 	/**
 	 * Create the tables for each extension the user enabled
-	 * @stable to override
 	 * @return Status
 	 */
 	public function createExtensionTables() {
@@ -343,9 +309,7 @@ abstract class DatabaseInstaller {
 		}
 
 		// Now run updates to create tables for old extensions
-		$updater = DatabaseUpdater::newForDB( $this->db );
-		$updater->setAutoExtensionHookContainer( $this->parent->getAutoExtensionHookContainer() );
-		$updater->doUpdates( [ 'extensions' ] );
+		DatabaseUpdater::newForDB( $this->db )->doUpdates( [ 'extensions' ] );
 
 		return $status;
 	}
@@ -360,7 +324,6 @@ abstract class DatabaseInstaller {
 	/**
 	 * Override this to provide DBMS-specific schema variables, to be
 	 * substituted into tables.sql and other schema files.
-	 * @stable to override
 	 * @return array
 	 */
 	public function getSchemaVars() {
@@ -372,13 +335,10 @@ abstract class DatabaseInstaller {
 	 *
 	 * This should be called after any request data has been imported, but before
 	 * any write operations to the database.
-	 *
-	 * @stable to override
 	 */
 	public function setupSchemaVars() {
 		$status = $this->getConnection();
 		if ( $status->isOK() ) {
-			// @phan-suppress-next-line PhanUndeclaredMethod
 			$status->value->setSchemaVars( $this->getSchemaVars() );
 		} else {
 			$msg = __METHOD__ . ': unexpected error while establishing'
@@ -398,19 +358,19 @@ abstract class DatabaseInstaller {
 		if ( !$status->isOK() ) {
 			throw new MWException( __METHOD__ . ': unexpected DB connection error' );
 		}
-		$connection = $status->value;
 
-		$this->parent->resetMediaWikiServices( null, [
-			'DBLoadBalancerFactory' => function () use ( $connection ) {
-				return LBFactorySingle::newFromConnection( $connection );
-			}
-		] );
+		\MediaWiki\MediaWikiServices::resetGlobalInstance();
+		$services = \MediaWiki\MediaWikiServices::getInstance();
+
+		$connection = $status->value;
+		$services->redefineService( 'DBLoadBalancerFactory', function () use ( $connection ) {
+			return LBFactorySingle::newFromConnection( $connection );
+		} );
 	}
 
 	/**
 	 * Perform database upgrades
 	 *
-	 * @suppress SecurityCheck-XSS Escaping provided by $this->outputHandler
 	 * @return bool
 	 */
 	public function doUpgrade() {
@@ -422,7 +382,6 @@ abstract class DatabaseInstaller {
 		$up = DatabaseUpdater::newForDB( $this->db );
 		try {
 			$up->doUpdates();
-			$up->purgeCache();
 		} catch ( MWException $e ) {
 			echo "\nAn error occurred:\n";
 			echo $e->getText();
@@ -432,6 +391,7 @@ abstract class DatabaseInstaller {
 			echo $e->getMessage();
 			$ret = false;
 		}
+		$up->purgeCache();
 		ob_end_flush();
 
 		return $ret;
@@ -441,21 +401,18 @@ abstract class DatabaseInstaller {
 	 * Allow DB installers a chance to make last-minute changes before installation
 	 * occurs. This happens before setupDatabase() or createTables() is called, but
 	 * long after the constructor. Helpful for things like modifying setup steps :)
-	 * @stable to override
 	 */
 	public function preInstall() {
 	}
 
 	/**
 	 * Allow DB installers a chance to make checks before upgrade.
-	 * @stable to override
 	 */
 	public function preUpgrade() {
 	}
 
 	/**
 	 * Get an array of MW configuration globals that will be configured by this class.
-	 * @stable to override
 	 * @return array
 	 */
 	public function getGlobalNames() {
@@ -465,7 +422,6 @@ abstract class DatabaseInstaller {
 	/**
 	 * Construct and initialise parent.
 	 * This is typically only called from Installer::getDBInstaller()
-	 * @stable to call
 	 * @param WebInstaller $parent
 	 */
 	public function __construct( $parent ) {
@@ -485,17 +441,16 @@ abstract class DatabaseInstaller {
 
 	/**
 	 * Get the internationalised name for this DBMS.
-	 * @stable to override
 	 * @return string
 	 */
 	public function getReadableName() {
-		// Messages: config-type-mysql, config-type-postgres, config-type-sqlite
+		// Messages: config-type-mysql, config-type-postgres, config-type-sqlite,
+		// config-type-oracle
 		return wfMessage( 'config-type-' . $this->getName() )->text();
 	}
 
 	/**
 	 * Get a name=>value map of MW configuration globals for the default values.
-	 * @stable to override
 	 * @return array
 	 */
 	public function getGlobalDefaults() {
@@ -657,7 +612,6 @@ abstract class DatabaseInstaller {
 	 * Traditionally, this is done by testing for the existence of either
 	 * the revision table or the cur table.
 	 *
-	 * @stable to override
 	 * @return bool
 	 */
 	public function needsUpgrade() {
@@ -666,12 +620,7 @@ abstract class DatabaseInstaller {
 			return false;
 		}
 
-		try {
-			$this->db->selectDB( $this->getVar( 'wgDBname' ) );
-		} catch ( DBConnectionError $e ) {
-			// Don't catch DBConnectionError
-			throw $e;
-		} catch ( DBExpectedError $e ) {
+		if ( !$this->db->selectDB( $this->getVar( 'wgDBname' ) ) ) {
 			return false;
 		}
 
@@ -732,7 +681,7 @@ abstract class DatabaseInstaller {
 			$this->getPasswordBox( 'wgDBpassword', 'config-db-password' ) .
 			$this->parent->getHelpBox( 'config-db-web-help' );
 		if ( $noCreateMsg ) {
-			$s .= Html::warningBox( wfMessage( $noCreateMsg )->plain(), 'config-warning-box' );
+			$s .= $this->parent->getWarningBox( wfMessage( $noCreateMsg )->plain() );
 		} else {
 			$s .= $this->getCheckBox( '_CreateDBAccount', 'config-db-web-create' );
 		}
@@ -765,7 +714,6 @@ abstract class DatabaseInstaller {
 
 	/**
 	 * Common function for databases that don't understand the MySQLish syntax of interwiki.sql.
-	 * @stable to override
 	 *
 	 * @return Status
 	 */
@@ -776,16 +724,16 @@ abstract class DatabaseInstaller {
 		}
 		$this->db->selectDB( $this->getVar( 'wgDBname' ) );
 
-		if ( $this->db->selectRow( 'interwiki', '1', [], __METHOD__ ) ) {
+		if ( $this->db->selectRow( 'interwiki', '*', [], __METHOD__ ) ) {
 			$status->warning( 'config-install-interwiki-exists' );
 
 			return $status;
 		}
 		global $IP;
-		Wikimedia\suppressWarnings();
+		MediaWiki\suppressWarnings();
 		$rows = file( "$IP/maintenance/interwiki.list",
 			FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES );
-		Wikimedia\restoreWarnings();
+		MediaWiki\restoreWarnings();
 		$interwikis = [];
 		if ( !$rows ) {
 			return Status::newFatal( 'config-install-interwiki-list' );

@@ -1,8 +1,5 @@
 <?php
 
-use MediaWiki\MediaWikiServices;
-use MediaWiki\Revision\RevisionRecord;
-
 /**
  * @covers CategoryMembershipChange
  *
@@ -28,7 +25,7 @@ class CategoryMembershipChangeTest extends MediaWikiLangTestCase {
 	private static $mockRecentChange;
 
 	/**
-	 * @var RevisionRecord
+	 * @var Revision
 	 */
 	private static $pageRev = null;
 
@@ -42,16 +39,16 @@ class CategoryMembershipChangeTest extends MediaWikiLangTestCase {
 	 */
 	private static $pageName = 'CategoryMembershipChangeTestPage';
 
-	public static function newForCategorizationCallback( ...$args ) {
-		self::$lastNotifyArgs = $args;
+	public static function newForCategorizationCallback() {
+		self::$lastNotifyArgs = func_get_args();
 		self::$notifyCallCounter += 1;
 		return self::$mockRecentChange;
 	}
 
-	protected function setUp() : void {
+	public function setUp() {
 		parent::setUp();
 		self::$notifyCallCounter = 0;
-		self::$mockRecentChange = $this->createMock( RecentChange::class );
+		self::$mockRecentChange = self::getMock( 'RecentChange' );
 
 		$this->setContentLang( 'qqx' );
 	}
@@ -61,13 +58,11 @@ class CategoryMembershipChangeTest extends MediaWikiLangTestCase {
 		$title = $info['title'];
 
 		$page = WikiPage::factory( $title );
-		self::$pageRev = $page->getRevisionRecord();
-		self::$revUser = User::newFromIdentity(
-			self::$pageRev->getUser( RevisionRecord::RAW )
-		);
+		self::$pageRev = $page->getRevision();
+		self::$revUser = User::newFromId( self::$pageRev->getUser( Revision::RAW ) );
 	}
 
-	private function newChange( RevisionRecord $revision = null ) {
+	private function newChange( Revision $revision = null ) {
 		$change = new CategoryMembershipChange( Title::newFromText( self::$pageName ), $revision );
 		$change->overrideNewForCategorizationCallback(
 			'CategoryMembershipChangeTest::newForCategorizationCallback'
@@ -80,7 +75,7 @@ class CategoryMembershipChangeTest extends MediaWikiLangTestCase {
 		$change = $this->newChange();
 		$change->triggerCategoryAddedNotification( Title::newFromText( 'CategoryName', NS_CATEGORY ) );
 
-		$this->assertSame( 1, self::$notifyCallCounter );
+		$this->assertEquals( 1, self::$notifyCallCounter );
 
 		$this->assertTrue( strlen( self::$lastNotifyArgs[0] ) === 14 );
 		$this->assertEquals( 'Category:CategoryName', self::$lastNotifyArgs[1]->getPrefixedText() );
@@ -88,19 +83,19 @@ class CategoryMembershipChangeTest extends MediaWikiLangTestCase {
 		$this->assertEquals( '(recentchanges-page-added-to-category: ' . self::$pageName . ')',
 			self::$lastNotifyArgs[3] );
 		$this->assertEquals( self::$pageName, self::$lastNotifyArgs[4]->getPrefixedText() );
-		$this->assertSame( 0, self::$lastNotifyArgs[5] );
-		$this->assertSame( 0, self::$lastNotifyArgs[6] );
-		$this->assertNull( self::$lastNotifyArgs[7] );
-		$this->assertSame( 1, self::$lastNotifyArgs[8] );
-		$this->assertSame( '', self::$lastNotifyArgs[9] );
-		$this->assertSame( 0, self::$lastNotifyArgs[10] );
+		$this->assertEquals( 0, self::$lastNotifyArgs[5] );
+		$this->assertEquals( 0, self::$lastNotifyArgs[6] );
+		$this->assertEquals( null, self::$lastNotifyArgs[7] );
+		$this->assertEquals( 1, self::$lastNotifyArgs[8] );
+		$this->assertEquals( null, self::$lastNotifyArgs[9] );
+		$this->assertEquals( 0, self::$lastNotifyArgs[10] );
 	}
 
 	public function testChangeRemovedNoRev() {
 		$change = $this->newChange();
 		$change->triggerCategoryRemovedNotification( Title::newFromText( 'CategoryName', NS_CATEGORY ) );
 
-		$this->assertSame( 1, self::$notifyCallCounter );
+		$this->assertEquals( 1, self::$notifyCallCounter );
 
 		$this->assertTrue( strlen( self::$lastNotifyArgs[0] ) === 14 );
 		$this->assertEquals( 'Category:CategoryName', self::$lastNotifyArgs[1]->getPrefixedText() );
@@ -108,22 +103,20 @@ class CategoryMembershipChangeTest extends MediaWikiLangTestCase {
 		$this->assertEquals( '(recentchanges-page-removed-from-category: ' . self::$pageName . ')',
 			self::$lastNotifyArgs[3] );
 		$this->assertEquals( self::$pageName, self::$lastNotifyArgs[4]->getPrefixedText() );
-		$this->assertSame( 0, self::$lastNotifyArgs[5] );
-		$this->assertSame( 0, self::$lastNotifyArgs[6] );
-		$this->assertNull( self::$lastNotifyArgs[7] );
-		$this->assertSame( 1, self::$lastNotifyArgs[8] );
-		$this->assertSame( '', self::$lastNotifyArgs[9] );
-		$this->assertSame( 0, self::$lastNotifyArgs[10] );
+		$this->assertEquals( 0, self::$lastNotifyArgs[5] );
+		$this->assertEquals( 0, self::$lastNotifyArgs[6] );
+		$this->assertEquals( null, self::$lastNotifyArgs[7] );
+		$this->assertEquals( 1, self::$lastNotifyArgs[8] );
+		$this->assertEquals( null, self::$lastNotifyArgs[9] );
+		$this->assertEquals( 0, self::$lastNotifyArgs[10] );
 	}
 
 	public function testChangeAddedWithRev() {
-		$revision = MediaWikiServices::getInstance()
-			->getRevisionLookup()
-			->getRevisionByTitle( Title::newFromText( self::$pageName ) );
+		$revision = Revision::newFromId( Title::newFromText( self::$pageName )->getLatestRevID() );
 		$change = $this->newChange( $revision );
 		$change->triggerCategoryAddedNotification( Title::newFromText( 'CategoryName', NS_CATEGORY ) );
 
-		$this->assertSame( 1, self::$notifyCallCounter );
+		$this->assertEquals( 1, self::$notifyCallCounter );
 
 		$this->assertTrue( strlen( self::$lastNotifyArgs[0] ) === 14 );
 		$this->assertEquals( 'Category:CategoryName', self::$lastNotifyArgs[1]->getPrefixedText() );
@@ -133,20 +126,18 @@ class CategoryMembershipChangeTest extends MediaWikiLangTestCase {
 		$this->assertEquals( self::$pageName, self::$lastNotifyArgs[4]->getPrefixedText() );
 		$this->assertEquals( self::$pageRev->getParentId(), self::$lastNotifyArgs[5] );
 		$this->assertEquals( $revision->getId(), self::$lastNotifyArgs[6] );
-		$this->assertNull( self::$lastNotifyArgs[7] );
-		$this->assertSame( 0, self::$lastNotifyArgs[8] );
+		$this->assertEquals( null, self::$lastNotifyArgs[7] );
+		$this->assertEquals( 0, self::$lastNotifyArgs[8] );
 		$this->assertEquals( '127.0.0.1', self::$lastNotifyArgs[9] );
-		$this->assertSame( 0, self::$lastNotifyArgs[10] );
+		$this->assertEquals( 0, self::$lastNotifyArgs[10] );
 	}
 
 	public function testChangeRemovedWithRev() {
-		$revision = MediaWikiServices::getInstance()
-			->getRevisionLookup()
-			->getRevisionByTitle( Title::newFromText( self::$pageName ) );
+		$revision = Revision::newFromId( Title::newFromText( self::$pageName )->getLatestRevID() );
 		$change = $this->newChange( $revision );
 		$change->triggerCategoryRemovedNotification( Title::newFromText( 'CategoryName', NS_CATEGORY ) );
 
-		$this->assertSame( 1, self::$notifyCallCounter );
+		$this->assertEquals( 1, self::$notifyCallCounter );
 
 		$this->assertTrue( strlen( self::$lastNotifyArgs[0] ) === 14 );
 		$this->assertEquals( 'Category:CategoryName', self::$lastNotifyArgs[1]->getPrefixedText() );
@@ -156,10 +147,10 @@ class CategoryMembershipChangeTest extends MediaWikiLangTestCase {
 		$this->assertEquals( self::$pageName, self::$lastNotifyArgs[4]->getPrefixedText() );
 		$this->assertEquals( self::$pageRev->getParentId(), self::$lastNotifyArgs[5] );
 		$this->assertEquals( $revision->getId(), self::$lastNotifyArgs[6] );
-		$this->assertNull( self::$lastNotifyArgs[7] );
-		$this->assertSame( 0, self::$lastNotifyArgs[8] );
+		$this->assertEquals( null, self::$lastNotifyArgs[7] );
+		$this->assertEquals( 0, self::$lastNotifyArgs[8] );
 		$this->assertEquals( '127.0.0.1', self::$lastNotifyArgs[9] );
-		$this->assertSame( 0, self::$lastNotifyArgs[10] );
+		$this->assertEquals( 0, self::$lastNotifyArgs[10] );
 	}
 
 }

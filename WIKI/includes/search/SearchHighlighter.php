@@ -21,29 +21,20 @@
  * @ingroup Search
  */
 
-use MediaWiki\MediaWikiServices;
-
 /**
  * Highlight bits of wikitext
  *
- * @newable
- * @note marked as newable in 1.35 for lack of a better alternative,
- *       but should use a factory in the future.
  * @ingroup Search
  */
 class SearchHighlighter {
-	public const DEFAULT_CONTEXT_LINES = 2;
-	public const DEFAULT_CONTEXT_CHARS = 75;
-
 	protected $mCleanWikitext = true;
 
 	/**
-	 * @stable to call
 	 * @warning If you pass false to this constructor, then
 	 *  the caller is responsible for HTML escaping.
 	 * @param bool $cleanupWikitext
 	 */
-	public function __construct( $cleanupWikitext = true ) {
+	function __construct( $cleanupWikitext = true ) {
 		$this->mCleanWikitext = $cleanupWikitext;
 	}
 
@@ -51,19 +42,14 @@ class SearchHighlighter {
 	 * Wikitext highlighting when $wgAdvancedSearchHighlighting = true
 	 *
 	 * @param string $text
-	 * @param string[] $terms Terms to highlight (not html escaped but
+	 * @param array $terms Terms to highlight (not html escaped but
 	 *   regex escaped via SearchDatabase::regexTerm())
 	 * @param int $contextlines
 	 * @param int $contextchars
 	 * @return string
 	 */
-	public function highlightText(
-		$text,
-		$terms,
-		$contextlines = self::DEFAULT_CONTEXT_LINES,
-		$contextchars = self::DEFAULT_CONTEXT_CHARS
-	) {
-		global $wgSearchHighlightBoundaries;
+	public function highlightText( $text, $terms, $contextlines, $contextchars ) {
+		global $wgContLang, $wgSearchHighlightBoundaries;
 
 		if ( $text == '' ) {
 			return '';
@@ -78,8 +64,8 @@ class SearchHighlighter {
 			3 => "/(\n\\{\\|)|(\n\\|\\})/" ]; // table
 
 		// @todo FIXME: This should prolly be a hook or something
-		// instead of hardcoding the name of the Cite extension
-		if ( \ExtensionRegistry::getInstance()->isLoaded( 'Cite' ) ) {
+		// instead of hardcoding a class name from the Cite extension
+		if ( class_exists( 'Cite' ) ) {
 			$spat .= '|(<ref>)'; // references via cite extension
 			$endPatterns[4] = '/(<ref>)|(<\/ref>)/';
 		}
@@ -98,10 +84,7 @@ class SearchHighlighter {
 						if ( $key == 2 ) {
 							// see if this is an image link
 							$ns = substr( $val[0], 2, -1 );
-							if (
-								MediaWikiServices::getInstance()->getContentLanguage()->
-								getNsIndex( $ns ) != NS_FILE
-							) {
+							if ( $wgContLang->getNsIndex( $ns ) != NS_FILE ) {
 								break;
 							}
 
@@ -150,7 +133,6 @@ class SearchHighlighter {
 			$this->splitAndAdd( $textExt, $count, substr( $text, $start ) );
 			break;
 		}
-		'@phan-var string[] $textExt';
 
 		$all = $textExt + $otherExt; // these have disjunct key sets
 
@@ -310,11 +292,11 @@ class SearchHighlighter {
 	/**
 	 * Split text into lines and add it to extracts array
 	 *
-	 * @param string[] &$extracts Index -> $line
+	 * @param array &$extracts Index -> $line
 	 * @param int &$count
 	 * @param string $text
 	 */
-	private function splitAndAdd( &$extracts, &$count, $text ) {
+	function splitAndAdd( &$extracts, &$count, $text ) {
 		$split = explode( "\n", $this->mCleanWikitext ? $this->removeWiki( $text ) : $text );
 		foreach ( $split as $line ) {
 			$tt = trim( $line );
@@ -330,11 +312,10 @@ class SearchHighlighter {
 	 * @param array $matches
 	 * @return string
 	 */
-	private function caseCallback( $matches ) {
+	function caseCallback( $matches ) {
+		global $wgContLang;
 		if ( strlen( $matches[0] ) > 1 ) {
-			$contLang = MediaWikiServices::getInstance()->getContentLanguage();
-			return '[' . $contLang->lc( $matches[0] ) .
-				$contLang->uc( $matches[0] ) . ']';
+			return '[' . $wgContLang->lc( $matches[0] ) . $wgContLang->uc( $matches[0] ) . ']';
 		} else {
 			return $matches[0];
 		}
@@ -346,11 +327,11 @@ class SearchHighlighter {
 	 * @param string $text
 	 * @param int $start
 	 * @param int $end
-	 * @param int|null &$posStart (out) actual start position
-	 * @param int|null &$posEnd (out) actual end position
+	 * @param int &$posStart (out) actual start position
+	 * @param int &$posEnd (out) actual end position
 	 * @return string
 	 */
-	private function extract( $text, $start, $end, &$posStart = null, &$posEnd = null ) {
+	function extract( $text, $start, $end, &$posStart = null, &$posEnd = null ) {
 		if ( $start != 0 ) {
 			$start = $this->position( $text, $start, 1 );
 		}
@@ -360,10 +341,10 @@ class SearchHighlighter {
 			$end = $this->position( $text, $end );
 		}
 
-		if ( $posStart !== null ) {
+		if ( !is_null( $posStart ) ) {
 			$posStart = $start;
 		}
-		if ( $posEnd !== null ) {
+		if ( !is_null( $posEnd ) ) {
 			$posEnd = $end;
 		}
 
@@ -382,7 +363,7 @@ class SearchHighlighter {
 	 * @param int $offset Offset to found index
 	 * @return int Nearest nonletter index, or beginning of utf8 char if none
 	 */
-	private function position( $text, $point, $offset = 0 ) {
+	function position( $text, $point, $offset = 0 ) {
 		$tolerance = 10;
 		$s = max( 0, $point - $tolerance );
 		$l = min( strlen( $text ), $point + $tolerance ) - $s;
@@ -421,8 +402,9 @@ class SearchHighlighter {
 	 * @param int &$contextchars Length of snippet
 	 * @param array &$out Map for highlighted snippets
 	 * @param array &$offsets Map of starting points of snippets
+	 * @protected
 	 */
-	private function process( $pattern, $extracts, &$linesleft, &$contextchars, &$out, &$offsets ) {
+	function process( $pattern, $extracts, &$linesleft, &$contextchars, &$out, &$offsets ) {
 		if ( $linesleft == 0 ) {
 			return; // nothing to do
 		}
@@ -461,10 +443,11 @@ class SearchHighlighter {
 
 	/**
 	 * Basic wikitext removal
+	 * @protected
 	 * @param string $text
 	 * @return mixed
 	 */
-	private function removeWiki( $text ) {
+	function removeWiki( $text ) {
 		$text = preg_replace( "/\\{\\{([^|]+?)\\}\\}/", "", $text );
 		$text = preg_replace( "/\\{\\{([^|]+\\|)(.*?)\\}\\}/", "\\2", $text );
 		$text = preg_replace( "/\\[\\[([^|]+?)\\]\\]/", "\\1", $text );
@@ -492,13 +475,14 @@ class SearchHighlighter {
 	 * @param array $matches
 	 * @return string
 	 */
-	private function linkReplace( $matches ) {
+	function linkReplace( $matches ) {
 		$colon = strpos( $matches[1], ':' );
 		if ( $colon === false ) {
 			return $matches[2]; // replace with caption
 		}
+		global $wgContLang;
 		$ns = substr( $matches[1], 0, $colon );
-		$index = MediaWikiServices::getInstance()->getContentLanguage()->getNsIndex( $ns );
+		$index = $wgContLang->getNsIndex( $ns );
 		if ( $index !== false && ( $index == NS_FILE || $index == NS_CATEGORY ) ) {
 			return $matches[0]; // return the whole thing
 		} else {
@@ -513,17 +497,14 @@ class SearchHighlighter {
 	 * Used when $wgAdvancedSearchHighlighting is false.
 	 *
 	 * @param string $text
-	 * @param string[] $terms Escaped for regex by SearchDatabase::regexTerm()
+	 * @param array $terms Escaped for regex by SearchDatabase::regexTerm()
 	 * @param int $contextlines
 	 * @param int $contextchars
 	 * @return string
 	 */
-	public function highlightSimple(
-		$text,
-		$terms,
-		$contextlines = self::DEFAULT_CONTEXT_LINES,
-		$contextchars = self::DEFAULT_CONTEXT_CHARS
-	) {
+	public function highlightSimple( $text, $terms, $contextlines, $contextchars ) {
+		global $wgContLang;
+
 		$lines = explode( "\n", $text );
 
 		$terms = implode( '|', $terms );
@@ -533,9 +514,8 @@ class SearchHighlighter {
 		$lineno = 0;
 
 		$extract = "";
-		$contLang = MediaWikiServices::getInstance()->getContentLanguage();
 		foreach ( $lines as $line ) {
-			if ( $contextlines == 0 ) {
+			if ( 0 == $contextlines ) {
 				break;
 			}
 			++$lineno;
@@ -545,12 +525,12 @@ class SearchHighlighter {
 			}
 			--$contextlines;
 			// truncate function changes ... to relevant i18n message.
-			$pre = $contLang->truncateForVisual( $m[1], -$contextchars, '...', false );
+			$pre = $wgContLang->truncate( $m[1], - $contextchars, '...', false );
 
 			if ( count( $m ) < 3 ) {
 				$post = '';
 			} else {
-				$post = $contLang->truncateForVisual( $m[3], $contextchars, '...', false );
+				$post = $wgContLang->truncate( $m[3], $contextchars, '...', false );
 			}
 
 			$found = $m[2];
@@ -573,11 +553,7 @@ class SearchHighlighter {
 	 * @param int $contextchars Average number of characters per line
 	 * @return string
 	 */
-	public function highlightNone(
-		$text,
-		$contextlines = self::DEFAULT_CONTEXT_LINES,
-		$contextchars = self::DEFAULT_CONTEXT_CHARS
-	) {
+	public function highlightNone( $text, $contextlines, $contextchars ) {
 		$match = [];
 		$text = ltrim( $text ) . "\n"; // make sure the preg_match may find the last line
 		$text = str_replace( "\n\n", "\n", $text ); // remove empty lines

@@ -43,7 +43,7 @@ class CheckLess extends Maintenance {
 		self::requireTestsAutoloader();
 
 		// If phpunit isn't available by autoloader try pulling it in
-		if ( !class_exists( 'PHPUnit\\Framework\\TestCase' ) ) {
+		if ( !class_exists( 'PHPUnit_Framework_TestCase' ) ) {
 			require_once 'PHPUnit/Autoload.php';
 		}
 
@@ -53,7 +53,7 @@ class CheckLess extends Maintenance {
 			define( 'MW_PHPUNIT_TEST', true );
 		}
 
-		$textUICommand = new \PHPUnit\TextUI\Command();
+		$textUICommand = new PHPUnit_TextUI_Command();
 		$argv = [
 			"$IP/tests/phpunit/phpunit.php",
 			"$IP/tests/phpunit/suites/LessTestSuite.php"
@@ -62,5 +62,5 @@ class CheckLess extends Maintenance {
 	}
 }
 
-$maintClass = CheckLess::class;
+$maintClass = 'CheckLess';
 require_once RUN_MAINTENANCE_IF_MAIN;

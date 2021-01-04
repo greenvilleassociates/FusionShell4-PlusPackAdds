@@ -2,16 +2,13 @@
 
 namespace MediaWiki\Auth;
 
-use MediaWiki\MediaWikiServices;
-use MediaWiki\Permissions\PermissionManager;
-use Psr\Container\ContainerInterface;
 use Wikimedia\TestingAccessWrapper;
 
 /**
  * @group AuthManager
- * @covers \MediaWiki\Auth\ConfirmLinkSecondaryAuthenticationProvider
+ * @covers MediaWiki\Auth\ConfirmLinkSecondaryAuthenticationProvider
  */
-class ConfirmLinkSecondaryAuthenticationProviderTest extends \MediaWikiIntegrationTestCase {
+class ConfirmLinkSecondaryAuthenticationProviderTest extends \MediaWikiTestCase {
 	/**
 	 * @dataProvider provideGetAuthenticationRequests
 	 * @param string $action
@@ -137,13 +134,7 @@ class ConfirmLinkSecondaryAuthenticationProviderTest extends \MediaWikiIntegrati
 		$request = new \FauxRequest();
 		$manager = $this->getMockBuilder( AuthManager::class )
 			->setMethods( [ 'allowsAuthenticationDataChange' ] )
-			->setConstructorArgs( [
-				$request,
-				\RequestContext::getMain()->getConfig(),
-				MediaWikiServices::getInstance()->getObjectFactory(),
-				$this->createNoOpMock( PermissionManager::class ),
-				MediaWikiServices::getInstance()->getHookContainer()
-			] )
+			->setConstructorArgs( [ $request, \RequestContext::getMain()->getConfig() ] )
 			->getMock();
 		$manager->expects( $this->any() )->method( 'allowsAuthenticationDataChange' )
 			->will( $this->returnCallback( function ( $req ) {
@@ -233,11 +224,7 @@ class ConfirmLinkSecondaryAuthenticationProviderTest extends \MediaWikiIntegrati
 			],
 		] );
 		$request = new \FauxRequest();
-		$services = $this->createNoOpMock( ContainerInterface::class );
-		$objectFactory = new \Wikimedia\ObjectFactory( $services );
-		$permManager = MediaWikiServices::getInstance()->getPermissionManager();
-		$hookContainer = MediaWikiServices::getInstance()->getHookContainer();
-		$manager = new AuthManager( $request, $config, $objectFactory, $permManager, $hookContainer );
+		$manager = new AuthManager( $request, $config );
 		$provider->setManager( $manager );
 		$provider = TestingAccessWrapper::newFromObject( $provider );
 

@@ -20,25 +20,27 @@
  * @file
  * @ingroup Cache
  */
+use Wikimedia\Assert\Assert;
 
 /**
- * Class for process caching individual properties of expiring items
- *
- * When the key for an entire item is deleted, all properties for it are deleted
- *
+ * Handles per process caching of items
  * @ingroup Cache
- * @deprecated Since 1.32 Use MapCacheLRU instead
  */
 class ProcessCacheLRU {
-	/** @var MapCacheLRU */
-	protected $cache;
+	/** @var Array */
+	protected $cache = []; // (key => prop => value)
+
+	/** @var Array */
+	protected $cacheTimes = []; // (key => prop => UNIX timestamp)
+
+	protected $maxCacheKeys; // integer; max entries
 
 	/**
 	 * @param int $maxKeys Maximum number of entries allowed (min 1).
 	 * @throws UnexpectedValueException When $maxCacheKeys is not an int or =< 0.
 	 */
 	public function __construct( $maxKeys ) {
-		$this->cache = new MapCacheLRU( $maxKeys );
+		$this->resize( $maxKeys );
 	}
 
 	/**
@@ -52,7 +54,16 @@ class ProcessCacheLRU {
 	 * @return void
 	 */
 	public function set( $key, $prop, $value ) {
-		$this->cache->setField( $key, $prop, $value );
+		if ( isset( $this->cache[$key] ) ) {
+			$this->ping( $key );
+		} elseif ( count( $this->cache ) >= $this->maxCacheKeys ) {
+			reset( $this->cache );
+			$evictKey = key( $this->cache );
+			unset( $this->cache[$evictKey] );
+			unset( $this->cacheTimes[$evictKey] );
+		}
+		$this->cache[$key][$prop] = $value;
+		$this->cacheTimes[$key][$prop] = microtime( true );
 	}
 
 	/**
@@ -64,7 +75,13 @@ class ProcessCacheLRU {
 	 * @return bool
 	 */
 	public function has( $key, $prop, $maxAge = 0.0 ) {
-		return $this->cache->hasField( $key, $prop, $maxAge );
+		if ( isset( $this->cache[$key][$prop] ) ) {
+			return ( $maxAge <= 0 ||
+				( microtime( true ) - $this->cacheTimes[$key][$prop] ) <= $maxAge
+			);
+		}
+
+		return false;
 	}
 
 	/**
@@ -77,17 +94,29 @@ class ProcessCacheLRU {
 	 * @return mixed
 	 */
 	public function get( $key, $prop ) {
-		return $this->cache->getField( $key, $prop );
+		if ( !isset( $this->cache[$key][$prop] ) ) {
+			return null;
+		}
+		$this->ping( $key );
+		return $this->cache[$key][$prop];
 	}
 
 	/**
 	 * Clear one or several cache entries, or all cache entries.
 	 *
-	 * @param string|array|null $keys
+	 * @param string|array $keys
 	 * @return void
 	 */
 	public function clear( $keys = null ) {
-		$this->cache->clear( $keys );
+		if ( $keys === null ) {
+			$this->cache = [];
+			$this->cacheTimes = [];
+		} else {
+			foreach ( (array)$keys as $key ) {
+				unset( $this->cache[$key] );
+				unset( $this->cacheTimes[$key] );
+			}
+		}
 	}
 
 	/**
@@ -98,7 +127,27 @@ class ProcessCacheLRU {
 	 * @throws UnexpectedValueException
 	 */
 	public function resize( $maxKeys ) {
-		$this->cache->setMaxSize( $maxKeys );
+		Assert::parameterType( 'integer', $maxKeys, '$maxKeys' );
+		Assert::parameter( $maxKeys > 0, '$maxKeys', 'must be above zero' );
+
+		$this->maxCacheKeys = $maxKeys;
+		while ( count( $this->cache ) > $this->maxCacheKeys ) {
+			reset( $this->cache );
+			$evictKey = key( $this->cache );
+			unset( $this->cache[$evictKey] );
+			unset( $this->cacheTimes[$evictKey] );
+		}
+	}
+
+	/**
+	 * Push an entry to the top of the cache
+	 *
+	 * @param string $key
+	 */
+	protected function ping( $key ) {
+		$item = $this->cache[$key];
+		unset( $this->cache[$key] );
+		$this->cache[$key] = $item;
 	}
 
 	/**
@@ -106,6 +155,6 @@ class ProcessCacheLRU {
 	 * @return int
 	 */
 	public function getSize() {
-		return $this->cache->getMaxSize();
+		return $this->maxCacheKeys;
 	}
 }

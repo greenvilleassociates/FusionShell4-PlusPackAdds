@@ -8,8 +8,6 @@
  *
  */
 
-$fallback = 'fr';
-
 $namespaceNames = [
 	NS_MEDIA            => 'Media',
 	NS_SPECIAL          => 'Uslig',

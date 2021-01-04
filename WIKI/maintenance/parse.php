@@ -1,7 +1,4 @@
 <?php
-
-use MediaWiki\MediaWikiServices;
-
 /**
  * Parse some wikitext.
  *
@@ -49,7 +46,7 @@ use MediaWiki\MediaWikiServices;
  * @file
  * @ingroup Maintenance
  * @author Antoine Musso <hashar at free dot fr>
- * @license GPL-2.0-or-later
+ * @license GNU General Public License 2.0 or later
  */
 
 require_once __DIR__ . '/Maintenance.php';
@@ -71,6 +68,7 @@ class CLIParser extends Maintenance {
 			false,
 			true
 		);
+		$this->addOption( 'tidy', 'Tidy the output' );
 		$this->addArg( 'file', 'File containing wikitext (Default: stdin)', false );
 	}
 
@@ -84,7 +82,7 @@ class CLIParser extends Maintenance {
 	 * @return string HTML Rendering
 	 */
 	public function render( $wikitext ) {
-		return $this->parse( $wikitext )->getText( [ 'wrapperDivClass' => '' ] );
+		return $this->parse( $wikitext )->getText();
 	}
 
 	/**
@@ -105,7 +103,9 @@ class CLIParser extends Maintenance {
 	}
 
 	protected function initParser() {
-		$this->parser = MediaWikiServices::getInstance()->getParserFactory()->create();
+		global $wgParserConf;
+		$parserClass = $wgParserConf['class'];
+		$this->parser = new $parserClass();
 	}
 
 	/**
@@ -116,7 +116,9 @@ class CLIParser extends Maintenance {
 	 * @return Title
 	 */
 	protected function getTitle() {
-		$title = $this->getOption( 'title' ) ?: 'CLIParser';
+		$title = $this->getOption( 'title' )
+			? $this->getOption( 'title' )
+			: 'CLIParser';
 
 		return Title::newFromText( $title );
 	}
@@ -126,8 +128,10 @@ class CLIParser extends Maintenance {
 	 * @return ParserOutput
 	 */
 	protected function parse( $wikitext ) {
-		$options = ParserOptions::newCanonical( 'canonical' );
-		$options->setOption( 'enableLimitReport', false );
+		$options = new ParserOptions;
+		if ( $this->getOption( 'tidy' ) ) {
+			$options->setTidy( true );
+		}
 		return $this->parser->parse(
 			$wikitext,
 			$this->getTitle(),
@@ -136,5 +140,5 @@ class CLIParser extends Maintenance {
 	}
 }
 
-$maintClass = CLIParser::class;
+$maintClass = "CLIParser";
 require_once RUN_MAINTENANCE_IF_MAIN;

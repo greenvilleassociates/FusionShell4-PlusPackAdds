@@ -4,7 +4,7 @@
  * @group Database
  * @group RequestContext
  */
-class RequestContextTest extends MediaWikiIntegrationTestCase {
+class RequestContextTest extends MediaWikiTestCase {
 
 	/**
 	 * Test the relationship between title and wikipage in RequestContext
@@ -49,7 +49,7 @@ class RequestContextTest extends MediaWikiIntegrationTestCase {
 
 		$oInfo = $context->exportSession();
 		$this->assertEquals( '127.0.0.1', $oInfo['ip'], "Correct initial IP address." );
-		$this->assertSame( 0, $oInfo['userId'], "Correct initial user ID." );
+		$this->assertEquals( 0, $oInfo['userId'], "Correct initial user ID." );
 		$this->assertFalse( MediaWiki\Session\SessionManager::getGlobalSession()->isPersistent(),
 			'Global session isn\'t persistent to start' );
 
@@ -96,7 +96,7 @@ class RequestContextTest extends MediaWikiIntegrationTestCase {
 		} else {
 			$this->assertEquals( $oldSessionId, session_id(), "Unchanged PHP session ID." );
 		}
-		$this->assertTrue( $context->getUser()->isLoggedIn(), "Correct context user." );
+		$this->assertEquals( true, $context->getUser()->isLoggedIn(), "Correct context user." );
 		$this->assertEquals( $sinfo['userId'], $context->getUser()->getId(), "Correct context user ID." );
 		$this->assertEquals(
 			'UnitTestContextUser',

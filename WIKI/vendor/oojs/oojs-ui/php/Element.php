@@ -39,11 +39,6 @@ class Element extends Tag {
 	protected $data = null;
 
 	/**
-	 * @var bool
-	 */
-	protected $visible = true;
-
-	/**
 	 * Strings of the CSS classes explicitly configured for this element (as opposed to #$classes,
 	 * which contains all classes for this element).
 	 *
@@ -56,27 +51,17 @@ class Element extends Tag {
 	 */
 	protected $configCallbacks = [];
 
-	/* Static methods */
-
-	/**
-	 * Emits a deprecation warning with provided message.
-	 *
-	 * @param string $message Message about the deprecation
-	 */
-	public static function warnDeprecation( $message = '' ) {
-		trigger_error( $message, E_USER_DEPRECATED );
-	}
-
 	/* Methods */
 
 	/**
 	 * @param array $config Configuration options
-	 *      - string[] $config['classes'] CSS class names to add
-	 *      - string $config['id'] HTML id attribute
-	 *      - string $config['text'] Text to insert
-	 *      - string[]|HtmlSnippet[]|Element[] $config['content'] Content to append (after text).
-	 *          Strings will be HTML-escaped for output, use an HtmlSnippet instance to prevent that.
-	 *      - mixed $config['data'] Element data
+	 * @param string[] $config['classes'] CSS class names to add
+	 * @param string $config['id'] HTML id attribute
+	 * @param string $config['text'] Text to insert
+	 * @param array $config['content'] Content to append (after text), strings
+	 *   or Element objects. Strings will be HTML-escaped for output, use an
+	 *   HtmlSnippet instance to prevent that.
+	 * @param mixed $config['data'] Element data
 	 */
 	public function __construct( array $config = [] ) {
 		// Parent constructor
@@ -114,21 +99,6 @@ class Element extends Tag {
 	 */
 	public function getTagName() {
 		return $this::$tagName;
-	}
-
-	/**
-	 * Toggle visiblity of an element.
-	 *
-	 * @param bool|null $show Make element visible, omit to toggle visibility
-	 * @return $this
-	 */
-	public function toggle( $show = null ) {
-		$show = $show === null ? !$this->visible : $show;
-
-		$this->visible = $show;
-		$this->toggleClasses( [ 'oo-ui-element-hidden' ], !$this->visible );
-
-		return $this;
 	}
 
 	/**
@@ -287,12 +257,12 @@ class Element extends Tag {
 
 	/**
 	 * A helper method to massage an array of HTML attributes into a format that is more likely to
-	 * work with an OOUI PHP element, camel-casing attribute names and setting values of boolean
+	 * work with an OOjs UI PHP element, camel-casing attribute names and setting values of boolean
 	 * ones to true. Intended as a convenience to be used when refactoring legacy systems using HTML
-	 * to use OOUI.
+	 * to use OOjs UI.
 	 *
 	 * @param array $attrs HTML attributes, e.g. `[ 'disabled' => '', 'accesskey' => 'k' ]`
-	 * @return array OOUI PHP element config, e.g. `[ 'disabled' => true, 'accessKey' => 'k' ]`
+	 * @return array OOjs UI PHP element config, e.g. `[ 'disabled' => true, 'accessKey' => 'k' ]`
 	 */
 	public static function configFromHtmlAttributes( array $attrs ) {
 		$booleanAttrs = [

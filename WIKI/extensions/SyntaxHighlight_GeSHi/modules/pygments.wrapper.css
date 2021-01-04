@@ -24,7 +24,7 @@ code code.mw-highlight {
 }
 
 /* The nested pre already has a background. T126010 */
-div.mw-highlight {
+div.mw-hightlight {
 	background-color: inherit;
 }
 
@@ -48,7 +48,6 @@ div.mw-highlight {
 	-moz-user-select: none;
 	-webkit-user-select: none;
 	-ms-user-select: none;
-	user-select: none;
 }
 
 /* To interact better with the 'display: block' above, doesn't affect other uses */

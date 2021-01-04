@@ -45,7 +45,7 @@ use WebRequest;
  * @ingroup Session
  * @since 1.27
  */
-class Session implements \Countable, \Iterator, \ArrayAccess {
+final class Session implements \Countable, \Iterator, \ArrayAccess {
 	/** @var null|string[] Encryption algorithm to use */
 	private static $encryptionAlgorithm = null;
 
@@ -83,7 +83,7 @@ class Session implements \Countable, \Iterator, \ArrayAccess {
 
 	/**
 	 * Returns the SessionId object
-	 * @internal For internal use by WebRequest
+	 * @private For internal use by WebRequest
 	 * @return SessionId
 	 */
 	public function getSessionId() {
@@ -209,10 +209,7 @@ class Session implements \Countable, \Iterator, \ArrayAccess {
 	}
 
 	/**
-	 * Get the expected value of the forceHTTPS cookie. This reflects whether
-	 * session cookies were sent with the Secure attribute. If $wgForceHTTPS
-	 * is true, the forceHTTPS cookie is not sent and this value is ignored.
-	 *
+	 * Whether HTTPS should be forced
 	 * @return bool
 	 */
 	public function shouldForceHTTPS() {
@@ -220,10 +217,7 @@ class Session implements \Countable, \Iterator, \ArrayAccess {
 	}
 
 	/**
-	 * Set the value of the forceHTTPS cookie. This reflects whether session
-	 * cookies were sent with the Secure attribute. If $wgForceHTTPS is true,
-	 * the forceHTTPS cookie is not sent, and this value is ignored.
-	 *
+	 * Set whether HTTPS should be forced
 	 * @param bool $force
 	 */
 	public function setForceHTTPS( $force ) {
@@ -248,7 +242,7 @@ class Session implements \Countable, \Iterator, \ArrayAccess {
 
 	/**
 	 * Fetch provider metadata
-	 * @note For use by SessionProvider subclasses only
+	 * @protected For use by SessionProvider subclasses only
 	 * @return mixed
 	 */
 	public function getProviderMetadata() {
@@ -297,7 +291,7 @@ class Session implements \Countable, \Iterator, \ArrayAccess {
 	/**
 	 * Fetch a value from the session
 	 * @param string|int $key
-	 * @param mixed|null $default Returned if $this->exists( $key ) would be false
+	 * @param mixed $default Returned if $this->exists( $key ) would be false
 	 * @return mixed
 	 */
 	public function get( $key, $default = null ) {
@@ -439,6 +433,20 @@ class Session implements \Countable, \Iterator, \ArrayAccess {
 				}
 			}
 
+			if ( function_exists( 'mcrypt_encrypt' )
+				&& in_array( 'rijndael-128', mcrypt_list_algorithms(), true )
+			) {
+				$modes = mcrypt_list_modes();
+				if ( in_array( 'ctr', $modes, true ) ) {
+					self::$encryptionAlgorithm = [ 'mcrypt', 'rijndael-128', 'ctr' ];
+					return self::$encryptionAlgorithm;
+				}
+				if ( in_array( 'cbc', $modes, true ) ) {
+					self::$encryptionAlgorithm = [ 'mcrypt', 'rijndael-128', 'cbc' ];
+					return self::$encryptionAlgorithm;
+				}
+			}
+
 			if ( $wgSessionInsecureSecrets ) {
 				// @todo: import a pure-PHP library for AES instead of this
 				self::$encryptionAlgorithm = [ 'insecure' ];
@@ -446,8 +454,8 @@ class Session implements \Countable, \Iterator, \ArrayAccess {
 			}
 
 			throw new \BadMethodCallException(
-				'Encryption is not available. You really should install the PHP OpenSSL extension. ' .
-				'But if you really can\'t and you\'re willing ' .
+				'Encryption is not available. You really should install the PHP OpenSSL extension, ' .
+				'or failing that the mcrypt extension. But if you really can\'t and you\'re willing ' .
 				'to accept insecure storage of sensitive session data, set ' .
 				'$wgSessionInsecureSecrets = true in LocalSettings.php to make this exception go away.'
 			);
@@ -473,13 +481,24 @@ class Session implements \Countable, \Iterator, \ArrayAccess {
 
 		// Encrypt
 		// @todo: import a pure-PHP library for AES instead of doing $wgSessionInsecureSecrets
-		$iv = random_bytes( 16 );
+		$iv = \MWCryptRand::generate( 16, true );
 		$algorithm = self::getEncryptionAlgorithm();
 		switch ( $algorithm[0] ) {
 			case 'openssl':
 				$ciphertext = openssl_encrypt( $serialized, $algorithm[1], $encKey, OPENSSL_RAW_DATA, $iv );
 				if ( $ciphertext === false ) {
 					throw new \UnexpectedValueException( 'Encryption failed: ' . openssl_error_string() );
+				}
+				break;
+			case 'mcrypt':
+				// PKCS7 padding
+				$blocksize = mcrypt_get_block_size( $algorithm[1], $algorithm[2] );
+				$pad = $blocksize - ( strlen( $serialized ) % $blocksize );
+				$serialized .= str_repeat( chr( $pad ), $pad );
+
+				$ciphertext = mcrypt_encrypt( $algorithm[1], $encKey, $serialized, $algorithm[2], $iv );
+				if ( $ciphertext === false ) {
+					throw new \UnexpectedValueException( 'Encryption failed' );
 				}
 				break;
 			case 'insecure':
@@ -503,7 +522,7 @@ class Session implements \Countable, \Iterator, \ArrayAccess {
 	/**
 	 * Fetch a value from the session that was set with self::setSecret()
 	 * @param string|int $key
-	 * @param mixed|null $default Returned if $this->exists( $key ) would be false or decryption fails
+	 * @param mixed $default Returned if $this->exists( $key ) would be false or decryption fails
 	 * @return mixed
 	 */
 	public function getSecret( $key, $default = null ) {
@@ -518,7 +537,7 @@ class Session implements \Countable, \Iterator, \ArrayAccess {
 		// Extension::OATHAuth.
 
 		// Unseal and check
-		$pieces = explode( '.', $encrypted, 4 );
+		$pieces = explode( '.', $encrypted );
 		if ( count( $pieces ) !== 3 ) {
 			$ex = new \Exception( 'Invalid sealed-secret format' );
 			$this->logger->warning( $ex->getMessage(), [ 'exception' => $ex ] );
@@ -544,6 +563,19 @@ class Session implements \Countable, \Iterator, \ArrayAccess {
 					$this->logger->debug( $ex->getMessage(), [ 'exception' => $ex ] );
 					return $default;
 				}
+				break;
+			case 'mcrypt':
+				$serialized = mcrypt_decrypt( $algorithm[1], $encKey, base64_decode( $ciphertext ),
+					$algorithm[2], base64_decode( $iv ) );
+				if ( $serialized === false ) {
+					$ex = new \Exception( 'Decyption failed' );
+					$this->logger->debug( $ex->getMessage(), [ 'exception' => $ex ] );
+					return $default;
+				}
+
+				// Remove PKCS7 padding
+				$pad = ord( substr( $serialized, -1 ) );
+				$serialized = substr( $serialized, 0, -$pad );
 				break;
 			case 'insecure':
 				$ex = new \Exception(
@@ -589,37 +621,31 @@ class Session implements \Countable, \Iterator, \ArrayAccess {
 	 * @{
 	 */
 
-	/** @inheritDoc */
 	public function count() {
 		$data = &$this->backend->getData();
 		return count( $data );
 	}
 
-	/** @inheritDoc */
 	public function current() {
 		$data = &$this->backend->getData();
 		return current( $data );
 	}
 
-	/** @inheritDoc */
 	public function key() {
 		$data = &$this->backend->getData();
 		return key( $data );
 	}
 
-	/** @inheritDoc */
 	public function next() {
 		$data = &$this->backend->getData();
 		next( $data );
 	}
 
-	/** @inheritDoc */
 	public function rewind() {
 		$data = &$this->backend->getData();
 		reset( $data );
 	}
 
-	/** @inheritDoc */
 	public function valid() {
 		$data = &$this->backend->getData();
 		return key( $data ) !== null;
@@ -652,16 +678,14 @@ class Session implements \Countable, \Iterator, \ArrayAccess {
 		return $data[$offset];
 	}
 
-	/** @inheritDoc */
 	public function offsetSet( $offset, $value ) {
 		$this->set( $offset, $value );
 	}
 
-	/** @inheritDoc */
 	public function offsetUnset( $offset ) {
 		$this->remove( $offset );
 	}
 
-	/** @} */
+	/**@}*/
 
 }

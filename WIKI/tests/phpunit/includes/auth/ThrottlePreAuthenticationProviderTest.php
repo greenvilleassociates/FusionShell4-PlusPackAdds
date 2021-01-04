@@ -2,16 +2,14 @@
 
 namespace MediaWiki\Auth;
 
-use MediaWiki\MediaWikiServices;
-use stdClass;
 use Wikimedia\TestingAccessWrapper;
 
 /**
  * @group AuthManager
  * @group Database
- * @covers \MediaWiki\Auth\ThrottlePreAuthenticationProvider
+ * @covers MediaWiki\Auth\ThrottlePreAuthenticationProvider
  */
-class ThrottlePreAuthenticationProviderTest extends \MediaWikiIntegrationTestCase {
+class ThrottlePreAuthenticationProviderTest extends \MediaWikiTestCase {
 	public function testConstructor() {
 		$provider = new ThrottlePreAuthenticationProvider();
 		$providerPriv = TestingAccessWrapper::newFromObject( $provider );
@@ -86,7 +84,7 @@ class ThrottlePreAuthenticationProviderTest extends \MediaWikiIntegrationTestCas
 			'AccountCreationThrottle' => null,
 			'PasswordAttemptThrottle' => null,
 		] ) );
-		$provider->setManager( MediaWikiServices::getInstance()->getAuthManager() );
+		$provider->setManager( AuthManager::singleton() );
 
 		$this->assertEquals(
 			\StatusValue::newGood(),
@@ -118,13 +116,12 @@ class ThrottlePreAuthenticationProviderTest extends \MediaWikiIntegrationTestCas
 			'AccountCreationThrottle' => null,
 			'PasswordAttemptThrottle' => null,
 		] ) );
-		$provider->setManager( MediaWikiServices::getInstance()->getAuthManager() );
-		$provider->setHookContainer( MediaWikiServices::getInstance()->getHookContainer() );
+		$provider->setManager( AuthManager::singleton() );
 
 		$user = \User::newFromName( 'RandomUser' );
 		$creator = \User::newFromName( $creatorname );
 		if ( $hook ) {
-			$mock = $this->getMockBuilder( stdClass::class )
+			$mock = $this->getMockBuilder( 'stdClass' )
 				->setMethods( [ 'onExemptFromAccountCreationThrottle' ] )
 				->getMock();
 			$mock->expects( $this->any() )->method( 'onExemptFromAccountCreationThrottle' )
@@ -134,13 +131,13 @@ class ThrottlePreAuthenticationProviderTest extends \MediaWikiIntegrationTestCas
 			] );
 		}
 
-		$this->assertTrue(
-
+		$this->assertEquals(
+			true,
 			$provider->testForAccountCreation( $user, $creator, [] )->isOK(),
 			'attempt #1'
 		);
-		$this->assertTrue(
-
+		$this->assertEquals(
+			true,
 			$provider->testForAccountCreation( $user, $creator, [] )->isOK(),
 			'attempt #2'
 		);
@@ -169,7 +166,7 @@ class ThrottlePreAuthenticationProviderTest extends \MediaWikiIntegrationTestCas
 			'AccountCreationThrottle' => null,
 			'PasswordAttemptThrottle' => null,
 		] ) );
-		$provider->setManager( MediaWikiServices::getInstance()->getAuthManager() );
+		$provider->setManager( AuthManager::singleton() );
 
 		$req = new UsernameAuthenticationRequest;
 		$req->username = 'SomeUser';
@@ -215,7 +212,7 @@ class ThrottlePreAuthenticationProviderTest extends \MediaWikiIntegrationTestCas
 			'AccountCreationThrottle' => null,
 			'PasswordAttemptThrottle' => null,
 		] ) );
-		$provider->setManager( MediaWikiServices::getInstance()->getAuthManager() );
+		$provider->setManager( AuthManager::singleton() );
 		$provider->postAuthentication( \User::newFromName( 'SomeUser' ),
 			AuthenticationResponse::newPass() );
 
@@ -229,7 +226,7 @@ class ThrottlePreAuthenticationProviderTest extends \MediaWikiIntegrationTestCas
 			'AccountCreationThrottle' => null,
 			'PasswordAttemptThrottle' => null,
 		] ) );
-		$provider->setManager( MediaWikiServices::getInstance()->getAuthManager() );
+		$provider->setManager( AuthManager::singleton() );
 		$provider->postAuthentication( \User::newFromName( 'SomeUser' ),
 			AuthenticationResponse::newPass() );
 		$this->assertSame( [

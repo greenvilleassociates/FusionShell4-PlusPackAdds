@@ -71,8 +71,3 @@ define( 'TS_POSTGRES', 7 );
  * ISO 8601 basic format with no timezone: 19860209T200000Z.
  */
 define( 'TS_ISO_8601_BASIC', 9 );
-
-/**
- * UNIX time with microseconds
- */
-define( 'TS_UNIX_MICRO', 10 );

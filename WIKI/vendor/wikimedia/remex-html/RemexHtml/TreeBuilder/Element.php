@@ -1,7 +1,6 @@
 <?php
 
 namespace RemexHtml\TreeBuilder;
-
 use RemexHtml\HTMLData;
 use RemexHtml\PropGuard;
 use RemexHtml\Tokenizer\Attributes;
@@ -15,8 +14,6 @@ use RemexHtml\Tokenizer\Attributes;
  * downstream clients.
  */
 class Element implements FormattingElement {
-	use PropGuard;
-
 	/**
 	 * The namespace. This will be the HTML namespace for elements that are not
 	 * in foreign content, even if there is a prefix.
@@ -57,7 +54,7 @@ class Element implements FormattingElement {
 	/**
 	 * Internal to CachingStack. A link in the scope list.
 	 */
-	public $nextEltInScope;
+	public $nextScope;
 
 	/**
 	 * Internal to CachingStack and SimpleStack. The current stack index, or
@@ -83,20 +80,9 @@ class Element implements FormattingElement {
 	public $userData;
 
 	/**
-	 * A unique ID which identifies the element
-	 * @var int
-	 */
-	public $uid;
-
-	/**
-	 * The next unique ID to be used
-	 */
-	private static $nextUid = 1;
-
-	/**
 	 * The element types in the MathML namespace which are MathML text
 	 * integration points.
-	 * @var array<string,bool>
+	 * @var string[bool]
 	 */
 	private static $mathmlIntegration = [
 		'mi' => true,
@@ -109,7 +95,7 @@ class Element implements FormattingElement {
 	/**
 	 * The element types in the SVG namespace which are SVG text integration
 	 * points.
-	 * @var array<string,bool>
+	 * @var string[bool]
 	 */
 	private static $svgHtmlIntegration = [
 		'foreignObject' => true,
@@ -137,7 +123,10 @@ class Element implements FormattingElement {
 			$this->htmlName = "$namespace $name";
 		}
 		$this->attrs = $attrs;
-		$this->uid = self::$nextUid++;
+	}
+
+	public function __set( $name, $value ) {
+		PropGuard::set( $this, $name, $value );
 	}
 
 	/**
@@ -152,7 +141,6 @@ class Element implements FormattingElement {
 
 	/**
 	 * Is the element an HTML integration point?
-	 * @return bool
 	 */
 	public function isHtmlIntegration() {
 		if ( $this->namespace === HTMLData::NS_MATHML ) {
@@ -185,9 +173,8 @@ class Element implements FormattingElement {
 
 	/**
 	 * Get a string identifying the element, for use in debugging.
-	 * @return string
 	 */
 	public function getDebugTag() {
-		return $this->htmlName . '#' . $this->uid;
+		return $this->htmlName . '#' . substr( md5( spl_object_hash( $this ) ), 0, 8 );
 	}
 }

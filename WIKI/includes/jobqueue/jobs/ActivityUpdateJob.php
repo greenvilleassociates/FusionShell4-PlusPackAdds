@@ -19,30 +19,18 @@
  * @ingroup JobQueue
  */
 
-use MediaWiki\Linker\LinkTarget;
-
 /**
  * Job for updating user activity like "last viewed" timestamps
- *
- * Job parameters include:
- *   - type: one of (updateWatchlistNotification) [required]
- *   - userid: affected user ID [required]
- *   - notifTime: timestamp to set watchlist entries to [required]
- *   - curTime: UNIX timestamp of the event that triggered this job [required]
  *
  * @ingroup JobQueue
  * @since 1.26
  */
 class ActivityUpdateJob extends Job {
-	public function __construct( LinkTarget $title, array $params ) {
-		$title = Title::newFromLinkTarget( $title );
-
+	function __construct( Title $title, array $params ) {
 		parent::__construct( 'activityUpdateJob', $title, $params );
 
-		static $required = [ 'type', 'userid', 'notifTime', 'curTime' ];
-		$missing = implode( ', ', array_diff( $required, array_keys( $this->params ) ) );
-		if ( $missing != '' ) {
-			throw new InvalidArgumentException( "Missing parameter(s) $missing" );
+		if ( !isset( $params['type'] ) ) {
+			throw new InvalidArgumentException( "Missing 'type' parameter." );
 		}
 
 		$this->removeDuplicates = true;
@@ -52,14 +40,17 @@ class ActivityUpdateJob extends Job {
 		if ( $this->params['type'] === 'updateWatchlistNotification' ) {
 			$this->updateWatchlistNotification();
 		} else {
-			throw new InvalidArgumentException( "Invalid 'type' '{$this->params['type']}'." );
+			throw new InvalidArgumentException(
+				"Invalid 'type' parameter '{$this->params['type']}'." );
 		}
 
 		return true;
 	}
 
 	protected function updateWatchlistNotification() {
-		$casTimestamp = $this->params['notifTime'] ?? $this->params['curTime'];
+		$casTimestamp = ( $this->params['notifTime'] !== null )
+			? $this->params['notifTime']
+			: $this->params['curTime'];
 
 		$dbw = wfGetDB( DB_MASTER );
 		$dbw->update( 'watchlist',

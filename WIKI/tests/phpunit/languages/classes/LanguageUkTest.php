@@ -6,6 +6,7 @@
  * @file
  */
 
+/** Tests for Ukrainian */
 class LanguageUkTest extends LanguageClassesTestCase {
 	/**
 	 * @dataProvider providePlural
@@ -104,11 +105,6 @@ class LanguageUkTest extends LanguageClassesTestCase {
 				'Вікіпедія',
 				'accusative',
 			],
-			[
-				'у MediaWiki',
-				'MediaWiki',
-				'locative',
-			]
 		];
 	}
 }

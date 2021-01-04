@@ -1,5 +1,9 @@
 <?php
 /**
+ *
+ *
+ * Created on Jul 3, 2007
+ *
  * Copyright © 2007 Roan Kattouw "<Firstname>.<Lastname>@gmail.com"
  *
  * This program is free software; you can redistribute it and/or modify
@@ -25,23 +29,13 @@
  */
 class ApiUndelete extends ApiBase {
 
-	use ApiWatchlistTrait;
-
-	public function __construct( ApiMain $mainModule, $moduleName, $modulePrefix = '' ) {
-		parent::__construct( $mainModule, $moduleName, $modulePrefix );
-
-		$this->watchlistExpiryEnabled = $this->getConfig()->get( 'WatchlistExpiry' );
-		$this->watchlistMaxDuration = $this->getConfig()->get( 'WatchlistExpiryMaxDuration' );
-	}
-
 	public function execute() {
 		$this->useTransactionalTimeLimit();
 
 		$params = $this->extractRequestParams();
 
 		$user = $this->getUser();
-		$block = $user->getBlock();
-		if ( $block && $block->isSitewide() ) {
+		if ( $user->isBlocked() ) {
 			$this->dieBlocked( $user->getBlock() );
 		}
 
@@ -50,12 +44,12 @@ class ApiUndelete extends ApiBase {
 			$this->dieWithError( [ 'apierror-invalidtitle', wfEscapeWikiText( $params['title'] ) ] );
 		}
 
-		if ( !$this->getPermissionManager()->userCan( 'undelete', $this->getUser(), $titleObj ) ) {
+		if ( !$titleObj->userCan( 'undelete', $user, 'secure' ) ) {
 			$this->dieWithError( 'permdenied-undelete' );
 		}
 
 		// Check if user can add tags
-		if ( $params['tags'] !== null ) {
+		if ( !is_null( $params['tags'] ) ) {
 			$ableToTag = ChangeTags::canAddTagsAccompanyingChange( $params['tags'], $user );
 			if ( !$ableToTag->isOK() ) {
 				$this->dieStatus( $ableToTag );
@@ -74,12 +68,12 @@ class ApiUndelete extends ApiBase {
 		}
 
 		$pa = new PageArchive( $titleObj, $this->getConfig() );
-		$retval = $pa->undeleteAsUser(
-			( $params['timestamps'] ?? [] ),
-			$user,
+		$retval = $pa->undelete(
+			( isset( $params['timestamps'] ) ? $params['timestamps'] : [] ),
 			$params['reason'],
 			$params['fileids'],
 			false,
+			$user,
 			$params['tags']
 		);
 		if ( !is_array( $retval ) ) {
@@ -87,20 +81,16 @@ class ApiUndelete extends ApiBase {
 		}
 
 		if ( $retval[1] ) {
-			$this->getHookRunner()->onFileUndeleteComplete(
-				$titleObj, $params['fileids'],
-				$this->getUser(), $params['reason'] );
+			Hooks::run( 'FileUndeleteComplete',
+				[ $titleObj, $params['fileids'], $this->getUser(), $params['reason'] ] );
 		}
 
-		$watchlistExpiry = $this->getExpiryFromParams( $params );
-		$this->setWatch( $params['watchlist'], $titleObj, $user, null, $watchlistExpiry );
+		$this->setWatch( $params['watchlist'], $titleObj );
 
-		$info = [
-			'title' => $titleObj->getPrefixedText(),
-			'revisions' => (int)$retval[0],
-			'fileversions' => (int)$retval[1],
-			'reason' => $retval[2]
-		];
+		$info['title'] = $titleObj->getPrefixedText();
+		$info['revisions'] = intval( $retval[0] );
+		$info['fileversions'] = intval( $retval[1] );
+		$info['reason'] = $retval[2];
 		$this->getResult()->addValue( null, $this->getModuleName(), $info );
 	}
 
@@ -131,7 +121,16 @@ class ApiUndelete extends ApiBase {
 				ApiBase::PARAM_TYPE => 'integer',
 				ApiBase::PARAM_ISMULTI => true,
 			],
-		] + $this->getWatchlistParams();
+			'watchlist' => [
+				ApiBase::PARAM_DFLT => 'preferences',
+				ApiBase::PARAM_TYPE => [
+					'watch',
+					'unwatch',
+					'preferences',
+					'nochange'
+				],
+			],
+		];
 	}
 
 	public function needsToken() {

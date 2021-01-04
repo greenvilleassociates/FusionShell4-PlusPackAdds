@@ -16,9 +16,8 @@
  * http://www.gnu.org/copyleft/gpl.html
  *
  * @file
+ * @license GPL 2+
  */
-
-use MediaWiki\MediaWikiServices;
 
 /**
  * A class to convert page titles on a foreign wiki (ForeignTitle objects) into
@@ -41,23 +40,21 @@ class NaiveImportTitleFactory implements ImportTitleFactory {
 	 * @return Title|null
 	 */
 	public function createTitleFromForeignTitle( ForeignTitle $foreignTitle ) {
+		global $wgContLang;
+
 		if ( $foreignTitle->isNamespaceIdKnown() ) {
 			$foreignNs = $foreignTitle->getNamespaceId();
 
 			// For built-in namespaces (0 <= ID < 100), we try to find a local NS with
 			// the same namespace ID
-			if (
-				$foreignNs < 100 &&
-				MediaWikiServices::getInstance()->getNamespaceInfo()->exists( $foreignNs )
-			) {
+			if ( $foreignNs < 100 && MWNamespace::exists( $foreignNs ) ) {
 				return Title::makeTitleSafe( $foreignNs, $foreignTitle->getText() );
 			}
 		}
 
 		// Do we have a local namespace by the same name as the foreign
 		// namespace?
-		$targetNs = MediaWikiServices::getInstance()->getContentLanguage()->getNsIndex(
-			$foreignTitle->getNamespaceName() );
+		$targetNs = $wgContLang->getNsIndex( $foreignTitle->getNamespaceName() );
 		if ( $targetNs !== false ) {
 			return Title::makeTitleSafe( $targetNs, $foreignTitle->getText() );
 		}

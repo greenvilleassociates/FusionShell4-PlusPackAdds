@@ -1,11 +1,9 @@
 <?php
 
-use MediaWiki\MediaWikiServices;
-
 /**
  * @group Database
  */
-class MergeHistoryTest extends MediaWikiIntegrationTestCase {
+class MergeHistoryTest extends MediaWikiTestCase {
 
 	/**
 	 * Make some pages to work with
@@ -29,14 +27,8 @@ class MergeHistoryTest extends MediaWikiIntegrationTestCase {
 	 * @param string|bool $error Expected error for test (or true for no error)
 	 */
 	public function testIsValidMerge( $source, $dest, $timestamp, $error ) {
-		if ( $timestamp === true ) {
-			// Although this timestamp is after the latest timestamp of both pages,
-			// MergeHistory should select the latest source timestamp up to this which should
-			// still work for the merge.
-			$timestamp = time() + ( 24 * 3600 );
-		}
-		$factory = MediaWikiServices::getInstance()->getMergeHistoryFactory();
-		$mh = $factory->newMergeHistory(
+		$this->setMwGlobals( 'wgContentHandlerUseDB', false );
+		$mh = new MergeHistory(
 			Title::newFromText( $source ),
 			Title::newFromText( $dest ),
 			$timestamp
@@ -53,8 +45,10 @@ class MergeHistoryTest extends MediaWikiIntegrationTestCase {
 		return [
 			// for MergeHistory::isValidMerge
 			[ 'Test', 'Test2', false, true ],
-			// Timestamp of `true` is a placeholder for "in the future""
-			[ 'Test', 'Test2', true, true ],
+			// Although this timestamp is after the latest timestamp of both pages,
+			// MergeHistory should select the latest source timestamp up to this which should
+			// still work for the merge.
+			[ 'Test', 'Test2', strtotime( 'tomorrow' ), true ],
 			[ 'Test', 'Test', false, 'mergehistory-fail-self-merge' ],
 			[ 'Nonexistant', 'Test2', false, 'mergehistory-fail-invalid-source' ],
 			[ 'Test', 'Nonexistant', false, 'mergehistory-fail-invalid-dest' ],
@@ -72,11 +66,9 @@ class MergeHistoryTest extends MediaWikiIntegrationTestCase {
 	 * @covers MergeHistory::isValidMerge
 	 */
 	public function testIsValidMergeRevisionLimit() {
-		$this->filterDeprecated( '/Direct construction of MergeHistory/' );
-
 		$limit = MergeHistory::REVISION_LIMIT;
 
-		$mh = $this->getMockBuilder( MergeHistory::class )
+		$mh = $this->getMockBuilder( 'MergeHistory' )
 			->setMethods( [ 'getRevisionCount' ] )
 			->setConstructorArgs( [
 				Title::newFromText( 'Test' ),
@@ -99,8 +91,7 @@ class MergeHistoryTest extends MediaWikiIntegrationTestCase {
 	 * @covers MergeHistory::checkPermissions
 	 */
 	public function testCheckPermissions() {
-		$factory = MediaWikiServices::getInstance()->getMergeHistoryFactory();
-		$mh = $factory->newMergeHistory(
+		$mh = new MergeHistory(
 			Title::newFromText( 'Test' ),
 			Title::newFromText( 'Test2' )
 		);
@@ -121,8 +112,7 @@ class MergeHistoryTest extends MediaWikiIntegrationTestCase {
 	 * @covers MergeHistory::getMergedRevisionCount
 	 */
 	public function testGetMergedRevisionCount() {
-		$factory = MediaWikiServices::getInstance()->getMergeHistoryFactory();
-		$mh = $factory->newMergeHistory(
+		$mh = new MergeHistory(
 			Title::newFromText( 'Merge1' ),
 			Title::newFromText( 'Merge2' )
 		);
@@ -130,41 +120,5 @@ class MergeHistoryTest extends MediaWikiIntegrationTestCase {
 		$sysop = static::getTestSysop()->getUser();
 		$mh->merge( $sysop );
 		$this->assertEquals( $mh->getMergedRevisionCount(), 1 );
-	}
-
-	/**
-	 * Test the old and new constructors work (though the old is deprecated)
-	 * @covers MergeHistory::__construct
-	 */
-	public function testConstructor() {
-		$services = MediaWikiServices::getInstance();
-		$source = Title::newFromText( 'Merge1' );
-		$destination = Title::newFromText( 'Merge2' );
-		$timestamp = false;
-
-		// Old method: No dependencies injected
-		$this->filterDeprecated( '/Direct construction of MergeHistory/' );
-		$mergeHistory = new MergeHistory( $source, $destination, $timestamp );
-		$this->assertInstanceOf(
-			MergeHistory::class,
-			$mergeHistory
-		);
-
-		// New method: all dependencies injected
-		$mergeHistory = new MergeHistory(
-			$source,
-			$destination,
-			$timestamp,
-			$services->getDBLoadBalancer(),
-			$services->getPermissionManager(),
-			$services->getContentHandlerFactory(),
-			$services->getRevisionStore(),
-			$services->getWatchedItemStore(),
-			$services->getSpamChecker()
-		);
-		$this->assertInstanceOf(
-			MergeHistory::class,
-			$mergeHistory
-		);
 	}
 }

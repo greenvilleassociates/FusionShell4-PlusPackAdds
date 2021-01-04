@@ -36,7 +36,7 @@ class PurgeParserCache extends Maintenance {
 
 	private $usleep = 0;
 
-	public function __construct() {
+	function __construct() {
 		parent::__construct();
 		$this->addDescription( "Remove old objects from the parser cache. " .
 			"This only works when the parser cache is in an SQL database." );
@@ -50,7 +50,7 @@ class PurgeParserCache extends Maintenance {
 		$this->addOption( 'msleep', 'Milliseconds to sleep between purge chunks', false, true );
 	}
 
-	public function execute() {
+	function execute() {
 		global $wgParserCacheExpireTime;
 
 		$inputDate = $this->getOption( 'expiredate' );
@@ -60,27 +60,26 @@ class PurgeParserCache extends Maintenance {
 		} elseif ( $inputAge !== null ) {
 			$date = wfTimestamp( TS_MW, time() + $wgParserCacheExpireTime - intval( $inputAge ) );
 		} else {
-			$this->fatalError( "Must specify either --expiredate or --age" );
+			$this->error( "Must specify either --expiredate or --age", 1 );
 			return;
 		}
 		$this->usleep = 1e3 * $this->getOption( 'msleep', 0 );
 
-		$english = MediaWikiServices::getInstance()->getLanguageFactory()->getLanguage( 'en' );
+		$english = Language::factory( 'en' );
 		$this->output( "Deleting objects expiring before " .
 			$english->timeanddate( $date ) . "\n" );
 
 		$pc = MediaWikiServices::getInstance()->getParserCache()->getCacheStorage();
 		$success = $pc->deleteObjectsExpiringBefore( $date, [ $this, 'showProgressAndWait' ] );
 		if ( !$success ) {
-			$this->fatalError( "\nCannot purge this kind of parser cache." );
+			$this->error( "\nCannot purge this kind of parser cache.", 1 );
 		}
 		$this->showProgressAndWait( 100 );
 		$this->output( "\nDone\n" );
 	}
 
 	public function showProgressAndWait( $percent ) {
-		// avoid lag; T150124
-		usleep( $this->usleep );
+		usleep( $this->usleep ); // avoid lag; T150124
 
 		$percentString = sprintf( "%.2f", $percent );
 		if ( $percentString === $this->lastProgress ) {
@@ -94,5 +93,5 @@ class PurgeParserCache extends Maintenance {
 	}
 }
 
-$maintClass = PurgeParserCache::class;
+$maintClass = 'PurgeParserCache';
 require_once RUN_MAINTENANCE_IF_MAIN;

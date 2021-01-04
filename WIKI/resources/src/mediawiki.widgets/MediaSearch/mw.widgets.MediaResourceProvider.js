@@ -4,7 +4,7 @@
  * @copyright 2011-2016 VisualEditor Team and others; see AUTHORS.txt
  * @license The MIT License (MIT); see LICENSE.txt
  */
-( function () {
+( function ( $, mw ) {
 
 	/**
 	 * MediaWiki media resource provider.
@@ -173,7 +173,7 @@
 			provider = this;
 
 		if ( !this.isValid() ) {
-			return $.Deferred().reject().promise( { abort: function () {} } );
+			return $.Deferred().reject().promise( { abort: $.noop } );
 		}
 
 		api = this.isLocal ? new mw.Api() : new mw.ForeignApi( this.getAPIurl(), { anonymous: true } );
@@ -319,4 +319,4 @@
 			this.apiurl !== undefined ||
 			this.scriptDirUrl !== undefined;
 	};
-}() );
+}( jQuery, mediaWiki ) );

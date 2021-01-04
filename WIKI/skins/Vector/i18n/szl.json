@@ -3,22 +3,20 @@
 		"authors": [
 			"Britscher",
 			"Gaj777",
-			"Krol111",
-			"Przem(1)s",
 			"Przemub",
-			"Uostofchuodnego"
+			"Krol111"
 		]
 	},
-	"vector-action-addsection": "Przidej tymat",
-	"vector-action-delete": "Skasuj",
-	"vector-action-move": "Przeniyś",
+	"vector-action-addsection": "Nowo tajla",
+	"vector-action-delete": "Wyćepej",
+	"vector-action-move": "Przećep",
 	"vector-action-protect": "Zawrzij",
 	"vector-action-undelete": "Wćep",
 	"vector-action-unprotect": "Uodymkńij",
-	"vector-view-create": "Stwōrz",
-	"vector-view-edit": "Edytuj",
-	"vector-view-history": "Pokŏż historyjõ",
+	"vector-view-create": "Stwůrz",
+	"vector-view-edit": "Sprowjej",
+	"vector-view-history": "Uobocz gyszichta",
 	"vector-view-view": "Czytej",
 	"vector-view-viewsource": "Zdrzůdłowy tekst",
-	"vector-more-actions": "Wiyncyj"
+	"vector-more-actions": "Wjyncyj"
 }

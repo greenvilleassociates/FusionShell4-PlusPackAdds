@@ -1,5 +1,9 @@
 <?php
 /**
+ *
+ *
+ * Created on Sep 7, 2006
+ *
  * Copyright © 2006 Yuri Astrakhan "<Firstname><Lastname>@gmail.com"
  *
  * This program is free software; you can redistribute it and/or modify
@@ -21,8 +25,6 @@
  */
 
 /**
- * @stable to extend
- *
  * @ingroup API
  */
 abstract class ApiQueryGeneratorBase extends ApiQueryBase {
@@ -37,6 +39,9 @@ abstract class ApiQueryGeneratorBase extends ApiQueryBase {
 	 *        by calling getPageSet() when in generator mode.
 	 */
 	public function setGeneratorMode( ApiPageSet $generatorPageSet ) {
+		if ( $generatorPageSet === null ) {
+			ApiBase::dieDebug( __METHOD__, 'Required parameter missing - $generatorPageSet' );
+		}
 		$this->mGeneratorPageSet = $generatorPageSet;
 	}
 

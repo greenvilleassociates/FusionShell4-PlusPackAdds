@@ -7,9 +7,9 @@
 	],
 	"url": "https://www.mediawiki.org/wiki/Extension:Nuke",
 	"descriptionmsg": "nuke-desc",
-	"license-name": "GPL-2.0-or-later",
+	"license-name": "GPL-2.0+",
 	"requires": {
-		"MediaWiki": ">= 1.35.0"
+		"MediaWiki": ">= 1.28.1"
 	},
 	"type": "specialpage",
 	"ExtensionMessagesFiles": {
@@ -21,18 +21,14 @@
 		]
 	},
 	"Hooks": {
-		"ContributionsToolLinks": "NukeHooks::nukeContributionsLinks"
+		"ContributionsToolLinks": [
+			"NukeHooks::nukeContributionsLinks"
+		]
 	},
 	"ResourceModules": {
-		"ext.nuke.confirm": {
+		"ext.nuke": {
 			"scripts": [
-				"ext.nuke.confirm.js"
-			],
-			"dependencies": [
-				"mediawiki.jqueryMsg"
-			],
-			"messages": [
-				"nuke-confirm"
+				"ext.nuke.js"
 			]
 		}
 	},
@@ -48,17 +44,12 @@
 	"AvailableRights": [
 		"nuke"
 	],
-	"GrantPermissions": {
-		"delete": {
-			"nuke": true
-		}
-	},
 	"SpecialPages": {
 		"Nuke": "SpecialNuke"
 	},
 	"AutoloadClasses": {
-		"SpecialNuke": "includes/SpecialNuke.php",
-		"NukeHooks": "includes/NukeHooks.php"
+		"SpecialNuke": "Nuke_body.php",
+		"NukeHooks": "Nuke.hooks.php"
 	},
 	"manifest_version": 1
 }

@@ -4,3 +4,4 @@ CREATE TABLE redirect (
   rd_title      TEXT     NOT NULL
 );
 CREATE INDEX redirect_ns_title ON redirect (rd_namespace,rd_title,rd_from);
+

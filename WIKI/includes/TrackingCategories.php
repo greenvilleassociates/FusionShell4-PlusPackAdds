@@ -19,8 +19,6 @@
  * @ingroup Categories
  */
 
-use MediaWiki\MediaWikiServices;
-
 /**
  * This class performs some operations related to tracking categories, such as creating
  * a list of all such categories.
@@ -47,6 +45,7 @@ class TrackingCategories {
 		'node-count-exceeded-category',
 		'expansion-depth-exceeded-category',
 		'restricted-displaytitle-ignored',
+		'deprecated-self-close-category',
 		'template-loop-category',
 	];
 
@@ -59,8 +58,7 @@ class TrackingCategories {
 
 	/**
 	 * Read the global and extract title objects from the corresponding messages
-	 * @return array[] [ 'msg' => Title, 'cats' => Title[] ]
-	 * @phan-return array<string,array{msg:Title,cats:Title[]}>
+	 * @return array Array( 'msg' => Title, 'cats' => Title[] )
 	 */
 	public function getTrackingCategories() {
 		$categories = array_merge(
@@ -82,7 +80,6 @@ class TrackingCategories {
 		}
 
 		$trackingCategories = [];
-		$nsInfo = MediaWikiServices::getInstance()->getNamespaceInfo();
 		foreach ( $categories as $catMsg ) {
 			/*
 			 * Check if the tracking category varies by namespace
@@ -99,7 +96,7 @@ class TrackingCategories {
 			// Match things like {{NAMESPACE}} and {{NAMESPACENUMBER}}.
 			// False positives are ok, this is just an efficiency shortcut
 			if ( strpos( $msgObj->plain(), '{{' ) !== false ) {
-				$ns = $nsInfo->getValidNamespaces();
+				$ns = MWNamespace::getValidNamespaces();
 				foreach ( $ns as $namesp ) {
 					$tempTitle = Title::makeTitleSafe( $namesp, $catMsg );
 					if ( !$tempTitle ) {

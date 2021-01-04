@@ -1,5 +1,9 @@
 <?php
 /**
+ *
+ *
+ * Created on Sep 19, 2006
+ *
  * Copyright © 2006-2007 Yuri Astrakhan "<Firstname><Lastname>@gmail.com",
  * Daniel Cannon (cannon dot danielc at gmail dot com)
  *
@@ -21,11 +25,10 @@
  * @file
  */
 
+use MediaWiki\Auth\AuthManager;
 use MediaWiki\Auth\AuthenticationRequest;
 use MediaWiki\Auth\AuthenticationResponse;
-use MediaWiki\Auth\AuthManager;
 use MediaWiki\Logger\LoggerFactory;
-use MediaWiki\MediaWikiServices;
 
 /**
  * Unit to authenticate log-in attempts to the current wiki.
@@ -108,15 +111,13 @@ class ApiLogin extends ApiBase {
 		}
 
 		$authRes = false;
+		$context = new DerivativeContext( $this->getContext() );
 		$loginType = 'N/A';
 
 		// Check login token
 		$token = $session->getToken( '', 'login' );
-		if ( !$params['token'] ) {
+		if ( $token->wasNew() || !$params['token'] ) {
 			$authRes = 'NeedToken';
-		} elseif ( $token->wasNew() ) {
-			$authRes = 'Failed';
-			$message = ApiMessage::create( 'authpage-cannot-login-continue', 'sessionlost' );
 		} elseif ( !$token->match( $params['token'] ) ) {
 			$authRes = 'WrongToken';
 		}
@@ -133,23 +134,18 @@ class ApiLogin extends ApiBase {
 				$session = $status->getValue();
 				$authRes = 'Success';
 				$loginType = 'BotPassword';
-			} elseif (
-				$status->hasMessage( 'login-throttled' ) ||
-				$status->hasMessage( 'botpasswords-needs-reset' ) ||
-				$status->hasMessage( 'botpasswords-locked' )
-			) {
+			} elseif ( !$botLoginData[2] || $status->hasMessage( 'login-throttled' ) ) {
 				$authRes = 'Failed';
 				$message = $status->getMessage();
 				LoggerFactory::getInstance( 'authentication' )->info(
 					'BotPassword login failed: ' . $status->getWikiText( false, false, 'en' )
 				);
 			}
-			// For other errors, let's see if it's a valid non-bot login
 		}
 
 		if ( $authRes === false ) {
 			// Simplified AuthManager login, for backwards compatibility
-			$manager = MediaWikiServices::getInstance()->getAuthManager();
+			$manager = AuthManager::singleton();
 			$reqs = AuthenticationRequest::loadRequestsFromSubmission(
 				$manager->getAuthenticationRequests( AuthManager::ACTION_LOGIN, $this->getUser() ),
 				[
@@ -159,7 +155,7 @@ class ApiLogin extends ApiBase {
 					'rememberMe' => true,
 				]
 			);
-			$res = $manager->beginAuthentication( $reqs, 'null:' );
+			$res = AuthManager::singleton()->beginAuthentication( $reqs, 'null:' );
 			switch ( $res->status ) {
 				case AuthenticationResponse::PASS:
 					if ( $this->getConfig()->get( 'EnableBotPasswords' ) ) {
@@ -198,9 +194,9 @@ class ApiLogin extends ApiBase {
 
 				// Deprecated hook
 				$injected_html = '';
-				$this->getHookRunner()->onUserLoginComplete( $user, $injected_html, true );
+				Hooks::run( 'UserLoginComplete', [ &$user, &$injected_html, true ] );
 
-				$result['lguserid'] = (int)$user->getId();
+				$result['lguserid'] = intval( $user->getId() );
 				$result['lgusername'] = $user->getName();
 				break;
 
@@ -224,15 +220,15 @@ class ApiLogin extends ApiBase {
 				);
 				break;
 
-			// @codeCoverageIgnoreStart
-			// Unreachable
 			default:
 				ApiBase::dieDebug( __METHOD__, "Unhandled case value: {$authRes}" );
-			// @codeCoverageIgnoreEnd
 		}
 
 		$this->getResult()->addValue( null, 'login', $result );
 
+		if ( $loginType === 'LoginForm' && isset( LoginForm::$statusCodes[$authRes] ) ) {
+			$authRes = LoginForm::$statusCodes[$authRes];
+		}
 		LoggerFactory::getInstance( 'authevents' )->info( 'Login attempt', [
 			'event' => 'login',
 			'successful' => $authRes === 'Success',
@@ -271,6 +267,8 @@ class ApiLogin extends ApiBase {
 
 	protected function getExamplesMessages() {
 		return [
+			'action=login&lgname=user&lgpassword=password'
+				=> 'apihelp-login-example-gettoken',
 			'action=login&lgname=user&lgpassword=password&lgtoken=123ABC'
 				=> 'apihelp-login-example-login',
 		];
@@ -290,8 +288,8 @@ class ApiLogin extends ApiBase {
 			'status' => $response->status,
 		];
 		if ( $response->message ) {
-			$ret['responseMessage'] = $response->message->inLanguage( 'en' )->plain();
-		}
+			$ret['message'] = $response->message->inLanguage( 'en' )->plain();
+		};
 		$reqs = [
 			'neededRequests' => $response->neededRequests,
 			'createRequest' => $response->createRequest,

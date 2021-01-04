@@ -56,11 +56,11 @@ class FSLockManager extends LockManager {
 	 * @param array $config Includes:
 	 *   - lockDirectory : Directory containing the lock files
 	 */
-	public function __construct( array $config ) {
+	function __construct( array $config ) {
 		parent::__construct( $config );
 
 		$this->lockDir = $config['lockDirectory'];
-		$this->isWindows = ( PHP_OS_FAMILY === 'Windows' );
+		$this->isWindows = ( strtoupper( substr( PHP_OS, 0, 3 ) ) === 'WIN' );
 	}
 
 	/**
@@ -122,17 +122,13 @@ class FSLockManager extends LockManager {
 			if ( isset( $this->handles[$path] ) ) {
 				$handle = $this->handles[$path];
 			} else {
-				Wikimedia\suppressWarnings();
+				MediaWiki\suppressWarnings();
 				$handle = fopen( $this->getLockPath( $path ), 'a+' );
-				if ( !$handle && !is_dir( $this->lockDir ) ) {
-					// Create the lock directory in case it is missing
-					if ( mkdir( $this->lockDir, 0777, true ) ) {
-						$handle = fopen( $this->getLockPath( $path ), 'a+' ); // try again
-					} else {
-						$this->logger->error( "Cannot create directory '{$this->lockDir}'." );
-					}
+				if ( !$handle ) { // lock dir missing?
+					mkdir( $this->lockDir, 0777, true );
+					$handle = fopen( $this->getLockPath( $path ), 'a+' ); // try again
 				}
-				Wikimedia\restoreWarnings();
+				MediaWiki\restoreWarnings();
 			}
 			if ( $handle ) {
 				// Either a shared or exclusive lock
@@ -173,7 +169,7 @@ class FSLockManager extends LockManager {
 			if ( $this->locksHeld[$path][$type] <= 0 ) {
 				unset( $this->locksHeld[$path][$type] );
 			}
-			if ( $this->locksHeld[$path] === [] ) {
+			if ( !count( $this->locksHeld[$path] ) ) {
 				unset( $this->locksHeld[$path] ); // no locks on this path
 				if ( isset( $this->handles[$path] ) ) {
 					$handlesToClose[] = $this->handles[$path];
@@ -246,7 +242,7 @@ class FSLockManager extends LockManager {
 	/**
 	 * Make sure remaining locks get cleared for sanity
 	 */
-	public function __destruct() {
+	function __destruct() {
 		while ( count( $this->locksHeld ) ) {
 			foreach ( $this->locksHeld as $path => $locks ) {
 				$this->doSingleUnlock( $path, self::LOCK_EX );

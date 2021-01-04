@@ -18,9 +18,9 @@
  * @file
  */
 
-use MediaWiki\Content\IContentHandlerFactory;
+use MediaWiki\Logger\LoggerFactory;
 use MediaWiki\MediaWikiServices;
-use MediaWiki\Revision\SlotRecord;
+use Wikimedia\ScopedCallback;
 
 /**
  * Prepare an edit in shared cache so that it can be reused on edit
@@ -36,6 +36,16 @@ use MediaWiki\Revision\SlotRecord;
  * @since 1.25
  */
 class ApiStashEdit extends ApiBase {
+	const ERROR_NONE = 'stashed';
+	const ERROR_PARSE = 'error_parse';
+	const ERROR_CACHE = 'error_cache';
+	const ERROR_UNCACHEABLE = 'uncacheable';
+	const ERROR_BUSY = 'busy';
+
+	const PRESUME_FRESH_TTL_SEC = 30;
+	const MAX_CACHE_TTL = 300; // 5 minutes
+	const MAX_SIGNATURE_TTL = 60;
+
 	public function execute() {
 		$user = $this->getUser();
 		$params = $this->extractRequestParams();
@@ -44,12 +54,11 @@ class ApiStashEdit extends ApiBase {
 			$this->dieWithError( 'apierror-botsnotsupported' );
 		}
 
-		$editStash = MediaWikiServices::getInstance()->getPageEditStash();
+		$cache = ObjectCache::getLocalClusterInstance();
 		$page = $this->getTitleOrPageId( $params );
 		$title = $page->getTitle();
 
-		if ( !$this->getContentHandlerFactory()
-			->getContentHandler( $params['contentmodel'] )
+		if ( !ContentHandler::getForModelID( $params['contentmodel'] )
 			->isSupportedFormat( $params['contentformat'] )
 		) {
 			$this->dieWithError(
@@ -58,25 +67,31 @@ class ApiStashEdit extends ApiBase {
 			);
 		}
 
-		$this->requireOnlyOneParameter( $params, 'stashedtexthash', 'text' );
+		$this->requireAtLeastOneParameter( $params, 'stashedtexthash', 'text' );
 
 		$text = null;
 		$textHash = null;
-		if ( $params['stashedtexthash'] !== null ) {
+		if ( strlen( $params['stashedtexthash'] ) ) {
 			// Load from cache since the client indicates the text is the same as last stash
 			$textHash = $params['stashedtexthash'];
 			if ( !preg_match( '/^[0-9a-f]{40}$/', $textHash ) ) {
 				$this->dieWithError( 'apierror-stashedit-missingtext', 'missingtext' );
 			}
-			$text = $editStash->fetchInputText( $textHash );
+			$textKey = $cache->makeKey( 'stashedit', 'text', $textHash );
+			$text = $cache->get( $textKey );
 			if ( !is_string( $text ) ) {
 				$this->dieWithError( 'apierror-stashedit-missingtext', 'missingtext' );
 			}
-		} else {
-			// 'text' was passed.  Trim and fix newlines so the key SHA1's
-			// match (see WebRequest::getText())
+		} elseif ( $params['text'] !== null ) {
+			// Trim and fix newlines so the key SHA1's match (see WebRequest::getText())
 			$text = rtrim( str_replace( "\r\n", "\n", $params['text'] ) );
 			$textHash = sha1( $text );
+		} else {
+			$this->dieWithError( [
+				'apierror-missingparam-at-least-one-of',
+				Message::listParam( [ '<var>stashedtexthash</var>', '<var>text</var>' ] ),
+				2,
+			], 'missingparam' );
 		}
 
 		$textContent = ContentHandler::makeContent(
@@ -85,13 +100,11 @@ class ApiStashEdit extends ApiBase {
 		$page = WikiPage::factory( $title );
 		if ( $page->exists() ) {
 			// Page exists: get the merged content with the proposed change
-			$baseRev = MediaWikiServices::getInstance()
-				->getRevisionLookup()
-				->getRevisionByPageId( $page->getId(), $params['baserevid'] );
+			$baseRev = Revision::newFromPageId( $page->getId(), $params['baserevid'] );
 			if ( !$baseRev ) {
 				$this->dieWithError( [ 'apierror-nosuchrevid', $params['baserevid'] ] );
 			}
-			$currentRev = $page->getRevisionRecord();
+			$currentRev = $page->getRevision();
 			if ( !$currentRev ) {
 				$this->dieWithError( [ 'apierror-missingrev-pageid', $page->getId() ], 'missingrev' );
 			}
@@ -110,14 +123,13 @@ class ApiStashEdit extends ApiBase {
 				$content = $editContent;
 			} else {
 				// Merge the edit into the current version
-				$baseContent = $baseRev->getContent( SlotRecord::MAIN );
-				$currentContent = $currentRev->getContent( SlotRecord::MAIN );
+				$baseContent = $baseRev->getContent();
+				$currentContent = $currentRev->getContent();
 				if ( !$baseContent || !$currentContent ) {
 					$this->dieWithError( [ 'apierror-missingcontent-pageid', $page->getId() ], 'missingrev' );
 				}
-				$content = $this->getContentHandlerFactory()
-					->getContentHandler( $baseContent->getModel() )
-					->merge3( $baseContent, $editContent, $currentContent );
+				$handler = ContentHandler::getForModelID( $baseContent->getModel() );
+				$content = $handler->merge3( $baseContent, $editContent, $currentContent );
 			}
 		} else {
 			// New pages: use the user-provided content model
@@ -130,23 +142,28 @@ class ApiStashEdit extends ApiBase {
 			return;
 		}
 
+		// The user will abort the AJAX request by pressing "save", so ignore that
+		ignore_user_abort( true );
+
 		if ( $user->pingLimiter( 'stashedit' ) ) {
 			$status = 'ratelimited';
 		} else {
-			$status = $editStash->parseAndCache( $page, $content, $user, $params['summary'] );
-			$editStash->stashInputText( $text, $textHash );
+			$status = self::parseAndStash( $page, $content, $user, $params['summary'] );
+			$textKey = $cache->makeKey( 'stashedit', 'text', $textHash );
+			$cache->set( $textKey, $text, self::MAX_CACHE_TTL );
 		}
 
 		$stats = MediaWikiServices::getInstance()->getStatsdDataFactory();
 		$stats->increment( "editstash.cache_stores.$status" );
 
-		$ret = [ 'status' => $status ];
-		// If we were rate-limited, we still return the pre-existing valid hash if one was passed
-		if ( $status !== 'ratelimited' || $params['stashedtexthash'] !== null ) {
-			$ret['texthash'] = $textHash;
-		}
-
-		$this->getResult()->addValue( null, $this->getModuleName(), $ret );
+		$this->getResult()->addValue(
+			null,
+			$this->getModuleName(),
+			[
+				'status' => $status,
+				'texthash' => $textHash
+			]
+		);
 	}
 
 	/**
@@ -156,12 +173,247 @@ class ApiStashEdit extends ApiBase {
 	 * @param string $summary Edit summary
 	 * @return string ApiStashEdit::ERROR_* constant
 	 * @since 1.25
-	 * @deprecated Since 1.34
 	 */
-	public function parseAndStash( WikiPage $page, Content $content, User $user, $summary ) {
-		$editStash = MediaWikiServices::getInstance()->getPageEditStash();
+	public static function parseAndStash( WikiPage $page, Content $content, User $user, $summary ) {
+		$cache = ObjectCache::getLocalClusterInstance();
+		$logger = LoggerFactory::getInstance( 'StashEdit' );
 
-		return $editStash->parseAndCache( $page, $content, $user, $summary ?? '' );
+		$title = $page->getTitle();
+		$key = self::getStashKey( $title, self::getContentHash( $content ), $user );
+
+		// Use the master DB for fast blocking locks
+		$dbw = wfGetDB( DB_MASTER );
+		if ( !$dbw->lock( $key, __METHOD__, 1 ) ) {
+			// De-duplicate requests on the same key
+			return self::ERROR_BUSY;
+		}
+		/** @noinspection PhpUnusedLocalVariableInspection */
+		$unlocker = new ScopedCallback( function () use ( $dbw, $key ) {
+			$dbw->unlock( $key, __METHOD__ );
+		} );
+
+		$cutoffTime = time() - self::PRESUME_FRESH_TTL_SEC;
+
+		// Reuse any freshly build matching edit stash cache
+		$editInfo = $cache->get( $key );
+		if ( $editInfo && wfTimestamp( TS_UNIX, $editInfo->timestamp ) >= $cutoffTime ) {
+			$alreadyCached = true;
+		} else {
+			$format = $content->getDefaultFormat();
+			$editInfo = $page->prepareContentForEdit( $content, null, $user, $format, false );
+			$alreadyCached = false;
+		}
+
+		if ( $editInfo && $editInfo->output ) {
+			// Let extensions add ParserOutput metadata or warm other caches
+			Hooks::run( 'ParserOutputStashForEdit',
+				[ $page, $content, $editInfo->output, $summary, $user ] );
+
+			if ( $alreadyCached ) {
+				$logger->debug( "Already cached parser output for key '$key' ('$title')." );
+				return self::ERROR_NONE;
+			}
+
+			list( $stashInfo, $ttl, $code ) = self::buildStashValue(
+				$editInfo->pstContent,
+				$editInfo->output,
+				$editInfo->timestamp,
+				$user
+			);
+
+			if ( $stashInfo ) {
+				$ok = $cache->set( $key, $stashInfo, $ttl );
+				if ( $ok ) {
+					$logger->debug( "Cached parser output for key '$key' ('$title')." );
+					return self::ERROR_NONE;
+				} else {
+					$logger->error( "Failed to cache parser output for key '$key' ('$title')." );
+					return self::ERROR_CACHE;
+				}
+			} else {
+				$logger->info( "Uncacheable parser output for key '$key' ('$title') [$code]." );
+				return self::ERROR_UNCACHEABLE;
+			}
+		}
+
+		return self::ERROR_PARSE;
+	}
+
+	/**
+	 * Check that a prepared edit is in cache and still up-to-date
+	 *
+	 * This method blocks if the prepared edit is already being rendered,
+	 * waiting until rendering finishes before doing final validity checks.
+	 *
+	 * The cache is rejected if template or file changes are detected.
+	 * Note that foreign template or file transclusions are not checked.
+	 *
+	 * The result is a map (pstContent,output,timestamp) with fields
+	 * extracted directly from WikiPage::prepareContentForEdit().
+	 *
+	 * @param Title $title
+	 * @param Content $content
+	 * @param User $user User to get parser options from
+	 * @return stdClass|bool Returns false on cache miss
+	 */
+	public static function checkCache( Title $title, Content $content, User $user ) {
+		if ( $user->isBot() ) {
+			return false; // bots never stash - don't pollute stats
+		}
+
+		$cache = ObjectCache::getLocalClusterInstance();
+		$logger = LoggerFactory::getInstance( 'StashEdit' );
+		$stats = MediaWikiServices::getInstance()->getStatsdDataFactory();
+
+		$key = self::getStashKey( $title, self::getContentHash( $content ), $user );
+		$editInfo = $cache->get( $key );
+		if ( !is_object( $editInfo ) ) {
+			$start = microtime( true );
+			// We ignore user aborts and keep parsing. Block on any prior parsing
+			// so as to use its results and make use of the time spent parsing.
+			// Skip this logic if there no master connection in case this method
+			// is called on an HTTP GET request for some reason.
+			$lb = MediaWikiServices::getInstance()->getDBLoadBalancer();
+			$dbw = $lb->getAnyOpenConnection( $lb->getWriterIndex() );
+			if ( $dbw && $dbw->lock( $key, __METHOD__, 30 ) ) {
+				$editInfo = $cache->get( $key );
+				$dbw->unlock( $key, __METHOD__ );
+			}
+
+			$timeMs = 1000 * max( 0, microtime( true ) - $start );
+			$stats->timing( 'editstash.lock_wait_time', $timeMs );
+		}
+
+		if ( !is_object( $editInfo ) || !$editInfo->output ) {
+			$stats->increment( 'editstash.cache_misses.no_stash' );
+			$logger->debug( "Empty cache for key '$key' ('$title'); user '{$user->getName()}'." );
+			return false;
+		}
+
+		$age = time() - wfTimestamp( TS_UNIX, $editInfo->output->getCacheTime() );
+		if ( $age <= self::PRESUME_FRESH_TTL_SEC ) {
+			// Assume nothing changed in this time
+			$stats->increment( 'editstash.cache_hits.presumed_fresh' );
+			$logger->debug( "Timestamp-based cache hit for key '$key' (age: $age sec)." );
+		} elseif ( isset( $editInfo->edits ) && $editInfo->edits === $user->getEditCount() ) {
+			// Logged-in user made no local upload/template edits in the meantime
+			$stats->increment( 'editstash.cache_hits.presumed_fresh' );
+			$logger->debug( "Edit count based cache hit for key '$key' (age: $age sec)." );
+		} elseif ( $user->isAnon()
+			&& self::lastEditTime( $user ) < $editInfo->output->getCacheTime()
+		) {
+			// Logged-out user made no local upload/template edits in the meantime
+			$stats->increment( 'editstash.cache_hits.presumed_fresh' );
+			$logger->debug( "Edit check based cache hit for key '$key' (age: $age sec)." );
+		} else {
+			// User may have changed included content
+			$editInfo = false;
+		}
+
+		if ( !$editInfo ) {
+			$stats->increment( 'editstash.cache_misses.proven_stale' );
+			$logger->info( "Stale cache for key '$key'; old key with outside edits. (age: $age sec)" );
+		} elseif ( $editInfo->output->getFlag( 'vary-revision' ) ) {
+			// This can be used for the initial parse, e.g. for filters or doEditContent(),
+			// but a second parse will be triggered in doEditUpdates(). This is not optimal.
+			$logger->info( "Cache for key '$key' ('$title') has vary_revision." );
+		} elseif ( $editInfo->output->getFlag( 'vary-revision-id' ) ) {
+			// Similar to the above if we didn't guess the ID correctly.
+			$logger->info( "Cache for key '$key' ('$title') has vary_revision_id." );
+		}
+
+		return $editInfo;
+	}
+
+	/**
+	 * @param User $user
+	 * @return string|null TS_MW timestamp or null
+	 */
+	private static function lastEditTime( User $user ) {
+		$time = wfGetDB( DB_REPLICA )->selectField(
+			'recentchanges',
+			'MAX(rc_timestamp)',
+			[ 'rc_user_text' => $user->getName() ],
+			__METHOD__
+		);
+
+		return wfTimestampOrNull( TS_MW, $time );
+	}
+
+	/**
+	 * Get hash of the content, factoring in model/format
+	 *
+	 * @param Content $content
+	 * @return string
+	 */
+	private static function getContentHash( Content $content ) {
+		return sha1( implode( "\n", [
+			$content->getModel(),
+			$content->getDefaultFormat(),
+			$content->serialize( $content->getDefaultFormat() )
+		] ) );
+	}
+
+	/**
+	 * Get the temporary prepared edit stash key for a user
+	 *
+	 * This key can be used for caching prepared edits provided:
+	 *   - a) The $user was used for PST options
+	 *   - b) The parser output was made from the PST using cannonical matching options
+	 *
+	 * @param Title $title
+	 * @param string $contentHash Result of getContentHash()
+	 * @param User $user User to get parser options from
+	 * @return string
+	 */
+	private static function getStashKey( Title $title, $contentHash, User $user ) {
+		return ObjectCache::getLocalClusterInstance()->makeKey(
+			'prepared-edit',
+			md5( $title->getPrefixedDBkey() ),
+			// Account for the edit model/text
+			$contentHash,
+			// Account for user name related variables like signatures
+			md5( $user->getId() . "\n" . $user->getName() )
+		);
+	}
+
+	/**
+	 * Build a value to store in memcached based on the PST content and parser output
+	 *
+	 * This makes a simple version of WikiPage::prepareContentForEdit() as stash info
+	 *
+	 * @param Content $pstContent Pre-Save transformed content
+	 * @param ParserOutput $parserOutput
+	 * @param string $timestamp TS_MW
+	 * @param User $user
+	 * @return array (stash info array, TTL in seconds, info code) or (null, 0, info code)
+	 */
+	private static function buildStashValue(
+		Content $pstContent, ParserOutput $parserOutput, $timestamp, User $user
+	) {
+		// If an item is renewed, mind the cache TTL determined by config and parser functions.
+		// Put an upper limit on the TTL for sanity to avoid extreme template/file staleness.
+		$since = time() - wfTimestamp( TS_UNIX, $parserOutput->getTimestamp() );
+		$ttl = min( $parserOutput->getCacheExpiry() - $since, self::MAX_CACHE_TTL );
+
+		// Avoid extremely stale user signature timestamps (T84843)
+		if ( $parserOutput->getFlag( 'user-signature' ) ) {
+			$ttl = min( $ttl, self::MAX_SIGNATURE_TTL );
+		}
+
+		if ( $ttl <= 0 ) {
+			return [ null, 0, 'no_ttl' ];
+		}
+
+		// Only store what is actually needed
+		$stashInfo = (object)[
+			'pstContent' => $pstContent,
+			'output'     => $parserOutput,
+			'timestamp'  => $timestamp,
+			'edits'      => $user->getEditCount()
+		];
+
+		return [ $stashInfo, $ttl, 'ok' ];
 	}
 
 	public function getAllowedParams() {
@@ -186,14 +438,13 @@ class ApiStashEdit extends ApiBase {
 			],
 			'summary' => [
 				ApiBase::PARAM_TYPE => 'string',
-				ApiBase::PARAM_DFLT => ''
 			],
 			'contentmodel' => [
-				ApiBase::PARAM_TYPE => $this->getContentHandlerFactory()->getContentModels(),
+				ApiBase::PARAM_TYPE => ContentHandler::getContentModels(),
 				ApiBase::PARAM_REQUIRED => true
 			],
 			'contentformat' => [
-				ApiBase::PARAM_TYPE => $this->getContentHandlerFactory()->getAllContentFormats(),
+				ApiBase::PARAM_TYPE => ContentHandler::getAllContentFormats(),
 				ApiBase::PARAM_REQUIRED => true
 			],
 			'baserevid' => [
@@ -217,9 +468,5 @@ class ApiStashEdit extends ApiBase {
 
 	public function isInternal() {
 		return true;
-	}
-
-	private function getContentHandlerFactory(): IContentHandlerFactory {
-		return MediaWikiServices::getInstance()->getContentHandlerFactory();
 	}
 }

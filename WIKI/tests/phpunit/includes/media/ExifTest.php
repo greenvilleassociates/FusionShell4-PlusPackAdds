@@ -4,12 +4,12 @@
  * @group Media
  * @covers Exif
  */
-class ExifTest extends MediaWikiIntegrationTestCase {
+class ExifTest extends MediaWikiTestCase {
 
 	/** @var string */
 	protected $mediaPath;
 
-	protected function setUp() : void {
+	protected function setUp() {
 		parent::setUp();
 		$this->checkPHPExtension( 'exif' );
 
@@ -30,7 +30,7 @@ class ExifTest extends MediaWikiIntegrationTestCase {
 			'GPSDOP' => '5/1',
 			'GPSVersionID' => '2.2.0.0',
 		];
-		$this->assertEqualsWithDelta( $expected, $data, 0.0000000001 );
+		$this->assertEquals( $expected, $data, '', 0.0000000001 );
 	}
 
 	public function testUnicodeUserComment() {

@@ -30,19 +30,19 @@
  * @ingroup SpecialPage
  */
 class MostimagesPage extends ImageQueryPage {
-	public function __construct( $name = 'Mostimages' ) {
+	function __construct( $name = 'Mostimages' ) {
 		parent::__construct( $name );
 	}
 
-	public function isExpensive() {
+	function isExpensive() {
 		return true;
 	}
 
-	public function isSyndicated() {
+	function isSyndicated() {
 		return false;
 	}
 
-	public function getQueryInfo() {
+	function getQueryInfo() {
 		return [
 			'tables' => [ 'imagelinks' ],
 			'fields' => [
@@ -57,7 +57,7 @@ class MostimagesPage extends ImageQueryPage {
 		];
 	}
 
-	protected function getCellHtml( $row ) {
+	function getCellHtml( $row ) {
 		return $this->msg( 'nimagelinks' )->numParams( $row->value )->escaped() . '<br />';
 	}
 

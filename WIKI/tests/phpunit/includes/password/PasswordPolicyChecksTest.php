@@ -20,7 +20,7 @@
  * @file
  */
 
-class PasswordPolicyChecksTest extends MediaWikiIntegrationTestCase {
+class PasswordPolicyChecksTest extends MediaWikiTestCase {
 
 	/**
 	 * @covers PasswordPolicyChecks::checkMinimalPasswordLength
@@ -115,98 +115,45 @@ class PasswordPolicyChecksTest extends MediaWikiIntegrationTestCase {
 	}
 
 	/**
-	 * @covers PasswordPolicyChecks::checkPasswordCannotBeSubstringInUsername
+	 * @covers PasswordPolicyChecks::checkPasswordCannotMatchBlacklist
 	 */
-	public function testCheckPasswordCannotBeSubstringInUsername() {
-		$statusOK = PasswordPolicyChecks::checkPasswordCannotBeSubstringInUsername(
-			1, // policy value
-			User::newFromName( 'user' ), // User
-			'password'  // password
+	public function testCheckPasswordCannotMatchBlacklist() {
+		$statusOK = PasswordPolicyChecks::checkPasswordCannotMatchBlacklist(
+			true, // policy value
+			User::newFromName( 'Username' ), // User
+			'AUniquePassword'  // password
 		);
-		$this->assertTrue( $statusOK->isGood(), 'Password is not a substring of username' );
-		$statusLong = PasswordPolicyChecks::checkPasswordCannotBeSubstringInUsername(
-			1, // policy value
-			User::newFromName( '123user123' ), // User
-			'user'  // password
+		$this->assertTrue( $statusOK->isGood(), 'Password is not on blacklist' );
+		$statusLong = PasswordPolicyChecks::checkPasswordCannotMatchBlacklist(
+			true, // policy value
+			User::newFromName( 'Useruser1' ), // User
+			'Passpass1'  // password
 		);
-		$this->assertFalse( $statusLong->isGood(), 'Password is a substring of username' );
-		$this->assertTrue( $statusLong->isOK(), 'Password is a substring of username, not fatal' );
+		$this->assertFalse( $statusLong->isGood(), 'Password matches blacklist' );
+		$this->assertTrue( $statusLong->isOK(), 'Password matches blacklist, not fatal' );
 	}
 
-	/**
-	 * @covers PasswordPolicyChecks::checkPasswordCannotMatchDefaults
-	 * @dataProvider provideCheckPasswordCannotMatchDefaults
-	 */
-	public function testCheckPasswordCannotMatchDefaults(
-		bool $failureExpected,
-		bool $policyValue,
-		string $username,
-		string $password
-	) {
-		$user = $this->createMock( User::class );
-		$user->method( 'getName' )->willReturn( $username );
-		/** @var User $user */
-
-		$status = PasswordPolicyChecks::checkPasswordCannotMatchDefaults(
-			$policyValue,
-			$user,
-			$password
-		);
-
-		if ( $failureExpected ) {
-			$this->assertFalse( $status->isGood(), 'Password matches defaults list' );
-			$this->assertTrue( $status->isOK(), 'Password matches default list, not fatal' );
-			$this->assertTrue( $status->hasMessage( 'password-login-forbidden' ) );
-		} else {
-			$this->assertTrue( $status->isGood(), 'Password is not on defaults list' );
-		}
-	}
-
-	public function provideCheckPasswordCannotMatchDefaults() {
+	public static function providePopularBlacklist() {
 		return [
-			'Unique username and password' => [ false, true, 'Unique username', 'AUniquePassword' ],
-			'Invalid combination' => [ true, true, 'Useruser1', 'Passpass1' ],
-			'Invalid password' => [ true, true, 'Whatever username', 'ExamplePassword' ],
-			'Uniques but no policy' => [ false, false, 'Unique username', 'AUniquePassword' ],
-			'Invalid combination but no policy' => [ false, false, 'Useruser1', 'Passpass1' ],
-			'Invalid password but no policy' => [ false, false, 'Whatever username', 'ExamplePassword' ],
-		];
-	}
-
-	public static function provideCommonList() {
-		return [
-			[ false, 'testpass' ],
+			[ false, 'sitename' ],
 			[ false, 'password' ],
 			[ false, '12345' ],
-			[ true, 'DKn17egcA4' ],
-			[ true, 'testwikijenkinspass' ],
+			[ true, 'hqY98gCZ6qM8s8' ],
 		];
 	}
 
 	/**
-	 * @covers PasswordPolicyChecks::checkPasswordNotInCommonList
-	 * @dataProvider provideCommonList
+	 * @covers PasswordPolicyChecks::checkPopularPasswordBlacklist
+	 * @dataProvider providePopularBlacklist
 	 */
-	public function testCheckNotInCommonList( $expected, $password ) {
+	public function testCheckPopularPasswordBlacklist( $expected, $password ) {
+		global $IP;
+		$this->setMwGlobals( [
+			'wgSitename' => 'sitename',
+			'wgPopularPasswordFile' => "$IP/serialized/commonpasswords.cdb"
+		] );
 		$user = User::newFromName( 'username' );
-		$status = PasswordPolicyChecks::checkPasswordNotInCommonList( true, $user, $password );
+		$status = PasswordPolicyChecks::checkPopularPasswordBlacklist( PHP_INT_MAX, $user, $password );
 		$this->assertSame( $expected, $status->isGood() );
-	}
-
-	/**
-	 * Verify that all password policy description messages actually exist.
-	 * Messages used on Special:PasswordPolicies
-	 * @coversNothing
-	 */
-	public function testPasswordPolicyDescriptionsExist() {
-		global $wgPasswordPolicy;
-
-		foreach ( array_keys( $wgPasswordPolicy['checks'] ) as $check ) {
-			$msgKey = 'passwordpolicies-policy-' . strtolower( $check );
-			$this->assertTrue(
-				wfMessage( $msgKey )->useDatabase( false )->inLanguage( 'en' )->exists(),
-				"Message '$msgKey' required by '$check' must exist"
-			);
-		}
 	}
 }

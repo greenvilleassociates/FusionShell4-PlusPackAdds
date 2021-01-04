@@ -1,33 +1,31 @@
 <?php
-
+/**
+ * MediaWiki Widgets – SelectWithInputWidget class.
+ *
+ * @copyright 2011-2017 MediaWiki Widgets Team and others; see AUTHORS.txt
+ * @license The MIT License (MIT); see LICENSE.txt
+ */
 namespace MediaWiki\Widget;
 
-use OOUI\DropdownInputWidget;
-use OOUI\TextInputWidget;
+use \OOUI\TextInputWidget;
+use \OOUI\DropdownInputWidget;
 
 /**
  * Select and input widget.
- *
- * @copyright 2011-2017 MediaWiki Widgets Team and others; see AUTHORS.txt
- * @license MIT
  */
 class SelectWithInputWidget extends \OOUI\Widget {
-	/** @var array */
-	protected $config;
-	/** @var TextInputWidget */
-	protected $textinput;
-	/** @var DropdownInputWidget */
-	protected $dropdowninput;
+
+	protected $textinput = null;
+	protected $dropdowninput = null;
 
 	/**
 	 * A version of the SelectWithInputWidget, with `or` set to true.
 	 *
 	 * @param array $config Configuration options
-	 *   - array $config['textinput'] Configuration for the TextInputWidget
-	 *   - array $config['dropdowninput'] Configuration for the DropdownInputWidget
-	 *   - bool $config['or'] Configuration for whether the widget is dropdown AND input
-	 *       or dropdown OR input
-	 *   - bool $config['required'] Configuration for whether the widget is a required input.
+	 * @param array $config['textinput'] Configuration for the TextInputWidget
+	 * @param array $config['dropdowninput'] Configuration for the DropdownInputWidget
+	 * @param bool $config['or'] Configuration for whether the widget is dropdown AND input
+	 *                              or dropdown OR input
 	 */
 	public function __construct( array $config = [] ) {
 		// Configuration initialization
@@ -35,20 +33,12 @@ class SelectWithInputWidget extends \OOUI\Widget {
 			[
 				'textinput' => [],
 				'dropdowninput' => [],
-				'or' => false,
-				'required' => false,
+				'or' => false
 			],
 			$config
 		);
 
-		if ( isset( $config['disabled'] ) && $config['disabled'] ) {
-			$config['textinput']['disabled'] = true;
-			$config['dropdowninput']['disabled'] = true;
-		}
-
-		$config['textinput']['required'] = $config['or'] ? false : $config['required'];
-		$config['dropdowninput']['required'] = $config['required'];
-
+		// Parent constructor
 		parent::__construct( $config );
 
 		// Properties
@@ -69,9 +59,7 @@ class SelectWithInputWidget extends \OOUI\Widget {
 	public function getConfig( &$config ) {
 		$config['textinput'] = $this->config['textinput'];
 		$config['dropdowninput'] = $this->config['dropdowninput'];
-		$config['dropdowninput']['dropdown']['$overlay'] = true;
 		$config['or'] = $this->config['or'];
-		$config['required'] = $this->config['required'];
 		return parent::getConfig( $config );
 	}
 }

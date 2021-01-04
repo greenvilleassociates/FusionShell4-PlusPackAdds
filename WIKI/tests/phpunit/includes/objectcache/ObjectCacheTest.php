@@ -1,8 +1,8 @@
 <?php
 
-class ObjectCacheTest extends MediaWikiIntegrationTestCase {
+class ObjectCacheTest extends MediaWikiTestCase {
 
-	protected function setUp() : void {
+	protected function setUp() {
 		// Parent calls ObjectCache::clear() among other things
 		parent::setUp();
 
@@ -16,13 +16,13 @@ class ObjectCacheTest extends MediaWikiIntegrationTestCase {
 
 	private function setCacheConfig( $arr = [] ) {
 		$defaults = [
-			CACHE_NONE => [ 'class' => EmptyBagOStuff::class ],
-			CACHE_DB => [ 'class' => SqlBagOStuff::class ],
+			CACHE_NONE => [ 'class' => 'EmptyBagOStuff' ],
+			CACHE_DB => [ 'class' => 'SqlBagOStuff' ],
 			CACHE_ANYTHING => [ 'factory' => 'ObjectCache::newAnything' ],
 			// Mock ACCEL with 'hash' as being installed.
 			// This makes tests deterministic regardless of APC.
-			CACHE_ACCEL => [ 'class' => HashBagOStuff::class ],
-			'hash' => [ 'class' => HashBagOStuff::class ],
+			CACHE_ACCEL => [ 'class' => 'HashBagOStuff' ],
+			'hash' => [ 'class' => 'HashBagOStuff' ],
 		];
 		$this->setMwGlobals( 'wgObjectCaches', $arr + $defaults );
 	}
@@ -70,7 +70,7 @@ class ObjectCacheTest extends MediaWikiIntegrationTestCase {
 
 		$this->setCacheConfig( [
 			// Mock APC not being installed (T160519, T147161)
-			CACHE_ACCEL => [ 'class' => EmptyBagOStuff::class ]
+			CACHE_ACCEL => [ 'class' => 'EmptyBagOStuff' ]
 		] );
 
 		$this->assertInstanceOf(
@@ -82,16 +82,17 @@ class ObjectCacheTest extends MediaWikiIntegrationTestCase {
 
 	/** @covers ObjectCache::newAnything */
 	public function testNewAnythingNoAccelNoDb() {
+		$this->overrideMwServices(); // Ensures restore on tear down
+		MediaWiki\MediaWikiServices::disableStorageBackend();
+
 		$this->setMwGlobals( [
 			'wgMainCacheType' => CACHE_ACCEL
 		] );
 
 		$this->setCacheConfig( [
 			// Mock APC not being installed (T160519, T147161)
-			CACHE_ACCEL => [ 'class' => EmptyBagOStuff::class ]
+			CACHE_ACCEL => [ 'class' => 'EmptyBagOStuff' ]
 		] );
-
-		MediaWiki\MediaWikiServices::disableStorageBackend();
 
 		$this->assertInstanceOf(
 			EmptyBagOStuff::class,
@@ -102,6 +103,7 @@ class ObjectCacheTest extends MediaWikiIntegrationTestCase {
 
 	/** @covers ObjectCache::newAnything */
 	public function testNewAnythingNothingNoDb() {
+		$this->overrideMwServices();
 		MediaWiki\MediaWikiServices::disableStorageBackend();
 
 		$this->assertInstanceOf(

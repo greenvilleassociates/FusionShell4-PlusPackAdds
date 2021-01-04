@@ -40,7 +40,6 @@ class UploadForm extends HTMLForm {
 
 	protected $mMaxFileSize = [];
 
-	/** @var array */
 	protected $mMaxUploadSize = [];
 
 	public function __construct( array $options = [], IContextSource $context = null,
@@ -56,31 +55,31 @@ class UploadForm extends HTMLForm {
 
 		$this->mWatch = !empty( $options['watch'] );
 		$this->mForReUpload = !empty( $options['forreupload'] );
-		$this->mSessionKey = $options['sessionkey'] ?? '';
+		$this->mSessionKey = isset( $options['sessionkey'] ) ? $options['sessionkey'] : '';
 		$this->mHideIgnoreWarning = !empty( $options['hideignorewarning'] );
 		$this->mDestWarningAck = !empty( $options['destwarningack'] );
-		$this->mDestFile = $options['destfile'] ?? '';
+		$this->mDestFile = isset( $options['destfile'] ) ? $options['destfile'] : '';
 
-		$this->mComment = $options['description'] ?? '';
+		$this->mComment = isset( $options['description'] ) ?
+			$options['description'] : '';
 
-		$this->mTextTop = $options['texttop'] ?? '';
+		$this->mTextTop = isset( $options['texttop'] )
+			? $options['texttop'] : '';
 
-		$this->mTextAfterSummary = $options['textaftersummary'] ?? '';
+		$this->mTextAfterSummary = isset( $options['textaftersummary'] )
+			? $options['textaftersummary'] : '';
 
 		$sourceDescriptor = $this->getSourceSection();
 		$descriptor = $sourceDescriptor
 			+ $this->getDescriptionSection()
 			+ $this->getOptionsSection();
 
-		$this->getHookRunner()->onUploadFormInitDescriptor( $descriptor );
+		Hooks::run( 'UploadFormInitDescriptor', [ &$descriptor ] );
 		parent::__construct( $descriptor, $context, 'upload' );
 
 		# Add a link to edit MediaWiki:Licenses
-		if ( MediaWikiServices::getInstance()
-				->getPermissionManager()
-				->userHasRight( $this->getUser(), 'editinterface' )
-		) {
-			$this->getOutput()->addModuleStyles( 'mediawiki.special' );
+		if ( $this->getUser()->isAllowed( 'editinterface' ) ) {
+			$this->getOutput()->addModuleStyles( 'mediawiki.special.upload.styles' );
 			$licensesLink = $linkRenderer->makeKnownLink(
 				$this->msg( 'licenses' )->inContentLanguage()->getTitle(),
 				$this->msg( 'licenses-edit' )->text(),
@@ -160,7 +159,7 @@ class UploadForm extends HTMLForm {
 		}
 
 		$descriptor['UploadFile'] = [
-			'class' => UploadSourceField::class,
+			'class' => 'UploadSourceField',
 			'section' => 'source',
 			'type' => 'file',
 			'id' => 'wpUploadFile',
@@ -175,7 +174,7 @@ class UploadForm extends HTMLForm {
 		if ( $canUploadByUrl ) {
 			$this->mMaxUploadSize['url'] = UploadBase::getMaxUploadSize( 'url' );
 			$descriptor['UploadFileURL'] = [
-				'class' => UploadSourceField::class,
+				'class' => 'UploadSourceField',
 				'section' => 'source',
 				'id' => 'wpUploadFileURL',
 				'radio-id' => 'wpSourceTypeurl',
@@ -190,8 +189,7 @@ class UploadForm extends HTMLForm {
 				'checked' => $selectedSourceType == 'url',
 			];
 		}
-		$this->getHookRunner()->onUploadFormSourceDescriptors(
-			$descriptor, $radio, $selectedSourceType );
+		Hooks::run( 'UploadFormSourceDescriptors', [ &$descriptor, &$radio, $selectedSourceType ] );
 
 		$descriptor['Extensions'] = [
 			'type' => 'info',
@@ -258,19 +256,19 @@ class UploadForm extends HTMLForm {
 	protected function getDescriptionSection() {
 		$config = $this->getConfig();
 		if ( $this->mSessionKey ) {
-			$stash = MediaWikiServices::getInstance()->getRepoGroup()
-				->getLocalRepo()->getUploadStash( $this->getUser() );
+			$stash = RepoGroup::singleton()->getLocalRepo()->getUploadStash( $this->getUser() );
 			try {
 				$file = $stash->getFile( $this->mSessionKey );
 			} catch ( Exception $e ) {
 				$file = null;
 			}
 			if ( $file ) {
+				global $wgContLang;
+
 				$mto = $file->transform( [ 'width' => 120 ] );
 				if ( $mto ) {
 					$this->addHeaderText(
-						'<div class="thumb t' .
-						MediaWikiServices::getInstance()->getContentLanguage()->alignEnd() . '">' .
+						'<div class="thumb t' . $wgContLang->alignEnd() . '">' .
 						Html::element( 'img', [
 							'src' => $mto->getUrl(),
 							'class' => 'thumbimage',
@@ -324,7 +322,7 @@ class UploadForm extends HTMLForm {
 		} else {
 			$descriptor['License'] = [
 				'type' => 'select',
-				'class' => Licenses::class,
+				'class' => 'Licenses',
 				'section' => 'description',
 				'id' => 'wpLicense',
 				'label-message' => 'license',
@@ -396,11 +394,10 @@ class UploadForm extends HTMLForm {
 
 	/**
 	 * Add the upload JS and show the form.
-	 * @return bool|Status
 	 */
 	public function show() {
 		$this->addUploadJS();
-		return parent::show();
+		parent::show();
 	}
 
 	/**
@@ -409,11 +406,14 @@ class UploadForm extends HTMLForm {
 	protected function addUploadJS() {
 		$config = $this->getConfig();
 
+		$useAjaxDestCheck = $config->get( 'UseAjax' ) && $config->get( 'AjaxUploadDestCheck' );
+		$useAjaxLicensePreview = $config->get( 'UseAjax' ) &&
+			$config->get( 'AjaxLicensePreview' ) && $config->get( 'EnableAPI' );
 		$this->mMaxUploadSize['*'] = UploadBase::getMaxUploadSize();
 
 		$scriptVars = [
-			'wgAjaxUploadDestCheck' => $config->get( 'AjaxUploadDestCheck' ),
-			'wgAjaxLicensePreview' => $config->get( 'AjaxLicensePreview' ),
+			'wgAjaxUploadDestCheck' => $useAjaxDestCheck,
+			'wgAjaxLicensePreview' => $useAjaxLicensePreview,
 			'wgUploadAutoFill' => !$this->mForReUpload &&
 				// If we received mDestFile from the request, don't autofill
 				// the wpDestFile textbox
@@ -422,8 +422,7 @@ class UploadForm extends HTMLForm {
 			'wgCheckFileExtensions' => $config->get( 'CheckFileExtensions' ),
 			'wgStrictFileExtensions' => $config->get( 'StrictFileExtensions' ),
 			'wgFileExtensions' => array_values( array_unique( $config->get( 'FileExtensions' ) ) ),
-			'wgCapitalizeUploads' => MediaWikiServices::getInstance()->getNamespaceInfo()->
-				isCapitalized( NS_FILE ),
+			'wgCapitalizeUploads' => MWNamespace::isCapitalized( NS_FILE ),
 			'wgMaxUploadSize' => $this->mMaxUploadSize,
 			'wgFileCanRotate' => SpecialUpload::rotationEnabled(),
 		];
@@ -441,7 +440,7 @@ class UploadForm extends HTMLForm {
 	 *
 	 * @return bool False
 	 */
-	public function trySubmit() {
+	function trySubmit() {
 		return false;
 	}
 }

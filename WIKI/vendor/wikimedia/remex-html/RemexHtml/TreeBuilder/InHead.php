@@ -1,7 +1,6 @@
 <?php
 
 namespace RemexHtml\TreeBuilder;
-
 use RemexHtml\Tokenizer\Attributes;
 use RemexHtml\Tokenizer\Tokenizer;
 
@@ -39,6 +38,7 @@ class InHead extends InsertionMode {
 		$tokenizerState = null;
 		$textMode = null;
 		$mode = null;
+		$builder = $this->builder;
 		$dispatcher = $this->dispatcher;
 
 		switch ( $name ) {

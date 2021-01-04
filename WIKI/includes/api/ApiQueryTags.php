@@ -1,5 +1,9 @@
 <?php
 /**
+ *
+ *
+ * Created on Jul 9, 2009
+ *
  * Copyright © 2009
  *
  * This program is free software; you can redistribute it and/or modify
@@ -85,7 +89,7 @@ class ApiQueryTags extends ApiQueryBase {
 			}
 
 			if ( $fld_hitcount ) {
-				$tag['hitcount'] = (int)$tagHitcounts[$tagName];
+				$tag['hitcount'] = intval( $tagHitcounts[$tagName] );
 			}
 
 			$isSoftware = isset( $softwareDefinedTags[$tagName] );
@@ -137,8 +141,9 @@ class ApiQueryTags extends ApiQueryBase {
 				ApiBase::PARAM_MAX2 => ApiBase::LIMIT_BIG2
 			],
 			'prop' => [
-				ApiBase::PARAM_DFLT => '',
+				ApiBase::PARAM_DFLT => 'name',
 				ApiBase::PARAM_TYPE => [
+					'name',
 					'displayname',
 					'description',
 					'hitcount',

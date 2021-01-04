@@ -23,8 +23,6 @@
 
 require_once __DIR__ . '/Maintenance.php';
 
-use MediaWiki\MediaWikiServices;
-
 /**
  * Maintenance script to populate *_from_namespace fields
  *
@@ -46,29 +44,29 @@ class PopulateBacklinkNamespace extends LoggedUpdateMaintenance {
 	}
 
 	public function doDBUpdates() {
+		$force = $this->getOption( 'force' );
+
 		$db = $this->getDB( DB_MASTER );
 
 		$this->output( "Updating *_from_namespace fields in links tables.\n" );
 
 		$start = $this->getOption( 'lastUpdatedId' );
 		if ( !$start ) {
-			$start = $db->selectField( 'page', 'MIN(page_id)', '', __METHOD__ );
+			$start = $db->selectField( 'page', 'MIN(page_id)', false, __METHOD__ );
 		}
 		if ( !$start ) {
 			$this->output( "Nothing to do." );
 			return false;
 		}
-		$end = $db->selectField( 'page', 'MAX(page_id)', '', __METHOD__ );
-		$batchSize = $this->getBatchSize();
+		$end = $db->selectField( 'page', 'MAX(page_id)', false, __METHOD__ );
 
 		# Do remaining chunk
-		$end += $batchSize - 1;
+		$end += $this->mBatchSize - 1;
 		$blockStart = $start;
-		$blockEnd = $start + $batchSize - 1;
-		$lbFactory = MediaWikiServices::getInstance()->getDBLoadBalancerFactory();
+		$blockEnd = $start + $this->mBatchSize - 1;
 		while ( $blockEnd <= $end ) {
 			$this->output( "...doing page_id from $blockStart to $blockEnd\n" );
-			$cond = "page_id BETWEEN " . (int)$blockStart . " AND " . (int)$blockEnd;
+			$cond = "page_id BETWEEN $blockStart AND $blockEnd";
 			$res = $db->select( 'page', [ 'page_id', 'page_namespace' ], $cond, __METHOD__ );
 			foreach ( $res as $row ) {
 				$db->update( 'pagelinks',
@@ -87,13 +85,13 @@ class PopulateBacklinkNamespace extends LoggedUpdateMaintenance {
 					__METHOD__
 				);
 			}
-			$blockStart += $batchSize - 1;
-			$blockEnd += $batchSize - 1;
-			$lbFactory->waitForReplication();
+			$blockStart += $this->mBatchSize - 1;
+			$blockEnd += $this->mBatchSize - 1;
+			wfWaitForSlaves();
 		}
 		return true;
 	}
 }
 
-$maintClass = PopulateBacklinkNamespace::class;
+$maintClass = "PopulateBacklinkNamespace";
 require_once RUN_MAINTENANCE_IF_MAIN;

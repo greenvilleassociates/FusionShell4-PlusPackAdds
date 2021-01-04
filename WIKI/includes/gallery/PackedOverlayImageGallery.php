@@ -1,5 +1,8 @@
 <?php
 /**
+ * Packed overlay image gallery. All images adjusted to be same height and
+ * image caption being placed over top of image.
+ *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
  * the Free Software Foundation; either version 2 of the License, or
@@ -18,10 +21,6 @@
  * @file
  */
 
-/**
- * Packed overlay image gallery. All images adjusted to be same height and
- * image caption being placed over top of image.
- */
 class PackedOverlayImageGallery extends PackedImageGallery {
 	/**
 	 * Add the wrapper html around the thumb's caption
@@ -52,4 +51,13 @@ class PackedOverlayImageGallery extends PackedImageGallery {
 			. $galleryText
 			. "\n\t\t\t</div></div>";
 	}
+}
+
+/**
+ * Same as Packed except different CSS is applied to make the
+ * caption only show up on hover. If a touch screen is detected,
+ * falls back to PackedHoverGallery. Degrades gracefully for
+ * screen readers.
+ */
+class PackedHoverImageGallery extends PackedOverlayImageGallery {
 }

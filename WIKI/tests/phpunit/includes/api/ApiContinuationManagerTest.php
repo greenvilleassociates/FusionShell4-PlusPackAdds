@@ -4,7 +4,7 @@
  * @covers ApiContinuationManager
  * @group API
  */
-class ApiContinuationManagerTest extends MediaWikiIntegrationTestCase {
+class ApiContinuationManagerTest extends MediaWikiTestCase {
 
 	private static function getManager( $continue, $allModules, $generatedModules ) {
 		$context = new DerivativeContext( RequestContext::getMain() );
@@ -22,7 +22,7 @@ class ApiContinuationManagerTest extends MediaWikiIntegrationTestCase {
 		$generator = new MockApiQueryBase( 'generator' );
 
 		$manager = self::getManager( '', $allModules, [ 'mock1', 'mock2' ] );
-		$this->assertSame( ApiMain::class, $manager->getSource() );
+		$this->assertSame( 'ApiMain', $manager->getSource() );
 		$this->assertSame( false, $manager->isGeneratorDone() );
 		$this->assertSame( $allModules, $manager->getRunModules() );
 		$manager->addContinueParam( $allModules[0], 'm1continue', [ 1, 2 ] );

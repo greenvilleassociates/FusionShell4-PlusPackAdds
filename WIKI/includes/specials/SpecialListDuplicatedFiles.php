@@ -24,16 +24,16 @@
  * @author Brian Wolff
  */
 
+use Wikimedia\Rdbms\ResultWrapper;
 use Wikimedia\Rdbms\IDatabase;
-use Wikimedia\Rdbms\IResultWrapper;
 
 /**
  * Special:ListDuplicatedFiles Lists all files where the current version is
  *   a duplicate of the current version of some other file.
  * @ingroup SpecialPage
  */
-class SpecialListDuplicatedFiles extends QueryPage {
-	public function __construct( $name = 'ListDuplicatedFiles' ) {
+class ListDuplicatedFilesPage extends QueryPage {
+	function __construct( $name = 'ListDuplicatedFiles' ) {
 		parent::__construct( $name );
 	}
 
@@ -41,7 +41,7 @@ class SpecialListDuplicatedFiles extends QueryPage {
 		return true;
 	}
 
-	public function isSyndicated() {
+	function isSyndicated() {
 		return false;
 	}
 
@@ -75,9 +75,9 @@ class SpecialListDuplicatedFiles extends QueryPage {
 	 * Pre-fill the link cache
 	 *
 	 * @param IDatabase $db
-	 * @param IResultWrapper $res
+	 * @param ResultWrapper $res
 	 */
-	public function preprocessResults( $db, $res ) {
+	function preprocessResults( $db, $res ) {
 		$this->executeLBFromResultWrapper( $res );
 	}
 
@@ -86,7 +86,7 @@ class SpecialListDuplicatedFiles extends QueryPage {
 	 * @param object $result Result row
 	 * @return string
 	 */
-	public function formatResult( $skin, $result ) {
+	function formatResult( $skin, $result ) {
 		// Future version might include a list of the first 5 duplicates
 		// perhaps separated by an "↔".
 		$image1 = Title::makeTitle( $result->namespace, $result->title );
@@ -98,11 +98,6 @@ class SpecialListDuplicatedFiles extends QueryPage {
 			->params( $dupeSearch->getPrefixedDBkey() );
 
 		return $msg->parse();
-	}
-
-	public function execute( $par ) {
-		$this->addHelpLink( 'Help:Managing_files' );
-		parent::execute( $par );
 	}
 
 	protected function getGroupName() {

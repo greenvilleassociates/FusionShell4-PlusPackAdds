@@ -8,3 +8,4 @@ CREATE TABLE /*_*/imagelinks (
 
 CREATE UNIQUE INDEX /*i*/il_from ON /*_*/imagelinks (il_from,il_to);
 CREATE UNIQUE INDEX /*i*/il_to ON /*_*/imagelinks (il_to,il_from);
+

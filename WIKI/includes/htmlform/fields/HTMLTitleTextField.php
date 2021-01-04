@@ -7,59 +7,58 @@ use MediaWiki\Widget\TitleInputWidget;
  * Automatically does validation that the title is valid,
  * as well as autocompletion if using the OOUI display format.
  *
+ * Note: Forms using GET requests will need to make sure the title value is not
+ * an empty string.
+ *
  * Optional parameters:
  * 'namespace' - Namespace the page must be in
  * 'relative' - If true and 'namespace' given, strip/add the namespace from/to the title as needed
  * 'creatable' - Whether to validate the title is creatable (not a special page)
  * 'exists' - Whether to validate that the title already exists
  *
- * @stable to extend
  * @since 1.26
  */
 class HTMLTitleTextField extends HTMLTextField {
-	/*
-	 * @stable to call
-	 */
 	public function __construct( $params ) {
 		$params += [
 			'namespace' => false,
 			'relative' => false,
 			'creatable' => false,
 			'exists' => false,
-			// This overrides the default from HTMLFormField
-			'required' => true,
 		];
 
 		parent::__construct( $params );
 	}
 
 	public function validate( $value, $alldata ) {
-		// Default value (from getDefault()) is null, which breaks Title::newFromTextThrow() below
-		if ( $value === null ) {
-			$value = '';
-		}
-
-		if ( !$this->mParams['required'] && $value === '' ) {
-			// If this field is not required and the value is empty, that's okay, skip validation
+		if ( $this->mParent->getMethod() === 'get' && $value === '' ) {
+			// If the form is a GET form and has no value, assume it hasn't been
+			// submitted yet, and skip validation
 			return parent::validate( $value, $alldata );
 		}
-
 		try {
 			if ( !$this->mParams['relative'] ) {
 				$title = Title::newFromTextThrow( $value );
 			} else {
 				// Can't use Title::makeTitleSafe(), because it doesn't throw useful exceptions
-				$title = Title::newFromTextThrow( Title::makeName( $this->mParams['namespace'], $value ) );
+				global $wgContLang;
+				$namespaceName = $wgContLang->getNsText( $this->mParams['namespace'] );
+				$title = Title::newFromTextThrow( $namespaceName . ':' . $value );
 			}
 		} catch ( MalformedTitleException $e ) {
-			return $this->msg( $e->getErrorMessage(), $e->getErrorMessageParameters() );
+			$msg = $this->msg( $e->getErrorMessage() );
+			$params = $e->getErrorMessageParameters();
+			if ( $params ) {
+				$msg->params( $params );
+			}
+			return $msg;
 		}
 
 		$text = $title->getPrefixedText();
 		if ( $this->mParams['namespace'] !== false &&
 			!$title->inNamespace( $this->mParams['namespace'] )
 		) {
-			return $this->msg( 'htmlform-title-badnamespace', $text, $this->mParams['namespace'] );
+			return $this->msg( 'htmlform-title-badnamespace', $this->mParams['namespace'], $text );
 		}
 
 		if ( $this->mParams['creatable'] && !$title->canExist() ) {

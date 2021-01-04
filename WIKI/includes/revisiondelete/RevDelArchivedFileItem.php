@@ -19,27 +19,19 @@
  * @ingroup RevisionDelete
  */
 
-use MediaWiki\MediaWikiServices;
-use MediaWiki\Revision\RevisionRecord;
-
 /**
  * Item class for a filearchive table row
- *
- * @property ArchivedFile $file
- * @property RevDelArchivedFileList $list
  */
 class RevDelArchivedFileItem extends RevDelFileItem {
+	/** @var RevDelArchivedFileList $list */
+	/** @var ArchivedFile $file */
 	/** @var LocalFile */
 	protected $lockFile;
 
-	public function __construct( RevisionListBase $list, $row ) {
-		parent::__construct( $list, $row );
-		$this->lockFile = MediaWikiServices::getInstance()->getRepoGroup()->getLocalRepo()
-			->newFile( $row->fa_name );
-	}
-
-	protected static function initFile( $list, $row ) {
-		return ArchivedFile::newFromRow( $row );
+	public function __construct( $list, $row ) {
+		RevDelItem::__construct( $list, $row );
+		$this->file = ArchivedFile::newFromRow( $row );
+		$this->lockFile = RepoGroup::singleton()->getLocalRepo()->newFile( $row->fa_name );
 	}
 
 	public function getIdField() {
@@ -56,10 +48,6 @@ class RevDelArchivedFileItem extends RevDelFileItem {
 
 	public function getAuthorNameField() {
 		return 'fa_user_text';
-	}
-
-	public function getAuthorActorField() {
-		return 'fa_actor';
 	}
 
 	public function getId() {
@@ -114,8 +102,8 @@ class RevDelArchivedFileItem extends RevDelFileItem {
 			'width' => $file->getWidth(),
 			'height' => $file->getHeight(),
 			'size' => $file->getSize(),
-			'userhidden' => (bool)$file->isDeleted( RevisionRecord::DELETED_USER ),
-			'commenthidden' => (bool)$file->isDeleted( RevisionRecord::DELETED_COMMENT ),
+			'userhidden' => (bool)$file->isDeleted( Revision::DELETED_USER ),
+			'commenthidden' => (bool)$file->isDeleted( Revision::DELETED_COMMENT ),
 			'contenthidden' => (bool)$this->isDeleted(),
 		];
 		if ( $this->canViewContent() ) {
@@ -129,13 +117,13 @@ class RevDelArchivedFileItem extends RevDelFileItem {
 				),
 			];
 		}
-		if ( $file->userCan( RevisionRecord::DELETED_USER, $user ) ) {
+		if ( $file->userCan( Revision::DELETED_USER, $user ) ) {
 			$ret += [
 				'userid' => $file->getUser( 'id' ),
 				'user' => $file->getUser( 'text' ),
 			];
 		}
-		if ( $file->userCan( RevisionRecord::DELETED_COMMENT, $user ) ) {
+		if ( $file->userCan( Revision::DELETED_COMMENT, $user ) ) {
 			$ret += [
 				'comment' => $file->getRawDescription(),
 			];

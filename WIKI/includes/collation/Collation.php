@@ -20,12 +20,9 @@
  * @file
  */
 
-use MediaWiki\MediaWikiServices;
-
 /**
  * @since 1.16.3
  * @author Tim Starling
- * @stable to extend
  */
 abstract class Collation {
 	private static $instance;
@@ -49,12 +46,13 @@ abstract class Collation {
 	 * @return Collation
 	 */
 	public static function factory( $collationName ) {
+		global $wgContLang;
+
 		switch ( $collationName ) {
 			case 'uppercase':
 				return new UppercaseCollation;
 			case 'numeric':
-				return new NumericUppercaseCollation(
-					MediaWikiServices::getInstance()->getContentLanguage() );
+				return new NumericUppercaseCollation( $wgContLang );
 			case 'identity':
 				return new IdentityCollation;
 			case 'uca-default':
@@ -63,8 +61,10 @@ abstract class Collation {
 				return new IcuCollation( 'root-u-kn' );
 			case 'xx-uca-ckb':
 				return new CollationCkb;
-			case 'uppercase-ab':
-				return new AbkhazUppercaseCollation;
+			case 'xx-uca-et':
+				return new CollationEt;
+			case 'xx-uca-fa':
+				return new CollationFa;
 			case 'uppercase-ba':
 				return new BashkirUppercaseCollation;
 			default:
@@ -75,9 +75,9 @@ abstract class Collation {
 
 				# Provide a mechanism for extensions to hook in.
 				$collationObject = null;
-				Hooks::runner()->onCollation__factory( $collationName, $collationObject );
+				Hooks::run( 'Collation::factory', [ $collationName, &$collationObject ] );
 
-				if ( $collationObject instanceof self ) {
+				if ( $collationObject instanceof Collation ) {
 					return $collationObject;
 				}
 
@@ -99,7 +99,7 @@ abstract class Collation {
 	 * @param string $string UTF-8 string
 	 * @return string Binary sortkey
 	 */
-	abstract public function getSortKey( $string );
+	abstract function getSortKey( $string );
 
 	/**
 	 * Given a string, return the logical "first letter" to be used for
@@ -126,6 +126,6 @@ abstract class Collation {
 	 * @param string $string UTF-8 string
 	 * @return string UTF-8 string corresponding to the first letter of input
 	 */
-	abstract public function getFirstLetter( $string );
+	abstract function getFirstLetter( $string );
 
 }

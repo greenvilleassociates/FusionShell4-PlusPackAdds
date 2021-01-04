@@ -21,41 +21,38 @@
  * @ingroup SpecialPage
  */
 
-use MediaWiki\MediaWikiServices;
-
 /**
  * A special page looking for page without any category.
  *
  * @ingroup SpecialPage
  * @todo FIXME: Make $requestedNamespace selectable, unify all subclasses into one
  */
-class SpecialUncategorizedPages extends PageQueryPage {
-	/** @var int|false */
+class UncategorizedPagesPage extends PageQueryPage {
 	protected $requestedNamespace = false;
 
-	public function __construct( $name = 'Uncategorizedpages' ) {
+	function __construct( $name = 'Uncategorizedpages' ) {
 		parent::__construct( $name );
-		$this->addHelpLink( 'Help:Categories' );
 	}
 
-	protected function sortDescending() {
+	function sortDescending() {
 		return false;
 	}
 
-	public function isExpensive() {
+	function isExpensive() {
 		return true;
 	}
 
-	public function isSyndicated() {
+	function isSyndicated() {
 		return false;
 	}
 
-	public function getQueryInfo() {
+	function getQueryInfo() {
 		return [
 			'tables' => [ 'page', 'categorylinks' ],
 			'fields' => [
 				'namespace' => 'page_namespace',
 				'title' => 'page_title',
+				'value' => 'page_title'
 			],
 			// default for page_namespace is all content namespaces (if requestedNamespace is false)
 			// otherwise, page_namespace is requestedNamespace
@@ -63,8 +60,7 @@ class SpecialUncategorizedPages extends PageQueryPage {
 				'cl_from IS NULL',
 				'page_namespace' => $this->requestedNamespace !== false
 						? $this->requestedNamespace
-						: MediaWikiServices::getInstance()->getNamespaceInfo()->
-							getContentNamespaces(),
+						: MWNamespace::getContentNamespaces(),
 				'page_is_redirect' => 0
 			],
 			'join_conds' => [
@@ -73,13 +69,10 @@ class SpecialUncategorizedPages extends PageQueryPage {
 		];
 	}
 
-	protected function getOrderFields() {
+	function getOrderFields() {
 		// For some crazy reason ordering by a constant
 		// causes a filesort
-		if ( $this->requestedNamespace === false &&
-			count( MediaWikiServices::getInstance()->getNamespaceInfo()->
-				getContentNamespaces() ) > 1
-		) {
+		if ( $this->requestedNamespace === false && count( MWNamespace::getContentNamespaces() ) > 1 ) {
 			return [ 'page_namespace', 'page_title' ];
 		}
 

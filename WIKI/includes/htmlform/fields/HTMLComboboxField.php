@@ -13,8 +13,6 @@
  *   options-messages - As for HTMLSelectField
  *   options - As for HTMLSelectField
  *   options-message - As for HTMLSelectField
- *
- * @stable to extend
  */
 class HTMLComboboxField extends HTMLTextField {
 	// FIXME Ewww, this shouldn't be adding any attributes not requested in $list :(

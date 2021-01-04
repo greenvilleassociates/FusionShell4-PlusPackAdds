@@ -21,10 +21,6 @@
  * @ingroup Maintenance ExternalStorage
  */
 
-use MediaWiki\MediaWikiServices;
-use MediaWiki\Revision\RevisionRecord;
-use MediaWiki\Revision\SlotRecord;
-
 $optionsWithArgs = [ 'start', 'limit', 'type' ];
 require __DIR__ . '/../commandLine.inc';
 
@@ -34,7 +30,7 @@ if ( !isset( $args[0] ) ) {
 	exit( 1 );
 }
 
-$lang = MediaWikiServices::getInstance()->getLanguageFactory()->getLanguage( 'en' );
+$lang = Language::factory( 'en' );
 $title = Title::newFromText( $args[0] );
 if ( isset( $options['start'] ) ) {
 	$start = wfTimestamp( TS_MW, strtotime( $options['start'] ) );
@@ -49,22 +45,19 @@ if ( isset( $options['limit'] ) ) {
 	$limit = 1000;
 	$untilHappy = true;
 }
-$type = $options['type'] ?? ConcatenatedGzipHistoryBlob::class;
+$type = isset( $options['type'] ) ? $options['type'] : 'ConcatenatedGzipHistoryBlob';
 
-$dbr = wfGetDB( DB_REPLICA );
-$revStore = MediaWikiServices::getInstance()->getRevisionStore();
-$revQuery = $revStore->getQueryInfo( [ 'page' ] );
+$dbr = $this->getDB( DB_REPLICA );
 $res = $dbr->select(
-	$revQuery['tables'],
-	$revQuery['fields'],
+	[ 'page', 'revision', 'text' ],
+	'*',
 	[
 		'page_namespace' => $title->getNamespace(),
 		'page_title' => $title->getDBkey(),
+		'page_id=rev_page',
 		'rev_timestamp > ' . $dbr->addQuotes( $dbr->timestamp( $start ) ),
-	],
-	__FILE__,
-	[ 'LIMIT' => $limit ],
-	$revQuery['joins']
+		'rev_text_id=old_id'
+	], __FILE__, [ 'LIMIT' => $limit ]
 );
 
 $blob = new $type;
@@ -73,10 +66,8 @@ $keys = [];
 $uncompressedSize = 0;
 $t = -microtime( true );
 foreach ( $res as $row ) {
-	$revRecord = $revStore->newRevisionFromRow( $row );
-	$text = $revRecord->getSlot( SlotRecord::MAIN, RevisionRecord::RAW )
-		->getContent()
-		->serialize();
+	$revision = new Revision( $row );
+	$text = $revision->getSerializedData();
 	$uncompressedSize += strlen( $text );
 	$hashes[$row->rev_id] = md5( $text );
 	$keys[$row->rev_id] = $blob->addItem( $text );

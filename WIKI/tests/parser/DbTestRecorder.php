@@ -34,15 +34,14 @@ class DbTestRecorder extends TestRecorder {
 	 * Set up result recording; insert a record for the run with the date
 	 * and all that fun stuff
 	 */
-	public function start() {
+	function start() {
 		$this->db->begin( __METHOD__ );
 
 		if ( !$this->db->tableExists( 'testrun' )
 			|| !$this->db->tableExists( 'testitem' )
 		) {
 			print "WARNING> `testrun` table not found in database. Trying to create table.\n";
-			$updater = DatabaseUpdater::newForDB( $this->db );
-			$this->db->sourceFile( $updater->patchPath( $this->db, 'patch-testrun.sql' ) );
+			$this->db->sourceFile( $this->db->patchPath( 'patch-testrun.sql' ) );
 			echo "OK, resuming.\n";
 		}
 
@@ -68,7 +67,7 @@ class DbTestRecorder extends TestRecorder {
 	 * @param array $test
 	 * @param ParserTestResult $result
 	 */
-	public function record( $test, ParserTestResult $result ) {
+	function record( $test, ParserTestResult $result ) {
 		$this->db->insert( 'testitem',
 			[
 				'ti_run' => $this->curRun,
@@ -81,7 +80,7 @@ class DbTestRecorder extends TestRecorder {
 	/**
 	 * Commit transaction and clean up for result recording
 	 */
-	public function end() {
+	function end() {
 		$this->db->commit( __METHOD__ );
 	}
 }

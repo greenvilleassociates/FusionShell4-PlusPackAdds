@@ -40,13 +40,10 @@ input#mw-interwiki-url {
 	white-space: nowrap;
 }
 
-.mw-interwiki-legend th:before,
 .mw-interwiki-legend .mw-collapsible-toggle {
-	font-weight: normal !important; /* stylelint-disable-line declaration-no-important */
+	font-weight: normal;
 }
-
-/* Selector with higher specifity than wikitable */
-table.wikitable.mw-interwiki-legend {
+table.mw-interwiki-legend {
 	margin-top: 2em;
 }
 

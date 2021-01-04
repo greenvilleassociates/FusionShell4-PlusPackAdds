@@ -1,8 +1,7 @@
 <?php
+class MWGrantsTest extends MediaWikiTestCase {
 
-class MWGrantsTest extends MediaWikiIntegrationTestCase {
-
-	protected function setUp() : void {
+	protected function setUp() {
 		parent::setUp();
 
 		$this->setMwGlobals( [

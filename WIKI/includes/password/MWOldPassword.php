@@ -20,8 +20,6 @@
  * @file
  */
 
-declare( strict_types = 1 );
-
 /**
  * The old style of MediaWiki password hashing. It involves
  * running MD5 on the password.
@@ -29,15 +27,15 @@ declare( strict_types = 1 );
  * @since 1.24
  */
 class MWOldPassword extends ParameterizedPassword {
-	protected function getDefaultParams() : array {
+	protected function getDefaultParams() {
 		return [];
 	}
 
-	protected function getDelimiter() : string {
+	protected function getDelimiter() {
 		return ':';
 	}
 
-	public function crypt( string $plaintext ) : void {
+	public function crypt( $plaintext ) {
 		if ( count( $this->args ) === 1 ) {
 			// Accept (but do not generate) salted passwords with :A: prefix.
 			// These are actually B-type passwords, but an error in a previous

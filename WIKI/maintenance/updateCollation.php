@@ -26,7 +26,6 @@
 
 require_once __DIR__ . '/Maintenance.php';
 
-use MediaWiki\MediaWikiServices;
 use Wikimedia\Rdbms\IDatabase;
 
 /**
@@ -36,19 +35,20 @@ use Wikimedia\Rdbms\IDatabase;
  * @ingroup Maintenance
  */
 class UpdateCollation extends Maintenance {
-	private const BATCH_SIZE = 100; // Number of rows to process in one batch
-	private const SYNC_INTERVAL = 5; // Wait for replica DBs after this many batches
+	const BATCH_SIZE = 100; // Number of rows to process in one batch
+	const SYNC_INTERVAL = 5; // Wait for replica DBs after this many batches
 
 	public $sizeHistogram = [];
 
 	public function __construct() {
 		parent::__construct();
 
+		global $wgCategoryCollation;
 		$this->addDescription( <<<TEXT
 This script will find all rows in the categorylinks table whose collation is
-out-of-date (cl_collation is not the same as \$wgCategoryCollation) and
-repopulate cl_sortkey using the page title and cl_sortkey_prefix. If all
-collations are up-to-date, it will do nothing.
+out-of-date (cl_collation != '$wgCategoryCollation') and repopulate cl_sortkey
+using the page title and cl_sortkey_prefix.  If all collations are
+up-to-date, it will do nothing.
 TEXT
 		);
 
@@ -69,6 +69,8 @@ TEXT
 	}
 
 	public function execute() {
+		global $wgCategoryCollation;
+
 		$dbw = $this->getDB( DB_MASTER );
 		$dbr = $this->getDB( DB_REPLICA );
 		$force = $this->getOption( 'force' );
@@ -78,7 +80,7 @@ TEXT
 			$collationName = $this->getOption( 'target-collation' );
 			$collation = Collation::factory( $collationName );
 		} else {
-			$collationName = $this->getConfig()->get( 'CategoryCollation' );
+			$collationName = $wgCategoryCollation;
 			$collation = Collation::singleton();
 		}
 
@@ -101,8 +103,9 @@ TEXT
 			'STRAIGHT_JOIN' // per T58041
 		];
 
-		$collationConds = [];
-		if ( !$force ) {
+		if ( $force ) {
+			$collationConds = [];
+		} else {
 			if ( $this->hasOption( 'previous-collation' ) ) {
 				$collationConds['cl_collation'] = $this->getOption( 'previous-collation' );
 			} else {
@@ -136,9 +139,10 @@ TEXT
 			} else {
 				$this->output( "Fixing collation for $count rows.\n" );
 			}
-			MediaWikiServices::getInstance()->getDBLoadBalancerFactory()->waitForReplication();
+			wfWaitForSlaves();
 		}
 		$count = 0;
+		$batchCount = 0;
 		$batchConds = [];
 		do {
 			$this->output( "Selecting next " . self::BATCH_SIZE . " rows..." );
@@ -183,19 +187,20 @@ TEXT
 				}
 				# cl_type will be wrong for lots of pages if cl_collation is 0,
 				# so let's update it while we're here.
-				$type = MediaWikiServices::getInstance()->getNamespaceInfo()->
-					getCategoryLinkType( $title->getNamespace() );
+				if ( $title->getNamespace() == NS_CATEGORY ) {
+					$type = 'subcat';
+				} elseif ( $title->getNamespace() == NS_FILE ) {
+					$type = 'file';
+				} else {
+					$type = 'page';
+				}
 				$newSortKey = $collation->getSortKey(
 					$title->getCategorySortkey( $prefix ) );
 				if ( $verboseStats ) {
 					$this->updateSortKeySizeHistogram( $newSortKey );
 				}
 
-				if ( $dryRun ) {
-					// Add 1 to the count if the sortkey was changed. (Note that this doesn't count changes in
-					// other fields, if any, those usually only happen when upgrading old MediaWikis.)
-					$count += ( $row->cl_sortkey !== $newSortKey );
-				} else {
+				if ( !$dryRun ) {
 					$dbw->update(
 						'categorylinks',
 						[
@@ -208,7 +213,6 @@ TEXT
 						[ 'cl_from' => $row->cl_from, 'cl_to' => $row->cl_to ],
 						__METHOD__
 					);
-					$count++;
 				}
 				if ( $row ) {
 					$batchConds = [ $this->getBatchCondition( $row, $dbw ) ];
@@ -218,16 +222,17 @@ TEXT
 				$this->commitTransaction( $dbw, __METHOD__ );
 			}
 
-			if ( $dryRun ) {
-				$this->output( "$count rows would be updated so far.\n" );
-			} else {
-				$this->output( "$count done.\n" );
+			$count += $res->numRows();
+			$this->output( "$count done.\n" );
+
+			if ( !$dryRun && ++$batchCount % self::SYNC_INTERVAL == 0 ) {
+				$this->output( "Waiting for replica DBs ... " );
+				wfWaitForSlaves();
+				$this->output( "done\n" );
 			}
 		} while ( $res->numRows() == self::BATCH_SIZE );
 
-		if ( !$dryRun ) {
-			$this->output( "$count rows processed\n" );
-		}
+		$this->output( "$count rows processed\n" );
 
 		if ( $verboseStats ) {
 			$this->output( "\n" );
@@ -242,7 +247,7 @@ TEXT
 	 * @param IDatabase $dbw
 	 * @return string
 	 */
-	private function getBatchCondition( $row, $dbw ) {
+	function getBatchCondition( $row, $dbw ) {
 		if ( $this->hasOption( 'previous-collation' ) ) {
 			$fields = [ 'cl_to', 'cl_type', 'cl_from' ];
 		} else {
@@ -274,7 +279,7 @@ TEXT
 		return $cond;
 	}
 
-	private function updateSortKeySizeHistogram( $key ) {
+	function updateSortKeySizeHistogram( $key ) {
 		$length = strlen( $key );
 		if ( !isset( $this->sizeHistogram[$length] ) ) {
 			$this->sizeHistogram[$length] = 0;
@@ -282,7 +287,7 @@ TEXT
 		$this->sizeHistogram[$length]++;
 	}
 
-	private function showSortKeySizeHistogram() {
+	function showSortKeySizeHistogram() {
 		$maxLength = max( array_keys( $this->sizeHistogram ) );
 		if ( $maxLength == 0 ) {
 			return;
@@ -301,7 +306,11 @@ TEXT
 			if ( $raw !== '' ) {
 				$raw .= ', ';
 			}
-			$val = $this->sizeHistogram[$i] ?? 0;
+			if ( !isset( $this->sizeHistogram[$i] ) ) {
+				$val = 0;
+			} else {
+				$val = $this->sizeHistogram[$i];
+			}
 			for ( $coarseIndex = 0; $coarseIndex < $numBins - 1; $coarseIndex++ ) {
 				if ( $coarseBoundaries[$coarseIndex] > $i ) {
 					$coarseHistogram[$coarseIndex] += $val;
@@ -320,7 +329,11 @@ TEXT
 		$scale = 60 / $maxBinVal;
 		$prevBoundary = 0;
 		for ( $coarseIndex = 0; $coarseIndex < $numBins; $coarseIndex++ ) {
-			$val = $coarseHistogram[$coarseIndex] ?? 0;
+			if ( !isset( $coarseHistogram[$coarseIndex] ) ) {
+				$val = 0;
+			} else {
+				$val = $coarseHistogram[$coarseIndex];
+			}
 			$boundary = $coarseBoundaries[$coarseIndex];
 			$this->output( sprintf( "%-10s %-10d |%s\n",
 				$prevBoundary . '-' . ( $boundary - 1 ) . ': ',
@@ -331,5 +344,5 @@ TEXT
 	}
 }
 
-$maintClass = UpdateCollation::class;
+$maintClass = "UpdateCollation";
 require_once RUN_MAINTENANCE_IF_MAIN;

@@ -1,16 +1,15 @@
 <?php
-
 /**
  * @group Database
- * @covers SpecialMIMESearch
  */
-class SpecialMIMESearchTest extends MediaWikiIntegrationTestCase {
 
-	/** @var SpecialMIMESearch */
+class SpecialMIMESearchTest extends MediaWikiTestCase {
+
+	/** @var MIMEsearchPage */
 	private $page;
 
-	protected function setUp() : void {
-		$this->page = new SpecialMIMESearch;
+	function setUp() {
+		$this->page = new MIMEsearchPage;
 		$context = new RequestContext();
 		$context->setTitle( Title::makeTitle( NS_SPECIAL, 'MIMESearch' ) );
 		$context->setRequest( new FauxRequest() );
@@ -25,7 +24,7 @@ class SpecialMIMESearchTest extends MediaWikiIntegrationTestCase {
 	 * @param string $major Major MIME type we expect to look for
 	 * @param string $minor Minor MIME type we expect to look for
 	 */
-	public function testMimeFiltering( $par, $major, $minor ) {
+	function testMimeFiltering( $par, $major, $minor ) {
 		$this->page->run( $par );
 		$qi = $this->page->getQueryInfo();
 		$this->assertEquals( $qi['conds']['img_major_mime'], $major );
@@ -37,7 +36,7 @@ class SpecialMIMESearchTest extends MediaWikiIntegrationTestCase {
 		$this->assertContains( 'image', $qi['tables'] );
 	}
 
-	public function providerMimeFiltering() {
+	function providerMimeFiltering() {
 		return [
 			[ 'image/gif', 'image', 'gif' ],
 			[ 'image/png', 'image', 'png' ],

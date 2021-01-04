@@ -19,8 +19,6 @@
  * @ingroup RevisionDelete
  */
 
-use MediaWiki\Revision\RevisionRecord;
-
 /**
  * Item class for a logging table row
  */
@@ -41,14 +39,8 @@ class RevDelLogItem extends RevDelItem {
 		return 'log_user_text';
 	}
 
-	public function getAuthorActorField() {
-		return 'log_actor';
-	}
-
 	public function canView() {
-		return LogEventsList::userCan(
-			$this->row, RevisionRecord::DELETED_RESTRICTED, $this->list->getUser()
-		);
+		return LogEventsList::userCan( $this->row, Revision::DELETED_RESTRICTED, $this->list->getUser() );
 	}
 
 	public function canViewContent() {
@@ -79,7 +71,7 @@ class RevDelLogItem extends RevDelItem {
 		$dbw->update( 'recentchanges',
 			[
 				'rc_deleted' => $bits,
-				'rc_patrolled' => RecentChange::PRC_AUTOPATROLLED
+				'rc_patrolled' => 1
 			],
 			[
 				'rc_logid' => $this->row->log_id,
@@ -109,8 +101,8 @@ class RevDelLogItem extends RevDelItem {
 		$loglink = $this->list->msg( 'parentheses' )->rawParams( $loglink )->escaped();
 		// User links and action text
 		$action = $formatter->getActionText();
-
-		$comment = CommentStore::getStore()->getComment( 'log_comment', $this->row )->text;
+		// Comment
+		$comment = CommentStore::newKey( 'log_comment' )->getComment( $this->row )->text;
 		$comment = $this->list->getLanguage()->getDirMark()
 			. Linker::commentBlock( $comment );
 
@@ -144,8 +136,7 @@ class RevDelLogItem extends RevDelItem {
 		}
 		if ( LogEventsList::userCan( $this->row, LogPage::DELETED_COMMENT, $user ) ) {
 			$ret += [
-				'comment' => CommentStore::getStore()->getComment( 'log_comment', $this->row )
-					->text,
+				'comment' => CommentStore::newKey( 'log_comment' )->getComment( $this->row )->text,
 			];
 		}
 

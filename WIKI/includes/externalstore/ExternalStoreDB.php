@@ -20,16 +20,13 @@
  * @file
  */
 
-use Wikimedia\Rdbms\DatabaseDomain;
-use Wikimedia\Rdbms\DBConnRef;
-use Wikimedia\Rdbms\DBUnexpectedError;
+use Wikimedia\Rdbms\LoadBalancer;
 use Wikimedia\Rdbms\IDatabase;
-use Wikimedia\Rdbms\ILoadBalancer;
-use Wikimedia\Rdbms\LBFactory;
+use Wikimedia\Rdbms\DBConnRef;
 use Wikimedia\Rdbms\MaintainableDBConnRef;
 
 /**
- * DB accessible external objects.
+ * DB accessable external objects.
  *
  * In this system, each store "location" maps to a database "cluster".
  * The clusters must be defined in the normal LBFactory configuration.
@@ -37,22 +34,6 @@ use Wikimedia\Rdbms\MaintainableDBConnRef;
  * @ingroup ExternalStorage
  */
 class ExternalStoreDB extends ExternalStoreMedium {
-	/** @var LBFactory */
-	private $lbFactory;
-
-	/**
-	 * @see ExternalStoreMedium::__construct()
-	 * @param array $params Additional parameters include:
-	 *   - lbFactory: an LBFactory instance
-	 */
-	public function __construct( array $params ) {
-		parent::__construct( $params );
-		if ( !isset( $params['lbFactory'] ) || !( $params['lbFactory'] instanceof LBFactory ) ) {
-			throw new InvalidArgumentException( "LBFactory required in 'lbFactory' field." );
-		}
-		$this->lbFactory = $params['lbFactory'];
-	}
-
 	/**
 	 * The provided URL is in the form of DB://cluster/id
 	 * or DB://cluster/id/itemid for concatened storage.
@@ -109,16 +90,11 @@ class ExternalStoreDB extends ExternalStoreMedium {
 		return $ret;
 	}
 
-	/**
-	 * @inheritDoc
-	 */
 	public function store( $location, $data ) {
 		$dbw = $this->getMaster( $location );
-		$dbw->insert(
-			$this->getTable( $dbw, $location ),
+		$dbw->insert( $this->getTable( $dbw ),
 			[ 'blob_text' => $data ],
-			__METHOD__
-		);
+			__METHOD__ );
 		$id = $dbw->insertId();
 		if ( !$id ) {
 			throw new MWException( __METHOD__ . ': no insert ID' );
@@ -128,45 +104,13 @@ class ExternalStoreDB extends ExternalStoreMedium {
 	}
 
 	/**
-	 * @inheritDoc
-	 */
-	public function isReadOnly( $location ) {
-		if ( parent::isReadOnly( $location ) ) {
-			return true;
-		}
-
-		$lb = $this->getLoadBalancer( $location );
-		$domainId = $this->getDomainId( $lb->getServerInfo( $lb->getWriterIndex() ) );
-
-		return ( $lb->getReadOnlyReason( $domainId ) !== false );
-	}
-
-	/**
 	 * Get a LoadBalancer for the specified cluster
 	 *
 	 * @param string $cluster Cluster name
-	 * @return ILoadBalancer
+	 * @return LoadBalancer
 	 */
 	private function getLoadBalancer( $cluster ) {
-		return $this->lbFactory->getExternalLB( $cluster );
-	}
-
-	/**
-	 * Get a replica DB connection for the specified cluster
-	 *
-	 * @since 1.34
-	 * @param string $cluster Cluster name
-	 * @return DBConnRef
-	 */
-	public function getReplica( $cluster ) {
-		$lb = $this->getLoadBalancer( $cluster );
-
-		return $lb->getConnectionRef(
-			DB_REPLICA,
-			[],
-			$this->getDomainId( $lb->getServerInfo( $lb->getWriterIndex() ) ),
-			$lb::CONN_TRX_AUTOCOMMIT
-		);
+		return wfGetLBFactory()->getExternalLB( $cluster );
 	}
 
 	/**
@@ -174,11 +118,24 @@ class ExternalStoreDB extends ExternalStoreMedium {
 	 *
 	 * @param string $cluster Cluster name
 	 * @return DBConnRef
-	 * @deprecated since 1.34
 	 */
 	public function getSlave( $cluster ) {
-		wfDeprecated( __METHOD__, '1.34' );
-		return $this->getReplica( $cluster );
+		global $wgDefaultExternalStore;
+
+		$wiki = isset( $this->params['wiki'] ) ? $this->params['wiki'] : false;
+		$lb = $this->getLoadBalancer( $cluster );
+
+		if ( !in_array( "DB://" . $cluster, (array)$wgDefaultExternalStore ) ) {
+			wfDebug( "read only external store\n" );
+			$lb->allowLagged( true );
+		} else {
+			wfDebug( "writable external store\n" );
+		}
+
+		$db = $lb->getConnectionRef( DB_REPLICA, [], $wiki );
+		$db->clearFlag( DBO_TRX ); // sanity
+
+		return $db;
 	}
 
 	/**
@@ -188,96 +145,28 @@ class ExternalStoreDB extends ExternalStoreMedium {
 	 * @return MaintainableDBConnRef
 	 */
 	public function getMaster( $cluster ) {
+		$wiki = isset( $this->params['wiki'] ) ? $this->params['wiki'] : false;
 		$lb = $this->getLoadBalancer( $cluster );
 
-		return $lb->getMaintenanceConnectionRef(
-			DB_MASTER,
-			[],
-			$this->getDomainId( $lb->getServerInfo( $lb->getWriterIndex() ) ),
-			$lb::CONN_TRX_AUTOCOMMIT
-		);
-	}
+		$db = $lb->getMaintenanceConnectionRef( DB_MASTER, [], $wiki );
+		$db->clearFlag( DBO_TRX ); // sanity
 
-	/**
-	 * @param array $server Master DB server configuration array for LoadBalancer
-	 * @return string|bool Database domain ID or false
-	 */
-	private function getDomainId( array $server ) {
-		if ( $this->isDbDomainExplicit ) {
-			return $this->dbDomain; // explicit foreign domain
-		}
-
-		if ( isset( $server['dbname'] ) ) {
-			// T200471: for b/c, treat any "dbname" field as forcing which database to use.
-			// MediaWiki/LoadBalancer previously did not enforce any concept of a local DB
-			// domain, but rather assumed that the LB server configuration matched $wgDBname.
-			// This check is useful when the external storage DB for this cluster does not use
-			// the same name as the corresponding "main" DB(s) for wikis.
-			$domain = new DatabaseDomain(
-				$server['dbname'],
-				$server['schema'] ?? null,
-				$server['tablePrefix'] ?? ''
-			);
-
-			return $domain->getId();
-		}
-
-		return false; // local LB domain
+		return $db;
 	}
 
 	/**
 	 * Get the 'blobs' table name for this database
 	 *
 	 * @param IDatabase $db
-	 * @param string|null $cluster Cluster name
 	 * @return string Table name ('blobs' by default)
 	 */
-	public function getTable( $db, $cluster = null ) {
-		if ( $cluster !== null ) {
-			$lb = $this->getLoadBalancer( $cluster );
-			$info = $lb->getServerInfo( $lb->getWriterIndex() );
-			if ( isset( $info['blobs table'] ) ) {
-				return $info['blobs table'];
-			}
+	public function getTable( $db ) {
+		$table = $db->getLBInfo( 'blobs table' );
+		if ( is_null( $table ) ) {
+			$table = 'blobs';
 		}
 
-		return $db->getLBInfo( 'blobs table' ) ?? 'blobs'; // b/c
-	}
-
-	/**
-	 * Create the appropriate blobs table on this cluster
-	 *
-	 * @see getTable()
-	 * @since 1.34
-	 * @param string $cluster
-	 */
-	public function initializeTable( $cluster ) {
-		global $IP;
-
-		static $supportedTypes = [ 'mysql', 'sqlite' ];
-
-		$dbw = $this->getMaster( $cluster );
-		if ( !in_array( $dbw->getType(), $supportedTypes, true ) ) {
-			throw new DBUnexpectedError( $dbw, "RDBMS type '{$dbw->getType()}' not supported." );
-		}
-
-		$sqlFilePath = "$IP/maintenance/storage/blobs.sql";
-		$sql = file_get_contents( $sqlFilePath );
-		if ( $sql === false ) {
-			throw new RuntimeException( "Failed to read '$sqlFilePath'." );
-		}
-
-		$rawTable = $this->getTable( $dbw, $cluster ); // e.g. "blobs_cluster23"
-		$encTable = $dbw->tableName( $rawTable );
-		$dbw->query(
-			str_replace(
-				[ '/*$wgDBprefix*/blobs', '/*_*/blobs' ],
-				[ $encTable, $encTable ],
-				$sql
-			),
-			__METHOD__,
-			$dbw::QUERY_IGNORE_DBO_TRX
-		);
+		return $table;
 	}
 
 	/**
@@ -299,35 +188,29 @@ class ExternalStoreDB extends ExternalStoreMedium {
 		static $externalBlobCache = [];
 
 		$cacheID = ( $itemID === false ) ? "$cluster/$id" : "$cluster/$id/";
-		$cacheID = "$cacheID@{$this->dbDomain}";
-
 		if ( isset( $externalBlobCache[$cacheID] ) ) {
-			$this->logger->debug( "ExternalStoreDB::fetchBlob cache hit on $cacheID" );
+			wfDebugLog( 'ExternalStoreDB-cache',
+				"ExternalStoreDB::fetchBlob cache hit on $cacheID" );
 
 			return $externalBlobCache[$cacheID];
 		}
 
-		$this->logger->debug( "ExternalStoreDB::fetchBlob cache miss on $cacheID" );
+		wfDebugLog( 'ExternalStoreDB-cache',
+			"ExternalStoreDB::fetchBlob cache miss on $cacheID" );
 
-		$dbr = $this->getReplica( $cluster );
-		$ret = $dbr->selectField(
-			$this->getTable( $dbr, $cluster ),
-			'blob_text',
-			[ 'blob_id' => $id ],
-			__METHOD__
-		);
+		$dbr = $this->getSlave( $cluster );
+		$ret = $dbr->selectField( $this->getTable( $dbr ),
+			'blob_text', [ 'blob_id' => $id ], __METHOD__ );
 		if ( $ret === false ) {
-			$this->logger->info( "ExternalStoreDB::fetchBlob master fallback on $cacheID" );
+			wfDebugLog( 'ExternalStoreDB',
+				"ExternalStoreDB::fetchBlob master fallback on $cacheID" );
 			// Try the master
 			$dbw = $this->getMaster( $cluster );
-			$ret = $dbw->selectField(
-				$this->getTable( $dbw, $cluster ),
-				'blob_text',
-				[ 'blob_id' => $id ],
-				__METHOD__
-			);
+			$ret = $dbw->selectField( $this->getTable( $dbw ),
+				'blob_text', [ 'blob_id' => $id ], __METHOD__ );
 			if ( $ret === false ) {
-				$this->logger->error( "ExternalStoreDB::fetchBlob master failed to find $cacheID" );
+				wfDebugLog( 'ExternalStoreDB',
+					"ExternalStoreDB::fetchBlob master failed to find $cacheID" );
 			}
 		}
 		if ( $itemID !== false && $ret !== false ) {
@@ -349,41 +232,33 @@ class ExternalStoreDB extends ExternalStoreMedium {
 	 *   Unlocated ids are not represented
 	 */
 	private function batchFetchBlobs( $cluster, array $ids ) {
-		$dbr = $this->getReplica( $cluster );
-		$res = $dbr->select(
-			$this->getTable( $dbr, $cluster ),
-			[ 'blob_id', 'blob_text' ],
-			[ 'blob_id' => array_keys( $ids ) ],
-			__METHOD__
-		);
-
+		$dbr = $this->getSlave( $cluster );
+		$res = $dbr->select( $this->getTable( $dbr ),
+			[ 'blob_id', 'blob_text' ], [ 'blob_id' => array_keys( $ids ) ], __METHOD__ );
 		$ret = [];
 		if ( $res !== false ) {
 			$this->mergeBatchResult( $ret, $ids, $res );
 		}
 		if ( $ids ) {
-			$this->logger->info(
-				__METHOD__ . ": master fallback on '$cluster' for: " .
-				implode( ',', array_keys( $ids ) )
-			);
+			wfDebugLog( __CLASS__, __METHOD__ .
+				" master fallback on '$cluster' for: " .
+				implode( ',', array_keys( $ids ) ) );
 			// Try the master
 			$dbw = $this->getMaster( $cluster );
-			$res = $dbw->select(
-				$this->getTable( $dbr, $cluster ),
+			$res = $dbw->select( $this->getTable( $dbr ),
 				[ 'blob_id', 'blob_text' ],
 				[ 'blob_id' => array_keys( $ids ) ],
 				__METHOD__ );
 			if ( $res === false ) {
-				$this->logger->error( __METHOD__ . ": master failed on '$cluster'" );
+				wfDebugLog( __CLASS__, __METHOD__ . " master failed on '$cluster'" );
 			} else {
 				$this->mergeBatchResult( $ret, $ids, $res );
 			}
 		}
 		if ( $ids ) {
-			$this->logger->error(
-				__METHOD__ . ": master on '$cluster' failed locating items: " .
-				implode( ',', array_keys( $ids ) )
-			);
+			wfDebugLog( __CLASS__, __METHOD__ .
+				" master on '$cluster' failed locating items: " .
+				implode( ',', array_keys( $ids ) ) );
 		}
 
 		return $ret;
@@ -420,7 +295,7 @@ class ExternalStoreDB extends ExternalStoreMedium {
 		return [
 			$path[2], // cluster
 			$path[3], // id
-			$path[4] ?? false // itemID
+			isset( $path[4] ) ? $path[4] : false // itemID
 		];
 	}
 }

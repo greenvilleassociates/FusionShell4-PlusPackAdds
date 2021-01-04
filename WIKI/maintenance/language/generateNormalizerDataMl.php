@@ -23,8 +23,6 @@
 
 require_once __DIR__ . '/../Maintenance.php';
 
-use Wikimedia\StaticArrayWriter;
-
 /**
  * Generates the normalizer data file for Malayalam.
  *
@@ -44,7 +42,7 @@ class GenerateNormalizerDataMl extends Maintenance {
 
 	public function execute() {
 		$hexPairs = [
-			# From https://www.unicode.org/versions/Unicode5.1.0/#Malayalam_Chillu_Characters
+			# From http://unicode.org/versions/Unicode5.1.0/#Malayalam_Chillu_Characters
 			'0D23 0D4D 200D' => '0D7A',
 			'0D28 0D4D 200D' => '0D7B',
 			'0D30 0D4D 200D' => '0D7C',
@@ -63,15 +61,10 @@ class GenerateNormalizerDataMl extends Maintenance {
 		}
 
 		global $IP;
-		$writer = new StaticArrayWriter();
-		file_put_contents( "$IP/languages/data/normalize-ml.php", $writer->create(
-			$pairs,
-			'File created by generateNormalizerDataMl.php'
-		) );
-
+		file_put_contents( "$IP/serialized/normalize-ml.ser", serialize( $pairs ) );
 		echo "ml: " . count( $pairs ) . " pairs written.\n";
 	}
 }
 
-$maintClass = GenerateNormalizerDataMl::class;
+$maintClass = 'GenerateNormalizerDataMl';
 require_once RUN_MAINTENANCE_IF_MAIN;

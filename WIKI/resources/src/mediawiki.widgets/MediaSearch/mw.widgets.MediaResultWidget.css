@@ -57,6 +57,7 @@
 }
 
 .mw-widget-mediaResultWidget-error .mw-widget-mediaResultWidget-thumbnail {
+	/* @embed */
 	background-image: url( broken-image.png );
 	background-size: auto;
 	background-position: center center;

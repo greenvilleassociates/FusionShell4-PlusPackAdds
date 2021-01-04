@@ -564,3 +564,4 @@ __DATA__
 OLD: searchindex          ## We use tsearch2 directly on the page table instead
 RENAME: user mwuser       ## Reserved word causing lots of problems
 RENAME: text pagecontent  ## Reserved word
+XFILE: ../archives/patch-profiling.sql

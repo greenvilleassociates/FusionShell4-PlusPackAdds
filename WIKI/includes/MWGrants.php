@@ -1,5 +1,7 @@
 <?php
 /**
+ * Functions and constants to deal with grants
+ *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
  * the Free Software Foundation; either version 2 of the License, or
@@ -14,8 +16,6 @@
  * with this program; if not, write to the Free Software Foundation, Inc.,
  * 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
  * http://www.gnu.org/copyleft/gpl.html
- *
- * @file
  */
 use MediaWiki\MediaWikiServices;
 
@@ -58,16 +58,15 @@ class MWGrants {
 		// Give grep a chance to find the usages:
 		// grant-blockusers, grant-createeditmovepage, grant-delete,
 		// grant-editinterface, grant-editmycssjs, grant-editmywatchlist,
-		// grant-editsiteconfig, grant-editpage, grant-editprotected,
-		// grant-highvolume, grant-oversight, grant-patrol, grant-protect,
-		// grant-rollback, grant-sendemail, grant-uploadeditmovefile,
-		// grant-uploadfile, grant-basic, grant-viewdeleted,
-		// grant-viewmywatchlist, grant-createaccount, grant-mergehistory
+		// grant-editpage, grant-editprotected, grant-highvolume,
+		// grant-oversight, grant-patrol, grant-protect, grant-rollback,
+		// grant-sendemail, grant-uploadeditmovefile, grant-uploadfile,
+		// grant-basic, grant-viewdeleted, grant-viewmywatchlist,
+		// grant-createaccount
 		$msg = wfMessage( "grant-$grant" );
 		if ( $lang !== null ) {
 			if ( is_string( $lang ) ) {
-				$lang = MediaWikiServices::getInstance()->getLanguageFactory()
-					->getLanguage( $lang );
+				$lang = Language::factory( $lang );
 			}
 			$msg->inLanguage( $lang );
 		}
@@ -87,8 +86,10 @@ class MWGrants {
 	 * @return string[] Corresponding grant descriptions
 	 */
 	public static function grantNames( array $grants, $lang = null ) {
-		if ( $lang !== null && is_string( $lang ) ) {
-			$lang = MediaWikiServices::getInstance()->getLanguageFactory()->getLanguage( $lang );
+		if ( $lang !== null ) {
+			if ( is_string( $lang ) ) {
+				$lang = Language::factory( $lang );
+			}
 		}
 
 		$ret = [];
@@ -192,10 +193,12 @@ class MWGrants {
 	 * @return string Wikitext
 	 */
 	public static function getGrantsWikiText( $grantsFilter, $lang = null ) {
+		global $wgContLang;
+
 		if ( is_string( $lang ) ) {
-			$lang = MediaWikiServices::getInstance()->getLanguageFactory()->getLanguage( $lang );
+			$lang = Language::factory( $lang );
 		} elseif ( $lang === null ) {
-			$lang = MediaWikiServices::getInstance()->getContentLanguage();
+			$lang = $wgContLang;
 		}
 
 		$s = '';

@@ -19,11 +19,9 @@
  *
  * @file
  * @author Kunal Grover
- * @license GPL-2.0-or-later
+ * @license http://www.gnu.org/copyleft/gpl.html GNU General Public License 2.0 or later
  * @since 1.24
  */
-
-use MediaWiki\MediaWikiServices;
 
 /**
  * This class formats language change log entries.
@@ -50,10 +48,9 @@ class PageLangLogFormatter extends LogFormatter {
 		}
 
 		// Convert language codes to names in user language
-		$languageNameUtils = MediaWikiServices::getInstance()->getLanguageNameUtils();
-		$logOld = $languageNameUtils->getLanguageName( $oldLang, $userLang )
+		$logOld = Language::fetchLanguageName( $oldLang, $userLang )
 			. ' (' . $oldLang . ')';
-		$logNew = $languageNameUtils->getLanguageName( $newLang, $userLang )
+		$logNew = Language::fetchLanguageName( $newLang, $userLang )
 			. ' (' . $newLang . ')';
 
 		// Add the default message to languages if required

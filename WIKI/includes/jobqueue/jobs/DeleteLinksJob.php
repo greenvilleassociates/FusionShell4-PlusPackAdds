@@ -20,8 +20,7 @@
  * @file
  * @ingroup JobQueue
  */
-
-use MediaWiki\MediaWikiServices;
+use \MediaWiki\MediaWikiServices;
 
 /**
  * Job to prune link tables for pages that were deleted
@@ -32,13 +31,13 @@ use MediaWiki\MediaWikiServices;
  * @since 1.27
  */
 class DeleteLinksJob extends Job {
-	public function __construct( Title $title, array $params ) {
+	function __construct( Title $title, array $params ) {
 		parent::__construct( 'deleteLinks', $title, $params );
 		$this->removeDuplicates = true;
 	}
 
-	public function run() {
-		if ( $this->title === null ) {
+	function run() {
+		if ( is_null( $this->title ) ) {
 			$this->setLastError( "deleteLinks: Invalid title" );
 			return false;
 		}
@@ -47,10 +46,6 @@ class DeleteLinksJob extends Job {
 
 		// Serialize links updates by page ID so they see each others' changes
 		$scopedLock = LinksUpdate::acquirePageLock( wfGetDB( DB_MASTER ), $pageId, 'job' );
-		if ( $scopedLock === null ) {
-			$this->setLastError( 'LinksUpdate already running for this page, try again later.' );
-			return false;
-		}
 
 		if ( WikiPage::newFromID( $pageId, WikiPage::READ_LATEST ) ) {
 			// The page was restored somehow or something went wrong
@@ -59,7 +54,7 @@ class DeleteLinksJob extends Job {
 		}
 
 		$factory = MediaWikiServices::getInstance()->getDBLoadBalancerFactory();
-		$timestamp = $this->params['timestamp'] ?? null;
+		$timestamp = isset( $this->params['timestamp'] ) ? $this->params['timestamp'] : null;
 		$page = WikiPage::factory( $this->title ); // title when deleted
 
 		$update = new LinksDeletionUpdate( $page, $pageId, $timestamp );

@@ -5,8 +5,7 @@
 			"Bennylin",
 			"Farras",
 			"Iwan Novirion",
-			"Rex",
-			"William Surya Permana"
+			"Rex"
 		]
 	},
 	"skinname-vector": "Vektor",
@@ -24,7 +23,5 @@
 	"vector-view-history": "Versi terdahulu",
 	"vector-view-view": "Baca",
 	"vector-view-viewsource": "Lihat sumber",
-	"vector-jumptonavigation": "Loncat ke navigasi",
-	"vector-jumptosearch": "Loncat ke pencarian",
 	"vector-more-actions": "Lainnya"
 }

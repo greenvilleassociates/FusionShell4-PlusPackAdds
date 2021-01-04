@@ -1,7 +1,5 @@
 <?php
 
-use MediaWiki\User\UserIdentityValue;
-
 /**
  * @group Database
  */
@@ -33,28 +31,30 @@ class LogFormatterTest extends MediaWikiLangTestCase {
 	 */
 	protected $user_comment;
 
-	public static function setUpBeforeClass() : void {
+	public static function setUpBeforeClass() {
 		parent::setUpBeforeClass();
 
 		global $wgExtensionMessagesFiles;
 		self::$oldExtMsgFiles = $wgExtensionMessagesFiles;
 		$wgExtensionMessagesFiles['LogTests'] = __DIR__ . '/LogTests.i18n.php';
+		Language::getLocalisationCache()->recache( 'en' );
 	}
 
-	public static function tearDownAfterClass() : void {
+	public static function tearDownAfterClass() {
 		global $wgExtensionMessagesFiles;
 		$wgExtensionMessagesFiles = self::$oldExtMsgFiles;
+		Language::getLocalisationCache()->recache( 'en' );
 
 		parent::tearDownAfterClass();
 	}
 
-	protected function setUp() : void {
+	protected function setUp() {
 		parent::setUp();
 
 		$this->setMwGlobals( [
 			'wgLogTypes' => [ 'phpunit' ],
-			'wgLogActionsHandlers' => [ 'phpunit/test' => LogFormatter::class,
-				'phpunit/param' => LogFormatter::class ],
+			'wgLogActionsHandlers' => [ 'phpunit/test' => 'LogFormatter',
+				'phpunit/param' => 'LogFormatter' ],
 			'wgUser' => User::newFromName( 'Testuser' ),
 		] );
 
@@ -91,11 +91,10 @@ class LogFormatterTest extends MediaWikiLangTestCase {
 
 		$formatter->setShowUserToolLinks( false );
 		$paramsWithoutTools = $formatter->getMessageParametersForTesting();
+		unset( $formatter->parsedParameters );
 
-		$formatter2 = LogFormatter::newFromEntry( $entry );
-		$formatter2->setContext( $this->context );
-		$formatter2->setShowUserToolLinks( true );
-		$paramsWithTools = $formatter2->getMessageParametersForTesting();
+		$formatter->setShowUserToolLinks( true );
+		$paramsWithTools = $formatter->getMessageParametersForTesting();
 
 		$userLink = Linker::userLink(
 			$this->user->getId(),
@@ -105,8 +104,7 @@ class LogFormatterTest extends MediaWikiLangTestCase {
 		$userTools = Linker::userToolLinksRedContribs(
 			$this->user->getId(),
 			$this->user->getName(),
-			$this->user->getEditCount(),
-			false
+			$this->user->getEditCount()
 		);
 
 		$titleLink = Linker::link( $this->title, null, [], [] );
@@ -218,23 +216,6 @@ class LogFormatterTest extends MediaWikiLangTestCase {
 	 * @covers LogFormatter::newFromEntry
 	 * @covers LogFormatter::getActionText
 	 */
-	public function testLogParamsTypeUserLink_empty() {
-		$params = [ '4:user-link:userLink' => ':' ];
-
-		$entry = $this->newLogEntry( 'param', $params );
-		$formatter = LogFormatter::newFromEntry( $entry );
-
-		$this->context->setLanguage( 'qqx' );
-		$formatter->setContext( $this->context );
-
-		$logParam = $formatter->getActionText();
-		$this->assertStringContainsString( '(empty-username)', $logParam );
-	}
-
-	/**
-	 * @covers LogFormatter::newFromEntry
-	 * @covers LogFormatter::getActionText
-	 */
 	public function testLogParamsTypeTitleLink() {
 		$params = [ '4:title-link:titleLink' => $this->title->getText() ];
 		$expected = Linker::link( $this->title, null, [], [] );
@@ -263,20 +244,6 @@ class LogFormatterTest extends MediaWikiLangTestCase {
 		$logParam = $formatter->getActionText();
 
 		$this->assertEquals( $expected, $logParam );
-	}
-
-	/**
-	 * @covers LogFormatter::getPerformerElement
-	 */
-	public function testGetPerformerElement() {
-		$entry = $this->newLogEntry( 'param', [] );
-		$entry->setPerformer( new UserIdentityValue( 1328435, 'Test', 0 ) );
-
-		$formatter = LogFormatter::newFromEntry( $entry );
-		$formatter->setContext( $this->context );
-
-		$element = $formatter->getPerformerElement();
-		$this->assertStringContainsString( 'User:Test', $element );
 	}
 
 	/**
@@ -340,10 +307,6 @@ class LogFormatterTest extends MediaWikiLangTestCase {
 			[ '4:title-link:key', 'project:foo', [
 				'key_ns' => NS_PROJECT,
 				'key_title' => Title::newFromText( 'project:foo' )->getFullText(),
-			] ],
-			[ '4:title-link:key', '<invalid>', [
-				'key_ns' => NS_SPECIAL,
-				'key_title' => SpecialPage::getTitleFor( 'Badtitle', '<invalid>' )->getFullText(),
 			] ],
 			[ '4:user:key', 'foo', [ 'key' => 'Foo' ] ],
 			[ '4:user-link:key', 'foo', [ 'key' => 'Foo' ] ],

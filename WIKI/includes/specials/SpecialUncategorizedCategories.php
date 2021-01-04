@@ -26,7 +26,7 @@
  *
  * @ingroup SpecialPage
  */
-class SpecialUncategorizedCategories extends SpecialUncategorizedPages {
+class UncategorizedCategoriesPage extends UncategorizedPagesPage {
 	/**
 	 * Holds a list of categories, which shouldn't be listed on this special page,
 	 * even if it is uncategorized.
@@ -34,7 +34,7 @@ class SpecialUncategorizedCategories extends SpecialUncategorizedPages {
 	 */
 	private $exceptionList = null;
 
-	public function __construct( $name = 'Uncategorizedcategories' ) {
+	function __construct( $name = 'Uncategorizedcategories' ) {
 		parent::__construct( $name );
 		$this->requestedNamespace = NS_CATEGORY;
 	}
@@ -47,7 +47,6 @@ class SpecialUncategorizedCategories extends SpecialUncategorizedPages {
 	 */
 	private function getExceptionList() {
 		if ( $this->exceptionList === null ) {
-			$this->exceptionList = [];
 			$exList = $this->msg( 'uncategorized-categories-exceptionlist' )
 				->inContentLanguage()->plain();
 			$proposedTitles = explode( "\n", $exList );
@@ -61,7 +60,7 @@ class SpecialUncategorizedCategories extends SpecialUncategorizedPages {
 					$title = Title::makeTitleSafe( NS_CATEGORY, $titleStr );
 				}
 				if ( $title ) {
-					$this->exceptionList[] = $title->getDBkey();
+					$this->exceptionList[] = $title->getDBKey();
 				}
 			}
 		}
@@ -85,7 +84,7 @@ class SpecialUncategorizedCategories extends SpecialUncategorizedPages {
 	 * @param object $result The query result
 	 * @return string The category link
 	 */
-	public function formatResult( $skin, $result ) {
+	function formatResult( $skin, $result ) {
 		$title = Title::makeTitle( NS_CATEGORY, $result->title );
 		$text = $title->getText();
 

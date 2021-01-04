@@ -1,5 +1,9 @@
 <?php
 /**
+ *
+ *
+ * Created on Sep 27, 2008
+ *
  * Copyright © 2008 Roan Kattouw "<Firstname>.<Lastname>@gmail.com"
  *
  * This program is free software; you can redistribute it and/or modify
@@ -19,8 +23,6 @@
  *
  * @file
  */
-
-use MediaWiki\MediaWikiServices;
 
 /**
  * A query module to list duplicates of the given file(s)
@@ -46,7 +48,7 @@ class ApiQueryDuplicateFiles extends ApiQueryGeneratorBase {
 	}
 
 	/**
-	 * @param ApiPageSet|null $resultPageSet
+	 * @param ApiPageSet $resultPageSet
 	 */
 	private function run( $resultPageSet = null ) {
 		$params = $this->extractRequestParams();
@@ -77,11 +79,10 @@ class ApiQueryDuplicateFiles extends ApiQueryGeneratorBase {
 		}
 
 		$filesToFind = array_keys( $images );
-		$repoGroup = MediaWikiServices::getInstance()->getRepoGroup();
 		if ( $params['localonly'] ) {
-			$files = $repoGroup->getLocalRepo()->findFiles( $filesToFind );
+			$files = RepoGroup::singleton()->getLocalRepo()->findFiles( $filesToFind );
 		} else {
-			$files = $repoGroup->findFiles( $filesToFind );
+			$files = RepoGroup::singleton()->findFiles( $filesToFind );
 		}
 
 		$fit = true;
@@ -98,9 +99,9 @@ class ApiQueryDuplicateFiles extends ApiQueryGeneratorBase {
 		// [ hash => [ dup1, dup2 ], hash1 => ... ]
 		$filesToFindBySha1s = array_unique( array_values( $sha1s ) );
 		if ( $params['localonly'] ) {
-			$filesBySha1s = $repoGroup->getLocalRepo()->findBySha1s( $filesToFindBySha1s );
+			$filesBySha1s = RepoGroup::singleton()->getLocalRepo()->findBySha1s( $filesToFindBySha1s );
 		} else {
-			$filesBySha1s = $repoGroup->findBySha1s( $filesToFindBySha1s );
+			$filesBySha1s = RepoGroup::singleton()->findBySha1s( $filesToFindBySha1s );
 		}
 
 		// iterate over $images to handle continue param correct
@@ -130,7 +131,7 @@ class ApiQueryDuplicateFiles extends ApiQueryGeneratorBase {
 					$this->setContinueEnumParameter( 'continue', $image . '|' . $dupName );
 					break;
 				}
-				if ( $resultPageSet !== null ) {
+				if ( !is_null( $resultPageSet ) ) {
 					$titles[] = $dupFile->getTitle();
 				} else {
 					$r = [
@@ -150,7 +151,7 @@ class ApiQueryDuplicateFiles extends ApiQueryGeneratorBase {
 				break;
 			}
 		}
-		if ( $resultPageSet !== null ) {
+		if ( !is_null( $resultPageSet ) ) {
 			$resultPageSet->populateFromTitles( $titles );
 		}
 	}

@@ -2,7 +2,6 @@
 	"@metadata": {
 		"authors": [
 			"Farras",
-			"Gombang",
 			"IvanLanin",
 			"Meursault2004"
 		]
@@ -12,7 +11,5 @@
 	"spam-blacklisted-email": "Alamat surel yang masuk daftar hitam",
 	"spam-blacklisted-email-signup": "Alamat surel yang dimasukkan saat ini sedang tidak boleh digunakan.",
 	"spam-invalid-lines": "{{PLURAL:$1|Baris|Baris-baris}} daftar hitam spam berikut adalah {{PLURAL:$1|ekspresi|ekspresi}} regular yang tak valid dan {{PLURAL:$1|perlu|perlu}} dikoreksi sebelum disimpan:",
-	"spam-blacklist-desc": "Perkakas anti-spam berbasis regex: [[MediaWiki:Spam-blacklist]] dan [[MediaWiki:Spam-whitelist]]",
-	"log-name-spamblacklist": "Catatan daftar hitam spam",
-	"right-spamblacklistlog": "Lihat catatan daftar hitam spam"
+	"spam-blacklist-desc": "Perkakas anti-spam berbasis regex: [[MediaWiki:Spam-blacklist]] dan [[MediaWiki:Spam-whitelist]]"
 }

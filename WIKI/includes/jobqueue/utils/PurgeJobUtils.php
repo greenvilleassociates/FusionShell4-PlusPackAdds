@@ -20,8 +20,8 @@
  *
  * @file
  */
-use MediaWiki\MediaWikiServices;
 use Wikimedia\Rdbms\IDatabase;
+use MediaWiki\MediaWikiServices;
 
 class PurgeJobUtils {
 	/**
@@ -30,18 +30,15 @@ class PurgeJobUtils {
 	 *
 	 * @param IDatabase $dbw
 	 * @param int $namespace Namespace number
-	 * @param string[] $dbkeys
+	 * @param array $dbkeys
 	 */
 	public static function invalidatePages( IDatabase $dbw, $namespace, array $dbkeys ) {
 		if ( $dbkeys === [] ) {
 			return;
 		}
-		$fname = __METHOD__;
 
-		DeferredUpdates::addUpdate( new AutoCommitUpdate(
-			$dbw,
-			__METHOD__,
-			function () use ( $dbw, $namespace, $dbkeys, $fname ) {
+		$dbw->onTransactionIdle(
+			function () use ( $dbw, $namespace, $dbkeys ) {
 				$services = MediaWikiServices::getInstance();
 				$lbFactory = $services->getDBLoadBalancerFactory();
 				// Determine which pages need to be updated.
@@ -56,7 +53,7 @@ class PurgeJobUtils {
 						'page_title' => $dbkeys,
 						'page_touched < ' . $dbw->addQuotes( $now )
 					],
-					$fname
+					__METHOD__
 				);
 
 				if ( !$ids ) {
@@ -64,9 +61,8 @@ class PurgeJobUtils {
 				}
 
 				$batchSize = $services->getMainConfig()->get( 'UpdateRowsPerQuery' );
-				$ticket = $lbFactory->getEmptyTransactionTicket( $fname );
-				$idBatches = array_chunk( $ids, $batchSize );
-				foreach ( $idBatches as $idBatch ) {
+				$ticket = $lbFactory->getEmptyTransactionTicket( __METHOD__ );
+				foreach ( array_chunk( $ids, $batchSize ) as $idBatch ) {
 					$dbw->update(
 						'page',
 						[ 'page_touched' => $now ],
@@ -74,13 +70,12 @@ class PurgeJobUtils {
 							'page_id' => $idBatch,
 							'page_touched < ' . $dbw->addQuotes( $now ) // handle races
 						],
-						$fname
+						__METHOD__
 					);
-					if ( count( $idBatches ) > 1 ) {
-						$lbFactory->commitAndWaitForReplication( $fname, $ticket );
-					}
+					$lbFactory->commitAndWaitForReplication( __METHOD__, $ticket );
 				}
-			}
-		) );
+			},
+			__METHOD__
+		);
 	}
 }

@@ -36,16 +36,13 @@ class CopyFileOp extends FileOp {
 
 	protected function doPrecheck( array &$predicates ) {
 		$status = StatusValue::newGood();
-
-		// Check source file existence
-		$srcExists = $this->fileExists( $this->params['src'], $predicates );
-		if ( $srcExists === false ) {
+		// Check if the source file exists
+		if ( !$this->fileExists( $this->params['src'], $predicates ) ) {
 			if ( $this->getParam( 'ignoreMissingSource' ) ) {
-				$this->cancelled = true; // no-op
+				$this->doOperation = false; // no-op
 				// Update file existence predicates (cache 404s)
-				$predicates[self::ASSUMED_EXISTS][$this->params['src']] = false;
-				$predicates[self::ASSUMED_SIZE][$this->params['src']] = false;
-				$predicates[self::ASSUMED_SHA1][$this->params['src']] = false;
+				$predicates['exists'][$this->params['src']] = false;
+				$predicates['sha1'][$this->params['src']] = false;
 
 				return $status; // nothing to do
 			} else {
@@ -53,20 +50,20 @@ class CopyFileOp extends FileOp {
 
 				return $status;
 			}
-		} elseif ( $srcExists === FileBackend::EXISTENCE_ERROR ) {
-			$status->fatal( 'backend-fail-stat', $this->params['src'] );
+			// Check if a file can be placed/changed at the destination
+		} elseif ( !$this->backend->isPathUsableInternal( $this->params['dst'] ) ) {
+			$status->fatal( 'backend-fail-usable', $this->params['dst'] );
+			$status->fatal( 'backend-fail-copy', $this->params['src'], $this->params['dst'] );
 
 			return $status;
 		}
 		// Check if destination file exists
 		$status->merge( $this->precheckDestExistence( $predicates ) );
 		$this->params['dstExists'] = $this->destExists; // see FileBackendStore::setFileCache()
-
-		// Update file existence predicates if the operation is expected to be allowed to run
 		if ( $status->isOK() ) {
-			$predicates[self::ASSUMED_EXISTS][$this->params['dst']] = true;
-			$predicates[self::ASSUMED_SIZE][$this->params['dst']] = $this->sourceSize;
-			$predicates[self::ASSUMED_SHA1][$this->params['dst']] = $this->sourceSha1;
+			// Update file existence predicates
+			$predicates['exists'][$this->params['dst']] = true;
+			$predicates['sha1'][$this->params['dst']] = $this->sourceSha1;
 		}
 
 		return $status; // safe to call attempt()

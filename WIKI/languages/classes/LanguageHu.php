@@ -33,7 +33,7 @@ class LanguageHu extends Language {
 	 * @param string $case
 	 * @return string
 	 */
-	public function convertGrammar( $word, $case ) {
+	function convertGrammar( $word, $case ) {
 		global $wgGrammarForms;
 		if ( isset( $wgGrammarForms[$this->getCode()][$case][$word] ) ) {
 			return $wgGrammarForms[$this->getCode()][$case][$word];

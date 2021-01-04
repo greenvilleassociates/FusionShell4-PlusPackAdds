@@ -1,5 +1,7 @@
 <?php
 /**
+ * Base class for profiling.
+ *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
  * the Free Software Foundation; either version 2 of the License, or
@@ -16,37 +18,34 @@
  * http://www.gnu.org/copyleft/gpl.html
  *
  * @file
- */
-use Wikimedia\Rdbms\TransactionProfiler;
-use Wikimedia\ScopedCallback;
-
-/**
+ * @ingroup Profiler
  * @defgroup Profiler Profiler
  */
+use Wikimedia\ScopedCallback;
+use Wikimedia\Rdbms\TransactionProfiler;
 
 /**
- * Profiler base class that defines the interface and some shared
- * functionality.
+ * Profiler base class that defines the interface and some trivial
+ * functionality
  *
  * @ingroup Profiler
  */
 abstract class Profiler {
 	/** @var string|bool Profiler ID for bucketing data */
 	protected $profileID = false;
+	/** @var bool Whether MediaWiki is in a SkinTemplate output context */
+	protected $templated = false;
 	/** @var array All of the params passed from $wgProfiler */
 	protected $params = [];
 	/** @var IContextSource Current request context */
 	protected $context = null;
 	/** @var TransactionProfiler */
 	protected $trxProfiler;
-	/** @var bool */
-	private $allowOutput = false;
-
 	/** @var Profiler */
 	private static $instance = null;
 
 	/**
-	 * @param array $params See $wgProfiler.
+	 * @param array $params
 	 */
 	public function __construct( array $params ) {
 		if ( isset( $params['profileID'] ) ) {
@@ -62,19 +61,21 @@ abstract class Profiler {
 	 */
 	final public static function instance() {
 		if ( self::$instance === null ) {
-			global $wgProfiler;
+			global $wgProfiler, $wgProfileLimit;
 
-			$params = $wgProfiler + [
-				'class'     => ProfilerStub::class,
+			$params = [
+				'class'     => 'ProfilerStub',
 				'sampling'  => 1,
-				'threshold' => 0.0,
+				'threshold' => $wgProfileLimit,
 				'output'    => [],
 			];
+			if ( is_array( $wgProfiler ) ) {
+				$params = array_merge( $params, $wgProfiler );
+			}
 
 			$inSample = mt_rand( 0, $params['sampling'] - 1 ) === 0;
-			// wfIsCLI() is not available yet
-			if ( PHP_SAPI === 'cli' || PHP_SAPI === 'phpdbg' || !$inSample ) {
-				$params['class'] = ProfilerStub::class;
+			if ( PHP_SAPI === 'cli' || !$inSample ) {
+				$params['class'] = 'ProfilerStub';
 			}
 
 			if ( !is_array( $params['output'] ) ) {
@@ -113,7 +114,7 @@ abstract class Profiler {
 	 */
 	public function getProfileID() {
 		if ( $this->profileID === false ) {
-			return WikiMap::getCurrentWikiDbDomain()->getId();
+			return wfWikiID();
 		} else {
 			return $this->profileID;
 		}
@@ -140,17 +141,16 @@ abstract class Profiler {
 			return $this->context;
 		} else {
 			wfDebug( __METHOD__ . " called and \$context is null. " .
-				"Return RequestContext::getMain(); for sanity" );
+				"Return RequestContext::getMain(); for sanity\n" );
 			return RequestContext::getMain();
 		}
 	}
 
+	// Kept BC for now, remove when possible
 	public function profileIn( $functionname ) {
-		wfDeprecated( __METHOD__, '1.33' );
 	}
 
 	public function profileOut( $functionname ) {
-		wfDeprecated( __METHOD__, '1.33' );
 	}
 
 	/**
@@ -164,7 +164,7 @@ abstract class Profiler {
 	abstract public function scopedProfileIn( $section );
 
 	/**
-	 * @param SectionProfileCallback|null &$section
+	 * @param SectionProfileCallback &$section
 	 */
 	public function scopedProfileOut( SectionProfileCallback &$section = null ) {
 		$section = null;
@@ -187,7 +187,7 @@ abstract class Profiler {
 	 * Get all usable outputs.
 	 *
 	 * @throws MWException
-	 * @return ProfilerOutput[]
+	 * @return array Array of ProfilerOutput instances.
 	 * @since 1.25
 	 */
 	private function getOutputs() {
@@ -211,7 +211,7 @@ abstract class Profiler {
 	}
 
 	/**
-	 * Log the data to the backing store for all ProfilerOutput instances that have one
+	 * Log the data to some store or even the page output
 	 *
 	 * @since 1.25
 	 */
@@ -224,62 +224,42 @@ abstract class Profiler {
 			return;
 		}
 
-		$outputs = [];
-		foreach ( $this->getOutputs() as $output ) {
-			if ( !$output->logsToOutput() ) {
-				$outputs[] = $output;
-			}
+		$outputs = $this->getOutputs();
+		if ( !$outputs ) {
+			return;
 		}
 
-		if ( $outputs ) {
-			$stats = $this->getFunctionStats();
-			foreach ( $outputs as $output ) {
-				$output->log( $stats );
-			}
+		$stats = $this->getFunctionStats();
+		foreach ( $outputs as $output ) {
+			$output->log( $stats );
 		}
 	}
 
 	/**
-	 * Log the data to the script/request output for all ProfilerOutput instances that do so
+	 * Output current data to the page output if configured to do so
 	 *
 	 * @throws MWException
 	 * @since 1.26
 	 */
 	public function logDataPageOutputOnly() {
-		if ( !$this->allowOutput ) {
-			return;
-		}
-
-		$outputs = [];
 		foreach ( $this->getOutputs() as $output ) {
-			if ( $output->logsToOutput() ) {
-				$outputs[] = $output;
-			}
-		}
-
-		if ( $outputs ) {
-			$stats = $this->getFunctionStats();
-			foreach ( $outputs as $output ) {
+			if ( $output instanceof ProfilerOutputText ) {
+				$stats = $this->getFunctionStats();
 				$output->log( $stats );
 			}
 		}
 	}
 
 	/**
-	 * Get the Content-Type for deciding how to format appended profile output.
-	 *
-	 * Disabled by default. Enable via setAllowOutput().
-	 *
-	 * @see ProfilerOutputText
+	 * Get the content type sent out to the client.
+	 * Used for profilers that output instead of store data.
+	 * @return string
 	 * @since 1.25
-	 * @return string|null Returns null if disabled or no Content-Type found.
 	 */
 	public function getContentType() {
-		if ( $this->allowOutput ) {
-			foreach ( headers_list() as $header ) {
-				if ( preg_match( '#^content-type: (\w+/\w+);?#i', $header, $m ) ) {
-					return $m[1];
-				}
+		foreach ( headers_list() as $header ) {
+			if ( preg_match( '#^content-type: (\w+/\w+);?#i', $header, $m ) ) {
+				return $m[1];
 			}
 		}
 		return null;
@@ -288,42 +268,19 @@ abstract class Profiler {
 	/**
 	 * Mark this call as templated or not
 	 *
-	 * @deprecated since 1.34 Use setAllowOutput() instead.
 	 * @param bool $t
 	 */
 	public function setTemplated( $t ) {
-		wfDeprecated( __METHOD__, '1.34' );
-		$this->allowOutput = ( $t === true );
+		$this->templated = $t;
 	}
 
 	/**
 	 * Was this call as templated or not
 	 *
-	 * @deprecated since 1.34 Use getAllowOutput() instead.
 	 * @return bool
 	 */
 	public function getTemplated() {
-		wfDeprecated( __METHOD__, '1.34' );
-		return $this->getAllowOutput();
-	}
-
-	/**
-	 * Enable appending profiles to standard output.
-	 *
-	 * @since 1.34
-	 */
-	public function setAllowOutput() {
-		$this->allowOutput = true;
-	}
-
-	/**
-	 * Whether appending profiles is allowed.
-	 *
-	 * @since 1.34
-	 * @return bool
-	 */
-	public function getAllowOutput() {
-		return $this->allowOutput;
+		return $this->templated;
 	}
 
 	/**
@@ -339,7 +296,7 @@ abstract class Profiler {
 	 * entries for the cyclic invocation should be be demarked with "@".
 	 * This makes filtering them out easier and follows the xhprof style.
 	 *
-	 * @return array[] List of method entries arrays, each having:
+	 * @return array List of method entries arrays, each having:
 	 *   - name     : method name
 	 *   - calls    : the number of invoking calls
 	 *   - real     : real time elapsed (ms)

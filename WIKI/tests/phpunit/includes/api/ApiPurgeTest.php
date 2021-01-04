@@ -9,6 +9,11 @@
  */
 class ApiPurgeTest extends ApiTestCase {
 
+	protected function setUp() {
+		parent::setUp();
+		$this->doLogin();
+	}
+
 	/**
 	 * @group Broken
 	 */
@@ -26,7 +31,9 @@ class ApiPurgeTest extends ApiTestCase {
 		$this->assertArrayHasKey( 'purge', $data[0],
 			"Must receive a 'purge' result from API" );
 
-		$this->assertCount( 3, $data[0]['purge'],
+		$this->assertEquals(
+			3,
+			count( $data[0]['purge'] ),
 			"Purge request for three articles should give back three results received: "
 				. var_export( $data[0]['purge'], true ) );
 

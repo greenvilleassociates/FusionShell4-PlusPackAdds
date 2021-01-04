@@ -5,9 +5,7 @@
  * @file
  */
 
-/** Tests for македонски/Macedonian
- * @group Language
- */
+/** Tests for македонски/Macedonian */
 class LanguageMkTest extends LanguageClassesTestCase {
 	/**
 	 * @dataProvider providePlural

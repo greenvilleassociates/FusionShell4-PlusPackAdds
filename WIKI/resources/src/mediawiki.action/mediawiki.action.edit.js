@@ -1,7 +1,7 @@
 /*!
  * Scripts for action=edit at domready
  */
-( function () {
+( function ( mw, $ ) {
 	'use strict';
 
 	/**
@@ -17,26 +17,15 @@
 	 */
 
 	$( function () {
-		var wpSummary, editBox, scrollTop, $editForm,
-			summaryCodePointLimit = mw.config.get( 'wgCommentCodePointLimit' ),
-			summaryByteLimit = mw.config.get( 'wgCommentByteLimit' ),
-			$wpSummary = $( '#wpSummaryWidget' );
+		var editBox, scrollTop, $editForm,
+			// TODO T6714: Once this can be adjusted, read this from config.
+			summaryByteLimit = 255,
+			wpSummary = OO.ui.infuse( $( '#wpSummaryWidget' ) );
 
-		// The summary field might not be there, e.g. when extensions replace it
-		if ( $wpSummary.length ) {
-			wpSummary = OO.ui.infuse( $wpSummary );
-
-			// Show a byte-counter to users with how many bytes are left for their edit summary.
-			// TODO: This looks a bit weird, as there is no unit in the UI, just numbers; showing
-			// 'bytes' confused users in testing, and showing 'chars' would be a lie. See T42035.
-			// (Showing 'chars' is still confusing with the code point limit, since it's not obvious
-			// that e.g. combining diacritics or zero-width punctuation count as characters.)
-			if ( summaryCodePointLimit ) {
-				mw.widgets.visibleCodePointLimit( wpSummary, summaryCodePointLimit );
-			} else if ( summaryByteLimit ) {
-				mw.widgets.visibleByteLimit( wpSummary, summaryByteLimit );
-			}
-		}
+		// Show a byte-counter to users with how many bytes are left for their edit summary.
+		// TODO: This looks a bit weird, as there is no unit in the UI, just numbers; showing
+		// 'bytes' confused users in testing, and showing 'chars' would be a lie. See T42035.
+		mw.widgets.visibleByteLimit( wpSummary, summaryByteLimit );
 
 		// Restore the edit box scroll state following a preview operation,
 		// and set up a form submission handler to remember this state.
@@ -48,9 +37,9 @@
 			if ( scrollTop.value ) {
 				editBox.scrollTop = scrollTop.value;
 			}
-			$editForm.on( 'submit', function () {
+			$editForm.submit( function () {
 				scrollTop.value = editBox.scrollTop;
 			} );
 		}
 	} );
-}() );
+}( mediaWiki, jQuery ) );

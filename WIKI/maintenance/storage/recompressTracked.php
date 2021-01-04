@@ -24,9 +24,6 @@
 
 use MediaWiki\Logger\LegacyLogger;
 use MediaWiki\MediaWikiServices;
-use MediaWiki\Shell\Shell;
-use MediaWiki\Storage\SqlBlobStore;
-use Wikimedia\Rdbms\IMaintainableDatabase;
 
 $optionsWithArgs = RecompressTracked::getOptionsWithArgs();
 require __DIR__ . '/../commandLine.inc';
@@ -64,20 +61,17 @@ class RecompressTracked {
 	public $numProcs = 1;
 	public $numBatches = 0;
 	public $pageBlobClass, $orphanBlobClass;
-	public $childPipes, $childProcs, $prevChildId;
+	public $replicaPipes, $replicaProcs, $prevReplicaId;
 	public $copyOnly = false;
 	public $isChild = false;
-	public $childId = false;
+	public $replicaId = false;
 	public $noCount = false;
 	public $debugLog, $infoLog, $criticalLog;
-	/** @var ExternalStoreDB */
 	public $store;
-	/** @var SqlBlobStore */
-	private $blobStore;
 
 	private static $optionsWithArgs = [
 		'procs',
-		'child-id',
+		'replica-id',
 		'debug-log',
 		'info-log',
 		'critical-log'
@@ -88,17 +82,17 @@ class RecompressTracked {
 		'procs' => 'numProcs',
 		'copy-only' => 'copyOnly',
 		'child' => 'isChild',
-		'child-id' => 'childId',
+		'replica-id' => 'replicaId',
 		'debug-log' => 'debugLog',
 		'info-log' => 'infoLog',
 		'critical-log' => 'criticalLog',
 	];
 
-	public static function getOptionsWithArgs() {
+	static function getOptionsWithArgs() {
 		return self::$optionsWithArgs;
 	}
 
-	public static function newFromCommandLine( $args, $options ) {
+	static function newFromCommandLine( $args, $options ) {
 		$jobOptions = [ 'destClusters' => $args ];
 		foreach ( self::$cmdLineOptionMap as $cmdOption => $classOption ) {
 			if ( isset( $options[$cmdOption] ) ) {
@@ -109,53 +103,48 @@ class RecompressTracked {
 		return new self( $jobOptions );
 	}
 
-	public function __construct( $options ) {
+	function __construct( $options ) {
 		foreach ( $options as $name => $value ) {
 			$this->$name = $value;
 		}
-		$esFactory = MediaWikiServices::getInstance()->getExternalStoreFactory();
-		$this->store = $esFactory->getStore( 'DB' );
+		$this->store = new ExternalStoreDB;
 		if ( !$this->isChild ) {
 			$GLOBALS['wgDebugLogPrefix'] = "RCT M: ";
-		} elseif ( $this->childId !== false ) {
-			$GLOBALS['wgDebugLogPrefix'] = "RCT {$this->childId}: ";
+		} elseif ( $this->replicaId !== false ) {
+			$GLOBALS['wgDebugLogPrefix'] = "RCT {$this->replicaId}: ";
 		}
 		$this->pageBlobClass = function_exists( 'xdiff_string_bdiff' ) ?
-			DiffHistoryBlob::class : ConcatenatedGzipHistoryBlob::class;
-		$this->orphanBlobClass = ConcatenatedGzipHistoryBlob::class;
-
-		$this->blobStore = MediaWikiServices::getInstance()
-			->getBlobStoreFactory()
-			->newSqlBlobStore();
+			'DiffHistoryBlob' : 'ConcatenatedGzipHistoryBlob';
+		$this->orphanBlobClass = 'ConcatenatedGzipHistoryBlob';
 	}
 
-	public function debug( $msg ) {
-		wfDebug( "$msg" );
+	function debug( $msg ) {
+		wfDebug( "$msg\n" );
 		if ( $this->debugLog ) {
 			$this->logToFile( $msg, $this->debugLog );
 		}
 	}
 
-	public function info( $msg ) {
+	function info( $msg ) {
 		echo "$msg\n";
 		if ( $this->infoLog ) {
 			$this->logToFile( $msg, $this->infoLog );
 		}
 	}
 
-	public function critical( $msg ) {
+	function critical( $msg ) {
 		echo "$msg\n";
 		if ( $this->criticalLog ) {
 			$this->logToFile( $msg, $this->criticalLog );
 		}
 	}
 
-	private function logToFile( $msg, $file ) {
+	function logToFile( $msg, $file ) {
 		$header = '[' . date( 'd\TH:i:s' ) . '] ' . wfHostname() . ' ' . posix_getpid();
-		if ( $this->childId !== false ) {
-			$header .= "({$this->childId})";
+		if ( $this->replicaId !== false ) {
+			$header .= "({$this->replicaId})";
 		}
-		$header .= ' ' . WikiMap::getCurrentWikiDbDomain()->getId();
+		$header .= ' ' . wfWikiID();
 		LegacyLogger::emit( sprintf( "%-50s %s\n", $header, $msg ), $file );
 	}
 
@@ -164,7 +153,7 @@ class RecompressTracked {
 	 * This allows us to use the replica DB for things that were committed in a
 	 * previous part of this batch process.
 	 */
-	private function syncDBs() {
+	function syncDBs() {
 		$dbw = wfGetDB( DB_MASTER );
 		$dbr = wfGetDB( DB_REPLICA );
 		$pos = $dbw->getMasterPos();
@@ -174,7 +163,7 @@ class RecompressTracked {
 	/**
 	 * Execute parent or child depending on the isChild option
 	 */
-	public function execute() {
+	function execute() {
 		if ( $this->isChild ) {
 			$this->executeChild();
 		} else {
@@ -185,25 +174,25 @@ class RecompressTracked {
 	/**
 	 * Execute the parent process
 	 */
-	public function executeParent() {
+	function executeParent() {
 		if ( !$this->checkTrackingTable() ) {
 			return;
 		}
 
 		$this->syncDBs();
-		$this->startChildProcs();
+		$this->startReplicaProcs();
 		$this->doAllPages();
 		$this->doAllOrphans();
-		$this->killChildProcs();
+		$this->killReplicaProcs();
 	}
 
 	/**
 	 * Make sure the tracking table exists and isn't empty
 	 * @return bool
 	 */
-	private function checkTrackingTable() {
+	function checkTrackingTable() {
 		$dbr = wfGetDB( DB_REPLICA );
-		if ( !$dbr->tableExists( 'blob_tracking', __METHOD__ ) ) {
+		if ( !$dbr->tableExists( 'blob_tracking' ) ) {
 			$this->critical( "Error: blob_tracking table does not exist" );
 
 			return false;
@@ -224,24 +213,22 @@ class RecompressTracked {
 	 * This necessary because text recompression is slow: loading, compressing and
 	 * writing are all slow.
 	 */
-	private function startChildProcs() {
-		$wiki = WikiMap::getCurrentWikiId();
-
-		$cmd = 'php ' . Shell::escape( __FILE__ );
+	function startReplicaProcs() {
+		$cmd = 'php ' . wfEscapeShellArg( __FILE__ );
 		foreach ( self::$cmdLineOptionMap as $cmdOption => $classOption ) {
-			if ( $cmdOption == 'child-id' ) {
+			if ( $cmdOption == 'replica-id' ) {
 				continue;
 			} elseif ( in_array( $cmdOption, self::$optionsWithArgs ) && isset( $this->$classOption ) ) {
-				$cmd .= " --$cmdOption " . Shell::escape( $this->$classOption );
+				$cmd .= " --$cmdOption " . wfEscapeShellArg( $this->$classOption );
 			} elseif ( $this->$classOption ) {
 				$cmd .= " --$cmdOption";
 			}
 		}
 		$cmd .= ' --child' .
-			' --wiki ' . Shell::escape( $wiki ) .
-			' ' . Shell::escape( ...$this->destClusters );
+			' --wiki ' . wfEscapeShellArg( wfWikiID() ) .
+			' ' . call_user_func_array( 'wfEscapeShellArg', $this->destClusters );
 
-		$this->childPipes = $this->childProcs = [];
+		$this->replicaPipes = $this->replicaProcs = [];
 		for ( $i = 0; $i < $this->numProcs; $i++ ) {
 			$pipes = [];
 			$spec = [
@@ -249,29 +236,29 @@ class RecompressTracked {
 				[ 'file', 'php://stdout', 'w' ],
 				[ 'file', 'php://stderr', 'w' ]
 			];
-			Wikimedia\suppressWarnings();
-			$proc = proc_open( "$cmd --child-id $i", $spec, $pipes );
-			Wikimedia\restoreWarnings();
+			MediaWiki\suppressWarnings();
+			$proc = proc_open( "$cmd --replica-id $i", $spec, $pipes );
+			MediaWiki\restoreWarnings();
 			if ( !$proc ) {
-				$this->critical( "Error opening child process: $cmd" );
+				$this->critical( "Error opening replica DB process: $cmd" );
 				exit( 1 );
 			}
-			$this->childProcs[$i] = $proc;
-			$this->childPipes[$i] = $pipes[0];
+			$this->replicaProcs[$i] = $proc;
+			$this->replicaPipes[$i] = $pipes[0];
 		}
-		$this->prevChildId = -1;
+		$this->prevReplicaId = -1;
 	}
 
 	/**
 	 * Gracefully terminate the child processes
 	 */
-	private function killChildProcs() {
-		$this->info( "Waiting for child processes to finish..." );
+	function killReplicaProcs() {
+		$this->info( "Waiting for replica DB processes to finish..." );
 		for ( $i = 0; $i < $this->numProcs; $i++ ) {
-			$this->dispatchToChild( $i, 'quit' );
+			$this->dispatchToReplica( $i, 'quit' );
 		}
 		for ( $i = 0; $i < $this->numProcs; $i++ ) {
-			$status = proc_close( $this->childProcs[$i] );
+			$status = proc_close( $this->replicaProcs[$i] );
 			if ( $status ) {
 				$this->critical( "Warning: child #$i exited with status $status" );
 			}
@@ -280,24 +267,22 @@ class RecompressTracked {
 	}
 
 	/**
-	 * Dispatch a command to the next available child process.
-	 * This may block until a child process finishes its work and becomes available.
-	 * @param array|string ...$args
+	 * Dispatch a command to the next available replica DB.
+	 * This may block until a replica DB finishes its work and becomes available.
 	 */
-	private function dispatch( ...$args ) {
-		$pipes = $this->childPipes;
-		$x = [];
-		$y = [];
-		$numPipes = stream_select( $x, $pipes, $y, 3600 );
+	function dispatch( /*...*/ ) {
+		$args = func_get_args();
+		$pipes = $this->replicaPipes;
+		$numPipes = stream_select( $x = [], $pipes, $y = [], 3600 );
 		if ( !$numPipes ) {
-			$this->critical( "Error waiting to write to child process. Aborting" );
+			$this->critical( "Error waiting to write to replica DBs. Aborting" );
 			exit( 1 );
 		}
 		for ( $i = 0; $i < $this->numProcs; $i++ ) {
-			$childId = ( $i + $this->prevChildId + 1 ) % $this->numProcs;
-			if ( isset( $pipes[$childId] ) ) {
-				$this->prevChildId = $childId;
-				$this->dispatchToChild( $childId, $args );
+			$replicaId = ( $i + $this->prevReplicaId + 1 ) % $this->numProcs;
+			if ( isset( $pipes[$replicaId] ) ) {
+				$this->prevReplicaId = $replicaId;
+				$this->dispatchToReplica( $replicaId, $args );
 
 				return;
 			}
@@ -307,20 +292,20 @@ class RecompressTracked {
 	}
 
 	/**
-	 * Dispatch a command to a specified child process
-	 * @param int $childId
+	 * Dispatch a command to a specified replica DB
+	 * @param int $replicaId
 	 * @param array|string $args
 	 */
-	private function dispatchToChild( $childId, $args ) {
+	function dispatchToReplica( $replicaId, $args ) {
 		$args = (array)$args;
 		$cmd = implode( ' ', $args );
-		fwrite( $this->childPipes[$childId], "$cmd\n" );
+		fwrite( $this->replicaPipes[$replicaId], "$cmd\n" );
 	}
 
 	/**
 	 * Move all tracked pages to the new clusters
 	 */
-	private function doAllPages() {
+	function doAllPages() {
 		$dbr = wfGetDB( DB_REPLICA );
 		$i = 0;
 		$startId = 0;
@@ -377,7 +362,7 @@ class RecompressTracked {
 	 * @param int $current
 	 * @param int $end
 	 */
-	private function report( $label, $current, $end ) {
+	function report( $label, $current, $end ) {
 		$this->numBatches++;
 		if ( $current == $end || $this->numBatches >= $this->reportingInterval ) {
 			$this->numBatches = 0;
@@ -389,7 +374,7 @@ class RecompressTracked {
 	/**
 	 * Move all orphan text to the new clusters
 	 */
-	private function doAllOrphans() {
+	function doAllOrphans() {
 		$dbr = wfGetDB( DB_REPLICA );
 		$startId = 0;
 		$i = 0;
@@ -441,12 +426,12 @@ class RecompressTracked {
 				$args = array_slice( $ids, 0, $this->orphanBatchSize );
 				$ids = array_slice( $ids, $this->orphanBatchSize );
 				array_unshift( $args, 'doOrphanList' );
-				$this->dispatch( ...$args );
+				call_user_func_array( [ $this, 'dispatch' ], $args );
 			}
 			if ( count( $ids ) ) {
 				$args = $ids;
 				array_unshift( $args, 'doOrphanList' );
-				$this->dispatch( ...$args );
+				call_user_func_array( [ $this, 'dispatch' ], $args );
 			}
 
 			$this->report( 'orphans', $i, $numOrphans );
@@ -458,7 +443,7 @@ class RecompressTracked {
 	/**
 	 * Main entry point for worker processes
 	 */
-	public function executeChild() {
+	function executeChild() {
 		$this->debug( 'starting' );
 		$this->syncDBs();
 
@@ -489,7 +474,7 @@ class RecompressTracked {
 	 *
 	 * @param int $pageId
 	 */
-	private function doPage( $pageId ) {
+	function doPage( $pageId ) {
 		$title = Title::newFromID( $pageId );
 		if ( $title ) {
 			$titleText = $title->getPrefixedText();
@@ -538,7 +523,7 @@ class RecompressTracked {
 				}
 				$lastTextId = $row->bt_text_id;
 				// Load the text
-				$text = $this->blobStore->expandBlob( $row->old_text, $row->old_flags );
+				$text = Revision::getRevisionText( $row );
 				if ( $text === false ) {
 					$this->critical( "Error loading {$row->bt_rev_id}/{$row->bt_text_id}" );
 					continue;
@@ -571,7 +556,7 @@ class RecompressTracked {
 	 * @param int $textId
 	 * @param string $url
 	 */
-	public function moveTextRow( $textId, $url ) {
+	function moveTextRow( $textId, $url ) {
 		if ( $this->copyOnly ) {
 			$this->critical( "Internal error: can't call moveTextRow() in --copy-only mode" );
 			exit( 1 );
@@ -606,7 +591,7 @@ class RecompressTracked {
 	 *
 	 * @param array $conds
 	 */
-	private function finishIncompleteMoves( $conds ) {
+	function finishIncompleteMoves( $conds ) {
 		$dbr = wfGetDB( DB_REPLICA );
 		$lbFactory = MediaWikiServices::getInstance()->getDBLoadBalancerFactory();
 
@@ -643,7 +628,7 @@ class RecompressTracked {
 	 * Returns the name of the next target cluster
 	 * @return string
 	 */
-	public function getTargetCluster() {
+	function getTargetCluster() {
 		$cluster = next( $this->destClusters );
 		if ( $cluster === false ) {
 			$cluster = reset( $this->destClusters );
@@ -655,13 +640,12 @@ class RecompressTracked {
 	/**
 	 * Gets a DB master connection for the given external cluster name
 	 * @param string $cluster
-	 * @return IMaintainableDatabase
+	 * @return Database
 	 */
-	private function getExtDB( $cluster ) {
-		$lbFactory = MediaWikiServices::getInstance()->getDBLoadBalancerFactory();
-		$lb = $lbFactory->getExternalLB( $cluster );
+	function getExtDB( $cluster ) {
+		$lb = wfGetLBFactory()->getExternalLB( $cluster );
 
-		return $lb->getMaintenanceConnectionRef( DB_MASTER );
+		return $lb->getConnection( DB_MASTER );
 	}
 
 	/**
@@ -669,7 +653,7 @@ class RecompressTracked {
 	 *
 	 * @param array $textIds
 	 */
-	private function doOrphanList( $textIds ) {
+	function doOrphanList( $textIds ) {
 		// Finish incomplete moves
 		if ( !$this->copyOnly ) {
 			$this->finishIncompleteMoves( [ 'bt_text_id' => $textIds ] );
@@ -692,7 +676,7 @@ class RecompressTracked {
 		);
 
 		foreach ( $res as $row ) {
-			$text = $this->blobStore->expandBlob( $row->old_text, $row->old_flags );
+			$text = Revision::getRevisionText( $row );
 			if ( $text === false ) {
 				$this->critical( "Error: cannot load revision text for old_id={$row->old_id}" );
 				continue;
@@ -717,18 +701,16 @@ class CgzCopyTransaction {
 	/** @var RecompressTracked */
 	public $parent;
 	public $blobClass;
-	/** @var ConcatenatedGzipHistoryBlob|false */
+	/** @var ConcatenatedGzipHistoryBlob */
 	public $cgz;
 	public $referrers;
-	/** @var array */
-	private $texts;
 
 	/**
 	 * Create a transaction from a RecompressTracked object
 	 * @param RecompressTracked $parent
 	 * @param string $blobClass
 	 */
-	public function __construct( $parent, $blobClass ) {
+	function __construct( $parent, $blobClass ) {
 		$this->blobClass = $blobClass;
 		$this->cgz = false;
 		$this->texts = [];
@@ -742,7 +724,7 @@ class CgzCopyTransaction {
 	 * @param int $textId
 	 * @return bool
 	 */
-	public function addItem( $text, $textId ) {
+	function addItem( $text, $textId ) {
 		if ( !$this->cgz ) {
 			$class = $this->blobClass;
 			$this->cgz = new $class;
@@ -754,14 +736,14 @@ class CgzCopyTransaction {
 		return $this->cgz->isHappy();
 	}
 
-	public function getSize() {
+	function getSize() {
 		return count( $this->texts );
 	}
 
 	/**
 	 * Recompress text after some aberrant modification
 	 */
-	public function recompress() {
+	function recompress() {
 		$class = $this->blobClass;
 		$this->cgz = new $class;
 		$this->referrers = [];
@@ -776,7 +758,7 @@ class CgzCopyTransaction {
 	 * Does nothing if no text items have been added.
 	 * May skip the move if --copy-only is set.
 	 */
-	public function commit() {
+	function commit() {
 		$originalCount = count( $this->texts );
 		if ( !$originalCount ) {
 			return;

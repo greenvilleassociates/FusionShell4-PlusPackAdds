@@ -1,5 +1,7 @@
 <?php
 /**
+ * HTML cache invalidation of all pages linking to a given title.
+ *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
  * the Free Software Foundation; either version 2 of the License, or
@@ -16,12 +18,14 @@
  * http://www.gnu.org/copyleft/gpl.html
  *
  * @file
+ * @ingroup JobQueue
+ * @ingroup Cache
  */
 
 use MediaWiki\MediaWikiServices;
 
 /**
- * Job to purge the HTML/file cache for all pages that link to or use another page or file
+ * Job to purge the cache for all pages that link to or use another page or file
  *
  * This job comes in a few variants:
  *   - a) Recursive jobs to purge caches for backlink pages for a given title.
@@ -30,13 +34,9 @@ use MediaWiki\MediaWikiServices;
  *        These jobs have (pages:(<page ID>:(<namespace>,<title>),...) set.
  *
  * @ingroup JobQueue
- * @ingroup Cache
  */
 class HTMLCacheUpdateJob extends Job {
-	/** @var int Lag safety margin when comparing root job time age to CDN max-age */
-	private const NORMAL_MAX_LAG = 10;
-
-	public function __construct( Title $title, array $params ) {
+	function __construct( Title $title, array $params ) {
 		parent::__construct( 'htmlCacheUpdate', $title, $params );
 		// Avoid the overhead of de-duplication when it would be pointless.
 		// Note that these jobs always set page_touched to the current time,
@@ -47,16 +47,14 @@ class HTMLCacheUpdateJob extends Job {
 			// Multiple pages per job make matches unlikely
 			!( isset( $params['pages'] ) && count( $params['pages'] ) != 1 )
 		);
-		$this->params += [ 'causeAction' => 'unknown', 'causeAgent' => 'unknown' ];
 	}
 
 	/**
 	 * @param Title $title Title to purge backlink pages from
 	 * @param string $table Backlink table name
-	 * @param array $params Additional job parameters
 	 * @return HTMLCacheUpdateJob
 	 */
-	public static function newForBacklinks( Title $title, $table, $params = [] ) {
+	public static function newForBacklinks( Title $title, $table ) {
 		return new self(
 			$title,
 			[
@@ -64,11 +62,11 @@ class HTMLCacheUpdateJob extends Job {
 				'recursive' => true
 			] + Job::newRootJobParams( // "overall" refresh links job info
 				"htmlCacheUpdate:{$table}:{$title->getPrefixedText()}"
-			) + $params
+			)
 		);
 	}
 
-	public function run() {
+	function run() {
 		global $wgUpdateRowsPerJob, $wgUpdateRowsPerQuery;
 
 		if ( isset( $this->params['table'] ) && !isset( $this->params['pages'] ) ) {
@@ -77,11 +75,6 @@ class HTMLCacheUpdateJob extends Job {
 
 		// Job to purge all (or a range of) backlink pages for a page
 		if ( !empty( $this->params['recursive'] ) ) {
-			// Carry over information for de-duplication
-			$extraParams = $this->getRootJobParams();
-			// Carry over cause information for logging
-			$extraParams['causeAction'] = $this->params['causeAction'];
-			$extraParams['causeAgent'] = $this->params['causeAgent'];
 			// Convert this into no more than $wgUpdateRowsPerJob HTMLCacheUpdateJob per-title
 			// jobs and possibly a recursive HTMLCacheUpdateJob job for the rest of the backlinks
 			$jobs = BacklinkJobUtils::partitionBacklinkJob(
@@ -89,7 +82,7 @@ class HTMLCacheUpdateJob extends Job {
 				$wgUpdateRowsPerJob,
 				$wgUpdateRowsPerQuery, // jobs-per-title
 				// Carry over information for de-duplication
-				[ 'params' => $extraParams ]
+				[ 'params' => $this->getRootJobParams() ]
 			);
 			JobQueueGroup::singleton()->push( $jobs );
 		// Job to purge pages for a set of titles
@@ -110,79 +103,67 @@ class HTMLCacheUpdateJob extends Job {
 	 * @param array $pages Map of (page ID => (namespace, DB key)) entries
 	 */
 	protected function invalidateTitles( array $pages ) {
+		global $wgUpdateRowsPerQuery, $wgUseFileCache;
+
 		// Get all page IDs in this query into an array
 		$pageIds = array_keys( $pages );
 		if ( !$pageIds ) {
 			return;
 		}
 
-		$rootTsUnix = wfTimestampOrNull( TS_UNIX, $this->params['rootJobTimestamp'] ?? null );
-		// Bump page_touched to the current timestamp. This previously used the root job timestamp
-		// (e.g. template/file edit time), which is a bit more efficient when template edits are
-		// rare and don't effect the same pages much. However, this way better de-duplicates jobs,
-		// which is much more useful for wikis with high edit rates. Note that RefreshLinksJob,
-		// enqueued alongside HTMLCacheUpdateJob, saves the parser output since it has to parse
-		// anyway. We assume that vast majority of the cache jobs finish before the link jobs,
-		// so using the current timestamp instead of the root timestamp is not expected to
-		// invalidate these cache entries too often.
-		$newTouchedUnix = time();
-		// Timestamp used to bypass pages already invalided since the triggering event
-		$casTsUnix = $rootTsUnix ?? $newTouchedUnix;
+		// Bump page_touched to the current timestamp. This used to use the root job timestamp
+		// (e.g. template/file edit time), which was a bit more efficient when template edits are
+		// rare and don't effect the same pages much. However, this way allows for better
+		// de-duplication, which is much more useful for wikis with high edit rates. Note that
+		// RefreshLinksJob, which is enqueued alongside HTMLCacheUpdateJob, saves the parser output
+		// since it has to parse anyway. We assume that vast majority of the cache jobs finish
+		// before the link jobs, so using the current timestamp instead of the root timestamp is
+		// not expected to invalidate these cache entries too often.
+		$touchTimestamp = wfTimestampNow();
+		// If page_touched is higher than this, then something else already bumped it after enqueue
+		$condTimestamp = isset( $this->params['rootJobTimestamp'] )
+			? $this->params['rootJobTimestamp']
+			: $touchTimestamp;
 
-		$services = MediaWikiServices::getInstance();
-		$config = $services->getMainConfig();
-
-		$lbFactory = $services->getDBLoadBalancerFactory();
-		$dbw = $lbFactory->getMainLB()->getConnectionRef( DB_MASTER );
-		$ticket = $lbFactory->getEmptyTransactionTicket( __METHOD__ );
+		$dbw = wfGetDB( DB_MASTER );
+		$factory = MediaWikiServices::getInstance()->getDBLoadBalancerFactory();
+		$ticket = $factory->getEmptyTransactionTicket( __METHOD__ );
 		// Update page_touched (skipping pages already touched since the root job).
 		// Check $wgUpdateRowsPerQuery for sanity; batch jobs are sized by that already.
-		$batches = array_chunk( $pageIds, $config->get( 'UpdateRowsPerQuery' ) );
-		foreach ( $batches as $batch ) {
+		foreach ( array_chunk( $pageIds, $wgUpdateRowsPerQuery ) as $batch ) {
+			$factory->commitAndWaitForReplication( __METHOD__, $ticket );
+
 			$dbw->update( 'page',
-				[ 'page_touched' => $dbw->timestamp( $newTouchedUnix ) ],
-				[
-					'page_id' => $batch,
-					"page_touched < " . $dbw->addQuotes( $dbw->timestamp( $casTsUnix ) )
+				[ 'page_touched' => $dbw->timestamp( $touchTimestamp ) ],
+				[ 'page_id' => $batch,
+					// don't invalidated pages that were already invalidated
+					"page_touched < " . $dbw->addQuotes( $dbw->timestamp( $condTimestamp ) )
 				],
 				__METHOD__
 			);
-			if ( count( $batches ) > 1 ) {
-				$lbFactory->commitAndWaitForReplication( __METHOD__, $ticket );
-			}
 		}
 		// Get the list of affected pages (races only mean something else did the purge)
 		$titleArray = TitleArray::newFromResult( $dbw->select(
 			'page',
-			array_merge(
-				[ 'page_namespace', 'page_title' ],
-				$config->get( 'PageLanguageUseDB' ) ? [ 'page_lang' ] : []
-			),
-			[ 'page_id' => $pageIds, 'page_touched' => $dbw->timestamp( $newTouchedUnix ) ],
+			[ 'page_namespace', 'page_title' ],
+			[ 'page_id' => $pageIds, 'page_touched' => $dbw->timestamp( $touchTimestamp ) ],
 			__METHOD__
 		) );
 
-		// Update CDN and file caches
-		$htmlCache = MediaWikiServices::getInstance()->getHtmlCacheUpdater();
-		$htmlCache->purgeTitleUrls(
-			$titleArray,
-			$htmlCache::PURGE_NAIVE | $htmlCache::PURGE_URLS_LINKSUPDATE_ONLY,
-			[ $htmlCache::UNLESS_CACHE_MTIME_AFTER => $casTsUnix + self::NORMAL_MAX_LAG ]
-		);
-	}
+		// Update CDN; call purge() directly so as to not bother with secondary purges
+		$urls = [];
+		foreach ( $titleArray as $title ) {
+			/** @var Title $title */
+			$urls = array_merge( $urls, $title->getCdnUrls() );
+		}
+		CdnCacheUpdate::purge( $urls );
 
-	public function getDeduplicationInfo() {
-		$info = parent::getDeduplicationInfo();
-		if ( is_array( $info['params'] ) ) {
-			// For per-pages jobs, the job title is that of the template that changed
-			// (or similar), so remove that since it ruins duplicate detection
-			if ( isset( $info['params']['pages'] ) ) {
-				unset( $info['namespace'] );
-				unset( $info['title'] );
+		// Update file cache
+		if ( $wgUseFileCache ) {
+			foreach ( $titleArray as $title ) {
+				HTMLFileCache::clearFileCache( $title );
 			}
 		}
-
-		return $info;
 	}
 
 	public function workItemCount() {

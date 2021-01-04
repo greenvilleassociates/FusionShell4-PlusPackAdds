@@ -1,9 +1,8 @@
 <?php
 
-/**
- * @covers HTMLFancyCaptchaField
- */
-class HTMLFancyCaptchaFieldTest extends PHPUnit\Framework\TestCase {
+require_once __DIR__ . '/../../FancyCaptcha/HTMLFancyCaptchaField.php';
+
+class HTMLFancyCaptchaFieldTest extends PHPUnit_Framework_TestCase {
 	public function testGetHTML() {
 		$html = $this->getForm( [ 'imageUrl' => 'https://example.com/' ] )->getHTML( false );
 		$this->assertRegExp( '/"fancycaptcha-image"/', $html );
@@ -18,8 +17,7 @@ class HTMLFancyCaptchaFieldTest extends PHPUnit\Framework\TestCase {
 	}
 
 	public function testValue() {
-		$mockClosure = $this->getMockBuilder( stdClass::class )
-			->setMethods( [ '__invoke' ] )->getMock();
+		$mockClosure = $this->getMockBuilder( 'object' )->setMethods( [ '__invoke' ] )->getMock();
 		$request = new FauxRequest( [ 'wpcaptchaWord' => 'abc' ], true );
 		$form = $this->getForm( [ 'imageUrl' => 'https://example.com/' ], $request );
 		$form->setSubmitCallback( $mockClosure );

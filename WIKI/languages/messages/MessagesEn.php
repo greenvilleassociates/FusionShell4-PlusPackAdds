@@ -38,6 +38,13 @@ $digitTransformTable = null;
 $separatorTransformTable = null;
 
 /**
+ * Extra user preferences, which will be shown in Special:Preferences as
+ * checkboxes. Extra settings in derived languages will automatically be
+ * appended to the array of the fallback languages.
+ */
+$extraUserToggles = [];
+
+/**
  * URLs do not specify their encoding. UTF-8 is used by default, but if the
  * URL is not a valid UTF-8 sequence, we have to try to guess what the real
  * encoding is. The encoding used in this case is defined below, and must be
@@ -88,20 +95,9 @@ $namespaceNames = [
 ];
 
 /**
- * Array of namespace aliases, mapping from name to NS_xxx index.
- *
- * Note that 'namespaceAliases' is a mergable language attribute,
- * which means it is combined with other languages in the fallback chain.
+ * Array of namespace aliases, mapping from name to NS_xxx index
  */
-$namespaceAliases = [
-	// The canonical names of namespaces 6 and 7 are, as of MediaWik 1.14,
-	// "File" and "File_talk".  The old names "Image" and "Image_talk" are
-	// retained as aliases for backwards compatibility.
-	// This must apply regardless of site language (and does, given 'en' is at
-	// the end of all fallback chains.)
-	'Image' => NS_FILE,
-	'Image_talk' => NS_FILE_TALK,
-];
+$namespaceAliases = [];
 
 /**
  * Array of gender specific. namespace aliases.
@@ -189,9 +185,9 @@ $dateFormats = [
  * Default list of book sources
  */
 $bookstoreList = [
-	'BWB' => 'https://www.betterworldbooks.com/product/detail/-$1',
-	'OpenLibrary' => 'https://openlibrary.org/isbn/$1',
-	'Worldcat' => 'https://www.worldcat.org/search?q=isbn:$1',
+	'AddALL' => 'http://www.addall.com/New/Partner.cgi?query=$1&type=ISBN',
+	'Barnes & Noble' => 'http://search.barnesandnoble.com/bookSearch/isbnInquiry.asp?isbn=$1',
+	'Amazon.com' => 'https://www.amazon.com/gp/search/?field-isbn=$1'
 ];
 
 /**
@@ -211,6 +207,8 @@ $bookstoreList = [
  *     used aliases. The aliases SHOULD be sorted by the following convention:
  *     1. Local first, English last, then
  *     2. Most common first, least common last.
+ *
+ * This array can be modified at runtime with the LanguageGetMagic hook
  */
 $magicWords = [
 #   ID                               CASE  SYNONYMS
@@ -363,7 +361,6 @@ $magicWords = [
 	'filepath'                => [ 0, 'FILEPATH:' ],
 	'tag'                     => [ 0, 'tag' ],
 	'hiddencat'               => [ 1, '__HIDDENCAT__' ],
-	'expectunusedcategory'    => [ 1, '__EXPECTUNUSEDCATEGORY__', ],
 	'pagesincategory'         => [ 1, 'PAGESINCATEGORY', 'PAGESINCAT' ],
 	'pagesize'                => [ 1, 'PAGESIZE' ],
 	'index'                   => [ 1, '__INDEX__' ],
@@ -391,6 +388,9 @@ $magicWords = [
  * Alternate names of special pages. All names are case-insensitive. The first
  * listed alias will be used as the default. Aliases from the fallback
  * localisation (usually English) will be included by default.
+ *
+ * This array may be altered at runtime using the LanguageGetSpecialPageAliases
+ * hook.
  */
 $specialPageAliases = [
 	'Activeusers'               => [ 'ActiveUsers' ],
@@ -404,7 +404,6 @@ $specialPageAliases = [
 	'Badtitle'                  => [ 'Badtitle' ],
 	'Blankpage'                 => [ 'BlankPage' ],
 	'Block'                     => [ 'Block', 'BlockIP', 'BlockUser' ],
-	'BlockList'                 => [ 'BlockList', 'ListBlocks', 'IPBlockList' ],
 	'Booksources'               => [ 'BookSources' ],
 	'BotPasswords'              => [ 'BotPasswords' ],
 	'BrokenRedirects'           => [ 'BrokenRedirects' ],
@@ -421,7 +420,6 @@ $specialPageAliases = [
 	'DeletedContributions'      => [ 'DeletedContributions' ],
 	'Diff'                      => [ 'Diff' ],
 	'DoubleRedirects'           => [ 'DoubleRedirects' ],
-	'EditPage'                  => [ 'EditPage', 'Edit' ],
 	'EditTags'                  => [ 'EditTags' ],
 	'EditWatchlist'             => [ 'EditWatchlist' ],
 	'Emailuser'                 => [ 'EmailUser', 'Email' ],
@@ -434,6 +432,7 @@ $specialPageAliases = [
 	'Import'                    => [ 'Import' ],
 	'Invalidateemail'           => [ 'InvalidateEmail' ],
 	'JavaScriptTest'            => [ 'JavaScriptTest' ],
+	'BlockList'                 => [ 'BlockList', 'ListBlocks', 'IPBlockList' ],
 	'LinkSearch'                => [ 'LinkSearch' ],
 	'LinkAccounts'              => [ 'LinkAccounts' ],
 	'Listadmins'                => [ 'ListAdmins' ],
@@ -443,7 +442,7 @@ $specialPageAliases = [
 	'Listgrants'                => [ 'ListGrants' ],
 	'Listredirects'             => [ 'ListRedirects' ],
 	'ListDuplicatedFiles'       => [ 'ListDuplicatedFiles', 'ListFileDuplicates' ],
-	'Listusers'                 => [ 'ListUsers', 'UserList', 'Users' ],
+	'Listusers'                 => [ 'ListUsers', 'UserList' ],
 	'Lockdb'                    => [ 'LockDB' ],
 	'Log'                       => [ 'Log', 'Logs' ],
 	'Lonelypages'               => [ 'LonelyPages', 'OrphanedPages' ],
@@ -459,28 +458,22 @@ $specialPageAliases = [
 	'Mostlinkedtemplates'       => [ 'MostTranscludedPages', 'MostLinkedTemplates', 'MostUsedTemplates' ],
 	'Mostrevisions'             => [ 'MostRevisions' ],
 	'Movepage'                  => [ 'MovePage' ],
-	'Mute'                      => [ 'Mute' ],
 	'Mycontributions'           => [ 'MyContributions' ],
 	'MyLanguage'                => [ 'MyLanguage' ],
 	'Mypage'                    => [ 'MyPage' ],
 	'Mytalk'                    => [ 'MyTalk' ],
 	'Myuploads'                 => [ 'MyUploads', 'MyFiles' ],
 	'Newimages'                 => [ 'NewFiles', 'NewImages' ],
-	'NewSection'                => [ 'NewSection', 'Newsection' ],
 	'Newpages'                  => [ 'NewPages' ],
 	'PagesWithProp'             => [ 'PagesWithProp', 'Pageswithprop', 'PagesByProp', 'Pagesbyprop' ],
-	'PageData'                  => [ 'PageData' ],
-	'PageHistory'               => [ 'PageHistory', 'History' ],
-	'PageInfo'                  => [ 'PageInfo', 'Info' ],
+	'PageData'                  => [ 'Pagedata' ],
 	'PageLanguage'              => [ 'PageLanguage' ],
-	'PasswordPolicies'          => [ 'PasswordPolicies' ],
 	'PasswordReset'             => [ 'PasswordReset' ],
 	'PermanentLink'             => [ 'PermanentLink', 'PermaLink' ],
 	'Preferences'               => [ 'Preferences' ],
 	'Prefixindex'               => [ 'PrefixIndex' ],
 	'Protectedpages'            => [ 'ProtectedPages' ],
 	'Protectedtitles'           => [ 'ProtectedTitles' ],
-	'Purge'                     => [ 'Purge' ],
 	'Randompage'                => [ 'Random', 'RandomPage' ],
 	'RandomInCategory'          => [ 'RandomInCategory' ],
 	'Randomredirect'            => [ 'RandomRedirect' ],
@@ -495,7 +488,7 @@ $specialPageAliases = [
 	'Search'                    => [ 'Search' ],
 	'Shortpages'                => [ 'ShortPages' ],
 	'Specialpages'              => [ 'SpecialPages' ],
-	'Statistics'                => [ 'Statistics', 'Stats' ],
+	'Statistics'                => [ 'Statistics' ],
 	'Tags'                      => [ 'Tags' ],
 	'TrackingCategories'        => [ 'TrackingCategories' ],
 	'Unblock'                   => [ 'Unblock' ],
@@ -536,6 +529,23 @@ $linkTrail = '/^([a-z]+)(.*)$/sD';
  * foo[[bar]]. UTF-8 characters may be used.
  */
 $linkPrefixCharset = 'a-zA-Z\\x{80}-\\x{10ffff}';
+
+/**
+ * List of filenames for some ui images that can be overridden per language
+ * basis if needed.
+ */
+$imageFiles = [
+	'button-bold'     => 'en/button_bold.png',
+	'button-italic'   => 'en/button_italic.png',
+	'button-link'     => 'en/button_link.png',
+	'button-extlink'  => 'en/button_extlink.png',
+	'button-headline' => 'en/button_headline.png',
+	'button-image'    => 'en/button_image.png',
+	'button-media'    => 'en/button_media.png',
+	'button-nowiki'   => 'en/button_nowiki.png',
+	'button-sig'      => 'en/button_sig.png',
+	'button-hr'       => 'en/button_hr.png',
+];
 
 /**
  * A list of messages to preload for each request.

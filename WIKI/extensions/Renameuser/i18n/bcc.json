@@ -1,22 +1,21 @@
 {
 	"@metadata": {
 		"authors": [
-			"Mostafadaneshvar",
-			"Sultanselim baloch"
+			"Mostafadaneshvar"
 		]
 	},
 	"renameuser": "کاربر نامی بدل کن",
 	"renameuser-desc": "یک کاربر نامی بدیل کن(حق ''بدل نام''لازمن)",
-	"renameuserold": "هنیگݔں کارزورۏکی نام:",
-	"renameusernew": "نۏکݔں کارزورۏکی نام:",
+	"renameuserold": "هنوکین نام کاربری:",
+	"renameusernew": "نوکین نام کاربری:",
 	"renameuserreason": "دلیل په نام بدل کتن:",
 	"renameusermove": "صفحات گپ و کاربر (و آیانی زیر صفحات) په نوکین نام جاه په جاه کن",
 	"renameuserwarnings": "هوژاریان:",
 	"renameuserconfirm": "بله، کاربر نامی عوض کن",
-	"renameusersubmit": "سپت کن",
+	"renameusersubmit": "دیم دی",
 	"renameusererrordoesnotexist": "کاربر \"<nowiki>$1</nowiki>\" موجود نهنت.",
 	"renameusererrorexists": "کاربر \"<nowiki>$1</nowiki>\" هنو هستن.",
-	"renameusererrorinvalid": "\"<nowiki>$1</nowiki>\"ء کارزورۏکی نام‌ئا اݔتبار نے",
+	"renameusererrorinvalid": "نام کاربری \"<nowiki>$1</nowiki>\"  نامعتبر انت.",
 	"renameuser-error-request": "مشکلی گون دریافت درخواست هستت.\nلطفا برگردیت و دگه تلاش کنیت.",
 	"renameuser-error-same-user": "شما نه تونیت یک کاربر په هما پیشگین چیزی نامی بدل کنیت",
 	"renameusersuccess": "کاربر \"<nowiki>$1</nowiki>\" نامی بدل بوتت په \"<nowiki>$2</nowiki>\".",

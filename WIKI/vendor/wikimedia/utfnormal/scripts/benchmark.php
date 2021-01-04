@@ -34,23 +34,25 @@ require_once dirname( __DIR__ ) . '/vendor/autoload.php';
 
 define( 'BENCH_CYCLES', 5 );
 
-$testfiles = [
+$testfiles = array(
 	__DIR__ . '/testdata/washington.txt' => 'English text',
 	__DIR__ . '/testdata/berlin.txt' => 'German text',
 	__DIR__ . '/testdata/bulgakov.txt' => 'Russian text',
 	__DIR__ . '/testdata/tokyo.txt' => 'Japanese text',
 	__DIR__ . '/testdata/young.txt' => 'Korean text'
-];
+);
 $normalizer = new Validator;
 Validator::loadData();
 foreach ( $testfiles as $file => $desc ) {
 	benchmarkTest( $normalizer, $file, $desc );
 }
 
+# -------
+
 function benchmarkTest( &$u, $filename, $desc ) {
 	print "Testing $filename ($desc)...\n";
 	$data = file_get_contents( $filename );
-	$forms = [
+	$forms = array(
 # 		'placebo',
 		'cleanUp',
 		'toNFC',
@@ -59,9 +61,9 @@ function benchmarkTest( &$u, $filename, $desc ) {
 		'NFC',
 # 		'NFKC',
 # 		'NFD', 'NFKD',
-		[ 'fastDecompose', 'fastCombiningSort', 'fastCompose' ],
+		array( 'fastDecompose', 'fastCombiningSort', 'fastCompose' ),
 # 		'quickIsNFC', 'quickIsNFCVerify',
-	];
+	);
 
 	foreach ( $forms as $form ) {
 		if ( is_array( $form ) ) {
@@ -84,8 +86,7 @@ function benchmarkForm( &$u, &$data, $form ) {
 	}
 	# $delta = (microtime( true ) - $start) / BENCH_CYCLES;
 	sort( $deltas );
-	# Take shortest time
-	$delta = $deltas[0];
+	$delta = $deltas[0]; # Take shortest time
 
 	$rate = intval( strlen( $data ) / $delta );
 	$same = ( 0 == strcmp( $data, $out ) );

@@ -1,7 +1,5 @@
 <?php
 
-use MediaWiki\MediaWikiServices;
-
 /**
  * @group API
  * @group Database
@@ -20,9 +18,7 @@ class ApiTokensTest extends ApiTestCase {
 	protected function runTokenTest( TestUser $user ) {
 		$tokens = $this->getTokenList( $user );
 
-		$rights = MediaWikiServices::getInstance()
-			->getPermissionManager()
-			->getUserPermissions( $user->getUser() );
+		$rights = $user->getUser()->getRights();
 
 		$this->assertArrayHasKey( 'edittoken', $tokens );
 		$this->assertArrayHasKey( 'movetoken', $tokens );

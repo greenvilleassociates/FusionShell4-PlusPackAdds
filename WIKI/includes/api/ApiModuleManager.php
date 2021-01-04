@@ -1,5 +1,9 @@
 <?php
 /**
+ *
+ *
+ * Created on Dec 27, 2012
+ *
  * Copyright © 2012 Yuri Astrakhan "<Firstname><Lastname>@gmail.com"
  *
  * This program is free software; you can redistribute it and/or modify
@@ -20,9 +24,6 @@
  * @file
  * @since 1.21
  */
-
-use MediaWiki\MediaWikiServices;
-use Wikimedia\ObjectFactory;
 
 /**
  * This class holds a list of modules and handles instantiation
@@ -48,35 +49,64 @@ class ApiModuleManager extends ContextSource {
 	 * @var array[]
 	 */
 	private $mModules = [];
-	/**
-	 * @var ObjectFactory
-	 */
-	private $objectFactory;
 
 	/**
 	 * Construct new module manager
-	 *
 	 * @param ApiBase $parentModule Parent module instance will be used during instantiation
-	 * @param ObjectFactory|null $objectFactory Object factory to use when instantiating modules
 	 */
-	public function __construct( ApiBase $parentModule, ObjectFactory $objectFactory = null ) {
+	public function __construct( ApiBase $parentModule ) {
 		$this->mParent = $parentModule;
-		$this->objectFactory = $objectFactory ?? MediaWikiServices::getInstance()->getObjectFactory();
 	}
 
 	/**
 	 * Add a list of modules to the manager. Each module is described
-	 * by an ObjectFactory spec.
+	 * by a module spec.
 	 *
-	 * This simply calls `addModule()` for each module in `$modules`.
+	 * Each module spec is an associative array containing at least
+	 * the 'class' key for the module's class, and optionally a
+	 * 'factory' key for the factory function to use for the module.
 	 *
-	 * @see ApiModuleManager::addModule()
-	 * @param array $modules A map of ModuleName => ModuleSpec
+	 * That factory function will be called with two parameters,
+	 * the parent module (an instance of ApiBase, usually ApiMain)
+	 * and the name the module was registered under. The return
+	 * value must be an instance of the class given in the 'class'
+	 * field.
+	 *
+	 * For backward compatibility, the module spec may also be a
+	 * simple string containing the module's class name. In that
+	 * case, the class' constructor will be called with the parent
+	 * module and module name as parameters, as described above.
+	 *
+	 * Examples for defining module specs:
+	 *
+	 * @code
+	 *  $modules['foo'] = 'ApiFoo';
+	 *  $modules['bar'] = [
+	 *      'class' => 'ApiBar',
+	 *      'factory' => function( $main, $name ) { ... }
+	 *  ];
+	 *  $modules['xyzzy'] = [
+	 *      'class' => 'ApiXyzzy',
+	 *      'factory' => [ 'XyzzyFactory', 'newApiModule' ]
+	 *  ];
+	 * @endcode
+	 *
+	 * @param array $modules A map of ModuleName => ModuleSpec; The ModuleSpec
+	 *        is either a string containing the module's class name, or an associative
+	 *        array (see above for details).
 	 * @param string $group Which group modules belong to (action,format,...)
 	 */
 	public function addModules( array $modules, $group ) {
 		foreach ( $modules as $name => $moduleSpec ) {
-			$this->addModule( $name, $group, $moduleSpec );
+			if ( is_array( $moduleSpec ) ) {
+				$class = $moduleSpec['class'];
+				$factory = ( isset( $moduleSpec['factory'] ) ? $moduleSpec['factory'] : null );
+			} else {
+				$class = $moduleSpec;
+				$factory = null;
+			}
+
+			$this->addModule( $name, $group, $class, $factory );
 		}
 	}
 
@@ -85,21 +115,14 @@ class ApiModuleManager extends ContextSource {
 	 * classes who wish to add their own modules to their lexicon or override the
 	 * behavior of inherent ones.
 	 *
-	 * ObjectFactory is used to instantiate the module when needed. The parent module
-	 * (`$parentModule` from `__construct()`) and the `$name` are passed as extraArgs.
-	 *
-	 * @since 1.34, accepts an ObjectFactory spec as the third parameter. The old calling convention,
-	 *  passing a class name as parameter #3 and an optional factory callable as parameter #4, is
-	 *  deprecated.
 	 * @param string $name The identifier for this module.
 	 * @param string $group Name of the module group
-	 * @param string|array $spec The ObjectFactory spec for instantiating the module,
-	 *  or a class name to instantiate.
-	 * @param callable|null $factory Callback for instantiating the module (deprecated).
+	 * @param string $class The class where this module is implemented.
+	 * @param callable|null $factory Callback for instantiating the module.
 	 *
 	 * @throws InvalidArgumentException
 	 */
-	public function addModule( $name, $group, $spec, $factory = null ) {
+	public function addModule( $name, $group, $class, $factory = null ) {
 		if ( !is_string( $name ) ) {
 			throw new InvalidArgumentException( '$name must be a string' );
 		}
@@ -108,30 +131,23 @@ class ApiModuleManager extends ContextSource {
 			throw new InvalidArgumentException( '$group must be a string' );
 		}
 
-		if ( is_string( $spec ) ) {
-			$spec = [
-				'class' => $spec
-			];
+		if ( !is_string( $class ) ) {
+			throw new InvalidArgumentException( '$class must be a string' );
+		}
 
-			if ( is_callable( $factory ) ) {
-				wfDeprecated( __METHOD__ . ' with $class and $factory', '1.34' );
-				$spec['factory'] = $factory;
-			}
-		} elseif ( !is_array( $spec ) ) {
-			throw new InvalidArgumentException( '$spec must be a string or an array' );
-		} elseif ( !isset( $spec['class'] ) ) {
-			throw new InvalidArgumentException( '$spec must define a class name' );
+		if ( $factory !== null && !is_callable( $factory ) ) {
+			throw new InvalidArgumentException( '$factory must be a callable (or null)' );
 		}
 
 		$this->mGroups[$group] = null;
-		$this->mModules[$name] = [ $group, $spec ];
+		$this->mModules[$name] = [ $group, $class, $factory ];
 	}
 
 	/**
 	 * Get module instance by name, or instantiate it if it does not exist
 	 *
 	 * @param string $moduleName Module name
-	 * @param string|null $group Optionally validate that the module is in a specific group
+	 * @param string $group Optionally validate that the module is in a specific group
 	 * @param bool $ignoreCache If true, force-creates a new instance and does not cache it
 	 *
 	 * @return ApiBase|null The new module instance, or null if failed
@@ -141,7 +157,7 @@ class ApiModuleManager extends ContextSource {
 			return null;
 		}
 
-		list( $moduleGroup, $spec ) = $this->mModules[$moduleName];
+		list( $moduleGroup, $moduleClass, $moduleFactory ) = $this->mModules[$moduleName];
 
 		if ( $group !== null && $moduleGroup !== $group ) {
 			return null;
@@ -152,7 +168,7 @@ class ApiModuleManager extends ContextSource {
 			return $this->mInstances[$moduleName];
 		} else {
 			// new instance
-			$instance = $this->instantiateModule( $moduleName, $spec );
+			$instance = $this->instantiateModule( $moduleName, $moduleClass, $moduleFactory );
 
 			if ( !$ignoreCache ) {
 				// cache this instance in case it is needed later
@@ -167,27 +183,33 @@ class ApiModuleManager extends ContextSource {
 	 * Instantiate the module using the given class or factory function.
 	 *
 	 * @param string $name The identifier for this module.
-	 * @param array $spec The ObjectFactory spec for instantiating the module.
+	 * @param string $class The class where this module is implemented.
+	 * @param callable|null $factory Callback for instantiating the module.
 	 *
-	 * @throws UnexpectedValueException
+	 * @throws MWException
 	 * @return ApiBase
 	 */
-	private function instantiateModule( $name, $spec ) {
-		return $this->objectFactory->createObject(
-			$spec,
-			[
-				'extraArgs' => [
-					$this->mParent,
-					$name
-				],
-				'assertClass' => $spec['class']
-			]
-		);
+	private function instantiateModule( $name, $class, $factory = null ) {
+		if ( $factory !== null ) {
+			// create instance from factory
+			$instance = call_user_func( $factory, $this->mParent, $name );
+
+			if ( !$instance instanceof $class ) {
+				throw new MWException(
+					"The factory function for module $name did not return an instance of $class!"
+				);
+			}
+		} else {
+			// create instance from class name
+			$instance = new $class( $this->mParent, $name );
+		}
+
+		return $instance;
 	}
 
 	/**
 	 * Get an array of modules in a specific group or all if no group is set.
-	 * @param string|null $group Optional group filter
+	 * @param string $group Optional group filter
 	 * @return array List of module names
 	 */
 	public function getNames( $group = null ) {
@@ -195,8 +217,8 @@ class ApiModuleManager extends ContextSource {
 			return array_keys( $this->mModules );
 		}
 		$result = [];
-		foreach ( $this->mModules as $name => $groupAndSpec ) {
-			if ( $groupAndSpec[0] === $group ) {
+		foreach ( $this->mModules as $name => $grpCls ) {
+			if ( $grpCls[0] === $group ) {
 				$result[] = $name;
 			}
 		}
@@ -206,14 +228,14 @@ class ApiModuleManager extends ContextSource {
 
 	/**
 	 * Create an array of (moduleName => moduleClass) for a specific group or for all.
-	 * @param string|null $group Name of the group to get or null for all
+	 * @param string $group Name of the group to get or null for all
 	 * @return array Name=>class map
 	 */
 	public function getNamesWithClasses( $group = null ) {
 		$result = [];
-		foreach ( $this->mModules as $name => $groupAndSpec ) {
-			if ( $group === null || $groupAndSpec[0] === $group ) {
-				$result[$name] = $groupAndSpec[1]['class'];
+		foreach ( $this->mModules as $name => $grpCls ) {
+			if ( $group === null || $grpCls[0] === $group ) {
+				$result[$name] = $grpCls[1];
 			}
 		}
 
@@ -229,7 +251,7 @@ class ApiModuleManager extends ContextSource {
 	 */
 	public function getClassName( $module ) {
 		if ( isset( $this->mModules[$module] ) ) {
-			return $this->mModules[$module][1]['class'];
+			return $this->mModules[$module][1];
 		}
 
 		return false;
@@ -238,7 +260,7 @@ class ApiModuleManager extends ContextSource {
 	/**
 	 * Returns true if the specific module is defined at all or in a specific group.
 	 * @param string $moduleName Module name
-	 * @param string|null $group Group name to check against, or null to check all groups,
+	 * @param string $group Group name to check against, or null to check all groups,
 	 * @return bool True if defined
 	 */
 	public function isDefined( $moduleName, $group = null ) {

@@ -8,7 +8,7 @@
  * of mime mail.
  * This class however allows full control over the email.
  *
- * Compatible with PHP version 5 and 7
+ * Compatible with PHP version 5
  *
  * LICENSE: This LICENSE is in the BSD license style.
  * Copyright (c) 2002-2003, Richard Heyes <richard@phpguru.org>
@@ -93,7 +93,7 @@ class Mail_mimePart
      *
      * @var array
      */
-    protected $subparts = array();
+    protected $subparts;
 
     /**
      * The output of this part after being built
@@ -107,7 +107,7 @@ class Mail_mimePart
      *
      * @var array
      */
-    protected $headers = array();
+    protected $headers;
 
     /**
      * The body of this part (not encoded)
@@ -145,26 +145,27 @@ class Mail_mimePart
      *
      * @param string $body   The body of the mime part if any.
      * @param array  $params An associative array of optional parameters:
-     *                       - content_type: The content type for this part eg multipart/mixed
-     *                       - encoding:  The encoding to use, 7bit, 8bit, base64, or quoted-printable
-     *                       - charset: Content character set
-     *                       - cid: Content ID to apply
-     *                       - disposition: Content disposition, inline or attachment
-     *                       - filename: Filename parameter for content disposition
-     *                       - description: Content description
-     *                       - name_encoding: Encoding of the attachment name (Content-Type)
-     *                       By default filenames are encoded using RFC2231
-     *                       Here you can set RFC2047 encoding (quoted-printable
-     *                       or base64) instead
-     *                       - filename_encoding: Encoding of the attachment filename (Content-Disposition)
-     *                       See 'name_encoding'
-     *                       - headers_charset: Charset of the headers e.g. filename, description.
-     *                       If not set, 'charset' will be used
-     *                       - eol: End of line sequence. Default: "\r\n"
-     *                       - headers: Hash array with additional part headers. Array keys
-     *                       can be in form of <header_name>:<parameter_name>
-     *                       - body_file: Location of file with part's body (instead of $body)
-     *                       - preamble: short text of multipart part preamble (RFC2046 5.1.1)
+     *     content_type      - The content type for this part eg multipart/mixed
+     *     encoding          - The encoding to use, 7bit, 8bit,
+     *                         base64, or quoted-printable
+     *     charset           - Content character set
+     *     cid               - Content ID to apply
+     *     disposition       - Content disposition, inline or attachment
+     *     filename          - Filename parameter for content disposition
+     *     description       - Content description
+     *     name_encoding     - Encoding of the attachment name (Content-Type)
+     *                         By default filenames are encoded using RFC2231
+     *                         Here you can set RFC2047 encoding (quoted-printable
+     *                         or base64) instead
+     *     filename_encoding - Encoding of the attachment filename (Content-Disposition)
+     *                         See 'name_encoding'
+     *     headers_charset   - Charset of the headers e.g. filename, description.
+     *                         If not set, 'charset' will be used
+     *     eol               - End of line sequence. Default: "\r\n"
+     *     headers           - Hash array with additional part headers. Array keys
+     *                         can be in form of <header_name>:<parameter_name>
+     *     body_file         - Location of file with part's body (instead of $body)
+     *     preamble          - short text of multipart part preamble (RFC2046 5.1.1)
      */
     public function __construct($body = '', $params = array())
     {
@@ -339,12 +340,12 @@ class Mail_mimePart
             $encoded['body'] = $this->getEncodedData($this->body, $this->encoding);
         } else if ($this->body_file) {
             // Temporarily reset magic_quotes_runtime for file reads and writes
-            if (version_compare(PHP_VERSION, '5.4.0', '<')) {
-                $magic_quotes = @ini_set('magic_quotes_runtime', 0);
+            if ($magic_quote_setting = get_magic_quotes_runtime()) {
+                @ini_set('magic_quotes_runtime', 0);
             }
             $body = $this->getEncodedDataFromFile($this->body_file, $this->encoding);
-            if (isset($magic_quotes)) {
-                @ini_set('magic_quotes_runtime', $magic_quotes);
+            if ($magic_quote_setting) {
+                @ini_set('magic_quotes_runtime', $magic_quote_setting);
             }
 
             if (is_a($body, 'PEAR_Error')) {
@@ -391,8 +392,8 @@ class Mail_mimePart
         }
 
         // Temporarily reset magic_quotes_runtime for file reads and writes
-        if (version_compare(PHP_VERSION, '5.4.0', '<')) {
-            $magic_quotes = @ini_set('magic_quotes_runtime', 0);
+        if ($magic_quote_setting = get_magic_quotes_runtime()) {
+            @ini_set('magic_quotes_runtime', 0);
         }
 
         $res = $this->encodePartToFile($fh, $boundary, $skip_head);
@@ -401,8 +402,8 @@ class Mail_mimePart
             fclose($fh);
         }
 
-        if (isset($magic_quotes)) {
-            @ini_set('magic_quotes_runtime', $magic_quotes);
+        if ($magic_quote_setting) {
+            @ini_set('magic_quotes_runtime', $magic_quote_setting);
         }
 
         return is_a($res, 'PEAR_Error') ? $res : $this->headers;
@@ -621,7 +622,7 @@ class Mail_mimePart
         $escape = '=';
         $output = '';
 
-        foreach ($lines as $idx => $line) {
+        while (list($idx, $line) = each($lines)) {
             $newline = '';
             $i = 0;
 
@@ -655,17 +656,13 @@ class Mail_mimePart
                     $output  .= $newline . $escape . $eol;
                     $newline  = '';
                 }
-
                 $newline .= $char;
             } // end of for
-
             $output .= $newline . $eol;
             unset($lines[$idx]);
         }
-
         // Don't want last crlf
         $output = substr($output, 0, -1 * strlen($eol));
-
         return $output;
     }
 
@@ -814,27 +811,6 @@ class Mail_mimePart
     }
 
     /**
-     * Return charset for mbstring functions.
-     * Replace ISO-2022-JP with ISO-2022-JP-MS to convert Windows dependent
-     * characters.
-     *
-     * @param string $charset A original charset
-     *
-     * @return string A charset for mbstring
-     * @since  1.10.8
-     */
-    protected static function mbstringCharset($charset)
-    {
-        $mb_charset = $charset;
-
-        if ($charset == 'ISO-2022-JP') {
-            $mb_charset = 'ISO-2022-JP-MS';
-        }
-
-        return $mb_charset;
-    }
-
-    /**
      * Encodes a header as per RFC2047
      *
      * @param string $name     The header name
@@ -876,7 +852,6 @@ class Mail_mimePart
         // exploding quoted strings as well as some regexes below do not
         // work properly with some charset e.g. ISO-2022-JP, we'll use UTF-8
         $mb = $charset != 'UTF-8' && function_exists('mb_convert_encoding');
-        $mb_charset = Mail_mimePart::mbstringCharset($charset);
 
         // Structured header (make sure addr-spec inside is not encoded)
         if (!empty($separator)) {
@@ -884,7 +859,7 @@ class Mail_mimePart
             $email_regexp = '([^\s<]+|("[^\r\n"]+"))@\S+';
 
             if ($mb) {
-                $value = mb_convert_encoding($value, 'UTF-8', $mb_charset);
+                $value = mb_convert_encoding($value, 'UTF-8', $charset);
             }
 
             $parts = Mail_mimePart::explodeQuotedString("[\t$separator]", $value);
@@ -926,7 +901,7 @@ class Mail_mimePart
                                 $word = preg_replace('/\\\\([\\\\"])/', '$1', $word);
                             }
                             if ($mb) {
-                                $word = mb_convert_encoding($word, $mb_charset, 'UTF-8');
+                                $word = mb_convert_encoding($word, $charset, 'UTF-8');
                             }
 
                             // find length of last line
@@ -950,7 +925,7 @@ class Mail_mimePart
                     $value .= $word.' '.$address;
                 } else {
                     if ($mb) {
-                        $part = mb_convert_encoding($part, $mb_charset, 'UTF-8');
+                        $part = mb_convert_encoding($part, $charset, 'UTF-8');
                     }
                     // addr-spec not found, don't encode (?)
                     $value .= $part;
@@ -970,14 +945,14 @@ class Mail_mimePart
             if (preg_match('#([^\s\x21-\x7E]){1}#', $value)) {
                 if ($value[0] == '"' && $value[strlen($value)-1] == '"') {
                     if ($mb) {
-                        $value = mb_convert_encoding($value, 'UTF-8', $mb_charset);
+                        $value = mb_convert_encoding($value, 'UTF-8', $charset);
                     }
                     // de-quote quoted-string, encoding changes
                     // string to atom
                     $value = substr($value, 1, -1);
                     $value = preg_replace('/\\\\([\\\\"])/', '$1', $value);
                     if ($mb) {
-                        $value = mb_convert_encoding($value, $mb_charset, 'UTF-8');
+                        $value = mb_convert_encoding($value, $charset, 'UTF-8');
                     }
                 }
 
@@ -1178,12 +1153,11 @@ class Mail_mimePart
         $prefix = '=?' . $charset . '?'.$encoding.'?';
         $suffix = '?=';
         $maxLength = 75 - strlen($prefix . $suffix);
-        $mb_charset = Mail_mimePart::mbstringCharset($charset);
 
         // A multi-octet character may not be split across adjacent encoded-words
         // So, we'll loop over each character
         // mb_stlen() with wrong charset will generate a warning here and return null
-        $length      = mb_strlen($str, $mb_charset);
+        $length      = mb_strlen($str, $charset);
         $result      = '';
         $line_length = $prefix_len;
 
@@ -1194,7 +1168,7 @@ class Mail_mimePart
 
             for ($i=1; $i<=$length; $i++) {
                 // See #17311
-                $chunk = mb_substr($str, $start, $i-$start, $mb_charset);
+                $chunk = mb_substr($str, $start, $i-$start, $charset);
                 $chunk = base64_encode($chunk);
                 $chunk_len = strlen($chunk);
 
@@ -1224,7 +1198,7 @@ class Mail_mimePart
             $regexp = '/([\x22-\x29\x2C\x2E\x3A-\x40\x5B-\x60\x7B-\x7E\x80-\xFF])/';
 
             for ($i=0; $i<=$length; $i++) {
-                $char = mb_substr($str, $i, 1, $mb_charset);
+                $char = mb_substr($str, $i, 1, $charset);
                 // RFC recommends underline (instead of =20) in place of the space
                 // that's one of the reasons why we're not using iconv_mime_encode()
                 if ($char == ' ') {

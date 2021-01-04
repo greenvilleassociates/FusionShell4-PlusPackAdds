@@ -164,5 +164,5 @@ $dateFormats = [
 	'dmy both' => 'j M Y "da" H:i',
 ];
 
-$separatorTransformTable = [ ',' => "\u{00A0}", '.' => ',' ];
+$separatorTransformTable = [ ',' => "\xc2\xa0", '.' => ',' ];
 $linkTrail = "/^((?:c\'h|C\'H|C\'h|c’h|C’H|C’h|[a-zA-ZàâçéèêîôûäëïöüùñÇÉÂÊÎÔÛÄËÏÖÜÀÈÙÑ])+)(.*)$/sDu";

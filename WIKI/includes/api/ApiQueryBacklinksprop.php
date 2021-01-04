@@ -2,6 +2,8 @@
 /**
  * API module to handle links table back-queries
  *
+ * Created on Aug 19, 2014
+ *
  * Copyright © 2014 Wikimedia Foundation and contributors
  *
  * This program is free software; you can redistribute it and/or modify
@@ -88,7 +90,7 @@ class ApiQueryBacklinksprop extends ApiQueryGeneratorBase {
 	}
 
 	/**
-	 * @param ApiPageSet|null $resultPageSet
+	 * @param ApiPageSet $resultPageSet
 	 */
 	private function run( ApiPageSet $resultPageSet = null ) {
 		$settings = self::$settings[$this->getModuleName()];
@@ -129,9 +131,6 @@ class ApiQueryBacklinksprop extends ApiQueryGeneratorBase {
 		if ( !$titles ) {
 			return; // nothing to do
 		}
-		if ( $params['namespace'] !== null && count( $params['namespace'] ) === 0 ) {
-			return; // nothing to do
-		}
 
 		// Figure out what we're sorting by, and add associated WHERE clauses.
 		// MySQL's query planner screws up if we include a field in ORDER BY
@@ -162,9 +161,7 @@ class ApiQueryBacklinksprop extends ApiQueryGeneratorBase {
 				}
 			} else {
 				$this->addWhereFld( "{$p}_from_namespace", $params['namespace'] );
-				if ( !empty( $settings['from_namespace'] )
-					&& $params['namespace'] !== null && count( $params['namespace'] ) > 1
-				) {
+				if ( !empty( $settings['from_namespace'] ) && count( $params['namespace'] ) > 1 ) {
 					$sortby["{$p}_from_namespace"] = 'int';
 				}
 			}
@@ -172,7 +169,7 @@ class ApiQueryBacklinksprop extends ApiQueryGeneratorBase {
 		$sortby[$bl_from] = 'int';
 
 		// Now use the $sortby to figure out the continuation
-		if ( $params['continue'] !== null ) {
+		if ( !is_null( $params['continue'] ) ) {
 			$cont = explode( '|', $params['continue'] );
 			$this->dieContinueUsageIf( count( $cont ) != count( $sortby ) );
 			$where = '';
@@ -211,7 +208,7 @@ class ApiQueryBacklinksprop extends ApiQueryGeneratorBase {
 
 		$this->addFields( array_keys( $sortby ) );
 		$this->addFields( [ 'bl_namespace' => $bl_namespace, 'bl_title' => $bl_title ] );
-		if ( $resultPageSet === null ) {
+		if ( is_null( $resultPageSet ) ) {
 			$fld_pageid = isset( $prop['pageid'] );
 			$fld_title = isset( $prop['title'] );
 			$fld_redirect = isset( $prop['redirect'] );
@@ -285,11 +282,7 @@ class ApiQueryBacklinksprop extends ApiQueryGeneratorBase {
 
 		$res = $this->select( __METHOD__ );
 
-		if ( $resultPageSet === null ) {
-			if ( $fld_title ) {
-				$this->executeGenderCacheFromResultWrapper( $res, __METHOD__ );
-			}
-
+		if ( is_null( $resultPageSet ) ) {
 			$count = 0;
 			foreach ( $res as $row ) {
 				if ( ++$count > $params['limit'] ) {
@@ -338,12 +331,6 @@ class ApiQueryBacklinksprop extends ApiQueryGeneratorBase {
 					$this->setContinue( $row, $sortby );
 					break;
 				}
-
-				if ( $miser_ns !== null && !in_array( $row->page_namespace, $miser_ns ) ) {
-					// Miser mode namespace check
-					continue;
-				}
-
 				$titles[] = Title::makeTitle( $row->page_namespace, $row->page_title );
 			}
 			$resultPageSet->populateFromTitles( $titles );
@@ -432,7 +419,7 @@ class ApiQueryBacklinksprop extends ApiQueryGeneratorBase {
 		$settings = self::$settings[$this->getModuleName()];
 		$name = $this->getModuleName();
 		$path = $this->getModulePath();
-		$title = $settings['exampletitle'] ?? 'Main Page';
+		$title = isset( $settings['exampletitle'] ) ? $settings['exampletitle'] : 'Main Page';
 		$etitle = rawurlencode( $title );
 
 		return [

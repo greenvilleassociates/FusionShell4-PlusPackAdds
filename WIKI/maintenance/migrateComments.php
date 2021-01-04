@@ -21,7 +21,6 @@
  * @ingroup Maintenance
  */
 
-use MediaWiki\MediaWikiServices;
 use Wikimedia\Rdbms\IDatabase;
 
 require_once __DIR__ . '/Maintenance.php';
@@ -48,12 +47,23 @@ class MigrateComments extends LoggedUpdateMaintenance {
 	}
 
 	protected function doDBUpdates() {
+		global $wgCommentTableSchemaMigrationStage;
+
+		if ( $wgCommentTableSchemaMigrationStage < MIGRATION_WRITE_NEW ) {
+			$this->output(
+				"...cannot update while \$wgCommentTableSchemaMigrationStage < MIGRATION_WRITE_NEW\n"
+			);
+			return false;
+		}
+
 		$this->migrateToTemp(
 			'revision', 'rev_id', 'rev_comment', 'revcomment_rev', 'revcomment_comment_id'
 		);
 		$this->migrate( 'archive', 'ar_id', 'ar_comment' );
 		$this->migrate( 'ipblocks', 'ipb_id', 'ipb_reason' );
-		$this->migrate( 'image', 'img_name', 'img_description' );
+		$this->migrateToTemp(
+			'image', 'img_name', 'img_description', 'imgcomment_name', 'imgcomment_description_id'
+		);
 		$this->migrate( 'oldimage', [ 'oi_name', 'oi_timestamp' ], 'oi_description' );
 		$this->migrate( 'filearchive', 'fa_id', 'fa_deleted_reason' );
 		$this->migrate( 'filearchive', 'fa_id', 'fa_description' );
@@ -76,7 +86,6 @@ class MigrateComments extends LoggedUpdateMaintenance {
 		while ( true ) {
 			$where = [];
 			foreach ( $needComments as $need => $dummy ) {
-				$need = (string)$need; // T268887
 				$where[] = $dbw->makeList(
 					[
 						'comment_hash' => CommentStore::hash( $need, null ),
@@ -131,19 +140,13 @@ class MigrateComments extends LoggedUpdateMaintenance {
 	 * @param string $oldField Old comment field name
 	 */
 	protected function migrate( $table, $primaryKey, $oldField ) {
-		$dbw = $this->getDB( DB_MASTER );
-		if ( !$dbw->fieldExists( $table, $oldField, __METHOD__ ) ) {
-			$this->output( "No need to migrate $table.$oldField, field does not exist\n" );
-			return;
-		}
-
 		$newField = $oldField . '_id';
 		$primaryKey = (array)$primaryKey;
 		$pkFilter = array_flip( $primaryKey );
 		$this->output( "Beginning migration of $table.$oldField to $table.$newField\n" );
-		$lbFactory = MediaWikiServices::getInstance()->getDBLoadBalancerFactory();
-		$lbFactory->waitForReplication();
+		wfWaitForSlaves();
 
+		$dbw = $this->getDB( DB_MASTER );
 		$next = '1=1';
 		$countUpdated = 0;
 		$countComments = 0;
@@ -159,7 +162,7 @@ class MigrateComments extends LoggedUpdateMaintenance {
 				__METHOD__,
 				[
 					'ORDER BY' => $primaryKey,
-					'LIMIT' => $this->getBatchSize(),
+					'LIMIT' => $this->mBatchSize,
 				]
 			);
 			if ( !$res->numRows() ) {
@@ -202,9 +205,9 @@ class MigrateComments extends LoggedUpdateMaintenance {
 					$next = "$field > $value OR $field = $value AND ($next)";
 				}
 			}
-			$prompt = implode( ' ', array_reverse( $prompt ) );
+			$prompt = join( ' ', array_reverse( $prompt ) );
 			$this->output( "... $prompt\n" );
-			$lbFactory->waitForReplication();
+			wfWaitForSlaves();
 		}
 
 		$this->output(
@@ -228,15 +231,9 @@ class MigrateComments extends LoggedUpdateMaintenance {
 	 * @param string $newField New comment field name
 	 */
 	protected function migrateToTemp( $table, $primaryKey, $oldField, $newPrimaryKey, $newField ) {
-		$dbw = $this->getDB( DB_MASTER );
-		if ( !$dbw->fieldExists( $table, $oldField, __METHOD__ ) ) {
-			$this->output( "No need to migrate $table.$oldField, field does not exist\n" );
-			return;
-		}
-
 		$newTable = $table . '_comment_temp';
 		$this->output( "Beginning migration of $table.$oldField to $newTable.$newField\n" );
-		MediaWikiServices::getInstance()->getDBLoadBalancerFactory()->waitForReplication();
+		wfWaitForSlaves();
 
 		$dbw = $this->getDB( DB_MASTER );
 		$next = [];
@@ -247,12 +244,11 @@ class MigrateComments extends LoggedUpdateMaintenance {
 			$res = $dbw->select(
 				[ $table, $newTable ],
 				[ $primaryKey, $oldField ],
-				// @phan-suppress-next-line PhanSuspiciousBinaryAddLists
 				[ $newPrimaryKey => null ] + $next,
 				__METHOD__,
 				[
 					'ORDER BY' => $primaryKey,
-					'LIMIT' => $this->getBatchSize(),
+					'LIMIT' => $this->mBatchSize,
 				],
 				[ $newTable => [ 'LEFT JOIN', "{$primaryKey}={$newPrimaryKey}" ] ]
 			);
@@ -286,6 +282,7 @@ class MigrateComments extends LoggedUpdateMaintenance {
 			// Calculate the "next" condition
 			$next = [ $primaryKey . ' > ' . $dbw->addQuotes( $row->$primaryKey ) ];
 			$this->output( "... {$row->$primaryKey}\n" );
+			wfWaitForSlaves();
 		}
 
 		$this->output(
@@ -294,5 +291,5 @@ class MigrateComments extends LoggedUpdateMaintenance {
 	}
 }
 
-$maintClass = MigrateComments::class;
+$maintClass = "MigrateComments";
 require_once RUN_MAINTENANCE_IF_MAIN;

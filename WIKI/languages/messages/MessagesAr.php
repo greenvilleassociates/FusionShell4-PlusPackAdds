@@ -86,21 +86,18 @@ $dateFormats = [
 ];
 
 $digitTransformTable = [
-	'0' => '٠', # U+0660
-	'1' => '١', # U+0661
-	'2' => '٢', # U+0662
-	'3' => '٣', # U+0663
-	'4' => '٤', # U+0664
-	'5' => '٥', # U+0665
-	'6' => '٦', # U+0666
-	'7' => '٧', # U+0667
-	'8' => '٨', # U+0668
-	'9' => '٩', # U+0669
-];
-
-$separatorTransformTable = [
-	'.' => '٫', # U+066B
-	',' => '٬', # U+066C
+	'0' => '٠', # &#x0660;
+	'1' => '١', # &#x0661;
+	'2' => '٢', # &#x0662;
+	'3' => '٣', # &#x0663;
+	'4' => '٤', # &#x0664;
+	'5' => '٥', # &#x0665;
+	'6' => '٦', # &#x0666;
+	'7' => '٧', # &#x0667;
+	'8' => '٨', # &#x0668;
+	'9' => '٩', # &#x0669;
+	'.' => '٫', # &#x066b; wrong table ?
+	',' => '٬', # &#x066c;
 ];
 
 $namespaceNames = [
@@ -439,3 +436,11 @@ $specialPageAliases = [
  * Arabic trails too.
  */
 $linkTrail = '/^([a-zء-ي]+)(.*)$/sDu';
+
+$imageFiles = [
+	'button-bold'     => 'ar/button_bold.png',
+	'button-italic'   => 'ar/button_italic.png',
+	'button-link'     => 'ar/button_link.png',
+	'button-headline' => 'ar/button_headline.png',
+	'button-nowiki'   => 'ar/button_nowiki.png',
+];

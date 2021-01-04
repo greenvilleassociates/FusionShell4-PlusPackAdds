@@ -17,3 +17,4 @@ CREATE TABLE /*_*/job (
 ) /*$wgDBTableOptions*/;
 
 CREATE INDEX /*i*/job_cmd ON /*_*/job (job_cmd, job_namespace, job_title, job_params(128));
+

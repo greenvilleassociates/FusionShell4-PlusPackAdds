@@ -1,8 +1,5 @@
 <?php
 
-/**
- * @covers IuConverter
- */
 class LanguageIuTest extends LanguageClassesTestCase {
 	/**
 	 * @dataProvider provideAutoConvertToAllVariants

@@ -19,7 +19,6 @@
  *
  * @file
  */
-use Wikimedia\ObjectFactory;
 
 /**
  * Class to implement stub globals, which are globals that delay loading the
@@ -41,8 +40,6 @@ use Wikimedia\ObjectFactory;
  * resort, you can use StubObject::isRealObject() to break the loop, but as a
  * general rule, the stub object mechanism should be transparent, and code
  * which refers to it should be kept to a minimum.
- *
- * @newable
  */
 class StubObject {
 	/** @var null|string */
@@ -58,10 +55,8 @@ class StubObject {
 	protected $params;
 
 	/**
-	 * @stable to call
-	 *
-	 * @param string|null $global Name of the global variable.
-	 * @param string|callable|null $class Name of the class of the real object
+	 * @param string $global Name of the global variable.
+	 * @param string|callable $class Name of the class of the real object
 	 *                               or a factory function to call
 	 * @param array $params Parameters to pass to constructor of the real object.
 	 */
@@ -83,7 +78,7 @@ class StubObject {
 	 * @return bool True if $obj is not an instance of StubObject class.
 	 */
 	public static function isRealObject( $obj ) {
-		return is_object( $obj ) && !$obj instanceof self;
+		return is_object( $obj ) && !$obj instanceof StubObject;
 	}
 
 	/**
@@ -95,7 +90,7 @@ class StubObject {
 	 * @return void
 	 */
 	public static function unstub( &$obj ) {
-		if ( $obj instanceof self ) {
+		if ( $obj instanceof StubObject ) {
 			$obj = $obj->_unstub( 'unstub', 3 );
 		}
 	}
@@ -157,7 +152,7 @@ class StubObject {
 	public function _unstub( $name = '_unstub', $level = 2 ) {
 		static $recursionLevel = 0;
 
-		if ( !$GLOBALS[$this->global] instanceof self ) {
+		if ( !$GLOBALS[$this->global] instanceof StubObject ) {
 			return $GLOBALS[$this->global]; // already unstubbed.
 		}
 
@@ -168,10 +163,45 @@ class StubObject {
 					. "\${$this->global}->$name from $caller\n" );
 			}
 			wfDebug( "Unstubbing \${$this->global} on call of "
-				. "\${$this->global}::$name from $caller" );
+				. "\${$this->global}::$name from $caller\n" );
 			$GLOBALS[$this->global] = $this->_newObject();
 			--$recursionLevel;
 			return $GLOBALS[$this->global];
 		}
+	}
+}
+
+/**
+ * Stub object for the user language. Assigned to the $wgLang global.
+ */
+class StubUserLang extends StubObject {
+
+	public function __construct() {
+		parent::__construct( 'wgLang' );
+	}
+
+	/**
+	 * Call Language::findVariantLink after unstubbing $wgLang.
+	 *
+	 * This method is implemented with a full signature rather than relying on
+	 * __call so that the pass-by-reference signature of the proxied method is
+	 * honored.
+	 *
+	 * @param string &$link The name of the link
+	 * @param Title &$nt The title object of the link
+	 * @param bool $ignoreOtherCond To disable other conditions when
+	 *   we need to transclude a template or update a category's link
+	 */
+	public function findVariantLink( &$link, &$nt, $ignoreOtherCond = false ) {
+		global $wgLang;
+		$this->_unstub( 'findVariantLink', 3 );
+		$wgLang->findVariantLink( $link, $nt, $ignoreOtherCond );
+	}
+
+	/**
+	 * @return Language
+	 */
+	public function _newObject() {
+		return RequestContext::getMain()->getLanguage();
 	}
 }

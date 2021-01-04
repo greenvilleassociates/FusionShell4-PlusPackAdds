@@ -9,8 +9,6 @@ use LogicException;
  * This generally means an error in the internal logic of a function, or a serious problem
  * in the runtime environment.
  *
- * @since 0.1.0
- *
  * @license MIT
  * @author Daniel Kinzler
  * @copyright Wikimedia Deutschland e.V.

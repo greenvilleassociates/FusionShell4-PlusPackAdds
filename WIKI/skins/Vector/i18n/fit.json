@@ -1,12 +1,10 @@
 {
 	"@metadata": {
 		"authors": [
-			"Mestos",
-			"Palmtree222",
-			"Pyscowicz"
+			"Mestos"
 		]
 	},
-	"vector-action-addsection": "Lissää aihe",
+	"vector-action-addsection": "Lissää aine",
 	"vector-action-delete": "Ota poies",
 	"vector-action-move": "Siirä",
 	"vector-action-protect": "Suojaa",
@@ -16,6 +14,5 @@
 	"vector-view-edit": "Mookkaa",
 	"vector-view-history": "Näytä histuuria",
 	"vector-view-view": "Lue",
-	"vector-view-viewsource": "Näytä lähekooti",
-	"vector-more-actions": "Lissää"
+	"vector-view-viewsource": "Näytä lähekooti"
 }

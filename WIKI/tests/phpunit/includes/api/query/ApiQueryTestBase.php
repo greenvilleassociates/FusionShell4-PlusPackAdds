@@ -1,5 +1,7 @@
 <?php
 /**
+ * Created on Feb 10, 2013
+ *
  * Copyright © 2013 Yuri Astrakhan "<Firstname><Lastname>@gmail.com"
  *
  * This program is free software; you can redistribute it and/or modify
@@ -20,14 +22,11 @@
  * @file
  */
 
-use PHPUnit\Framework\ExpectationFailedException;
-use SebastianBergmann\Comparator\ComparisonFailure;
-
 /** This class has some common functionality for testing query module
  */
 abstract class ApiQueryTestBase extends ApiTestCase {
 
-	private const PARAM_ASSERT = <<<STR
+	const PARAM_ASSERT = <<<STR
 Each parameter must be an array of two elements,
 first - an array of params to the API call,
 and the second array - expected results as returned by the API
@@ -35,14 +34,14 @@ STR;
 
 	/**
 	 * Merges all requests parameter + expected values into one
-	 * @param array ...$arrays List of arrays, each of which contains exactly two
+	 * @param array $v,... List of arrays, each of which contains exactly two
 	 * @return array
 	 */
-	protected function merge( ...$arrays ) {
+	protected function merge( /*...*/ ) {
 		$request = [];
 		$expected = [];
-		foreach ( $arrays as $array ) {
-			list( $req, $exp ) = $this->validateRequestExpectedPair( $array );
+		foreach ( func_get_args() as $v ) {
+			list( $req, $exp ) = $this->validateRequestExpectedPair( $v );
 			$request = array_merge_recursive( $request, $req );
 			$this->mergeExpected( $expected, $exp );
 		}
@@ -57,12 +56,12 @@ STR;
 	 * @return array
 	 */
 	private function validateRequestExpectedPair( $v ) {
-		$this->assertIsArray( $v, self::PARAM_ASSERT );
-		$this->assertCount( 2, $v, self::PARAM_ASSERT );
+		$this->assertInternalType( 'array', $v, self::PARAM_ASSERT );
+		$this->assertEquals( 2, count( $v ), self::PARAM_ASSERT );
 		$this->assertArrayHasKey( 0, $v, self::PARAM_ASSERT );
 		$this->assertArrayHasKey( 1, $v, self::PARAM_ASSERT );
-		$this->assertIsArray( $v[0], self::PARAM_ASSERT );
-		$this->assertIsArray( $v[1], self::PARAM_ASSERT );
+		$this->assertInternalType( 'array', $v[0], self::PARAM_ASSERT );
+		$this->assertInternalType( 'array', $v[1], self::PARAM_ASSERT );
 
 		return $v;
 	}
@@ -89,10 +88,10 @@ STR;
 	/**
 	 * Checks that the request's result matches the expected results.
 	 * Assumes no rawcontinue and a complete batch.
-	 * @param array $values Array is a two element [ request, expected_results ]
-	 * @param array|null $session
+	 * @param array $values Array is a two element array( request, expected_results )
+	 * @param array $session
 	 * @param bool $appendModule
-	 * @param User|null $user
+	 * @param User $user
 	 */
 	protected function check( $values, array $session = null,
 		$appendModule = false, User $user = null
@@ -115,14 +114,20 @@ STR;
 			$exp = self::sanitizeResultArray( $exp );
 			$result = self::sanitizeResultArray( $result );
 			$this->assertEquals( $exp, $result );
-		} catch ( ExpectationFailedException $e ) {
+		} catch ( PHPUnit_Framework_ExpectationFailedException $e ) {
 			if ( is_array( $message ) ) {
 				$message = http_build_query( $message );
 			}
 
-			throw new ExpectationFailedException(
+			// FIXME: once we migrate to phpunit 4.1+, hardcode ComparisonFailure exception use
+			$compEx = 'SebastianBergmann\Comparator\ComparisonFailure';
+			if ( !class_exists( $compEx ) ) {
+				$compEx = 'PHPUnit_Framework_ComparisonFailure';
+			}
+
+			throw new PHPUnit_Framework_ExpectationFailedException(
 				$e->getMessage() . "\nRequest: $message",
-				new ComparisonFailure(
+				new $compEx(
 					$exp,
 					$result,
 					print_r( $exp, true ),

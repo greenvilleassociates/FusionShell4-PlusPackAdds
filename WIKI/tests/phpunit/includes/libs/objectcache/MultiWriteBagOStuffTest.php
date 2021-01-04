@@ -3,7 +3,7 @@
 /**
  * @group Database
  */
-class MultiWriteBagOStuffTest extends MediaWikiIntegrationTestCase {
+class MultiWriteBagOStuffTest extends MediaWikiTestCase {
 	/** @var HashBagOStuff */
 	private $cache1;
 	/** @var HashBagOStuff */
@@ -11,7 +11,7 @@ class MultiWriteBagOStuffTest extends MediaWikiIntegrationTestCase {
 	/** @var MultiWriteBagOStuff */
 	private $cache;
 
-	protected function setUp() : void {
+	protected function setUp() {
 		parent::setUp();
 
 		$this->cache1 = new HashBagOStuff();
@@ -28,8 +28,8 @@ class MultiWriteBagOStuffTest extends MediaWikiIntegrationTestCase {
 	 * @covers MultiWriteBagOStuff::doWrite
 	 */
 	public function testSetImmediate() {
-		$key = 'key';
-		$value = 'value';
+		$key = wfRandomString();
+		$value = wfRandomString();
 		$this->cache->set( $key, $value );
 
 		// Set in tier 1
@@ -42,8 +42,8 @@ class MultiWriteBagOStuffTest extends MediaWikiIntegrationTestCase {
 	 * @covers MultiWriteBagOStuff
 	 */
 	public function testSyncMerge() {
-		$key = 'keyA';
-		$value = 'value';
+		$key = wfRandomString();
+		$value = wfRandomString();
 		$func = function () use ( $value ) {
 			return $value;
 		};
@@ -56,14 +56,14 @@ class MultiWriteBagOStuffTest extends MediaWikiIntegrationTestCase {
 		// Set in tier 1
 		$this->assertEquals( $value, $this->cache1->get( $key ), 'Written to tier 1' );
 		// Not yet set in tier 2
-		$this->assertFalse( $this->cache2->get( $key ), 'Not written to tier 2' );
+		$this->assertEquals( false, $this->cache2->get( $key ), 'Not written to tier 2' );
 
 		$dbw->commit();
 
 		// Set in tier 2
 		$this->assertEquals( $value, $this->cache2->get( $key ), 'Written to tier 2' );
 
-		$key = 'keyB';
+		$key = wfRandomString();
 
 		$dbw->begin();
 		$this->cache->merge( $key, $func, 0, 1, BagOStuff::WRITE_SYNC );
@@ -80,8 +80,8 @@ class MultiWriteBagOStuffTest extends MediaWikiIntegrationTestCase {
 	 * @covers MultiWriteBagOStuff::set
 	 */
 	public function testSetDelayed() {
-		$key = 'key';
-		$value = (object)[ 'v' => 'saved value' ];
+		$key = wfRandomString();
+		$value = (object)[ 'v' => wfRandomString() ];
 		$expectValue = clone $value;
 
 		// XXX: DeferredUpdates bound to transactions in CLI mode
@@ -90,12 +90,12 @@ class MultiWriteBagOStuffTest extends MediaWikiIntegrationTestCase {
 		$this->cache->set( $key, $value );
 
 		// Test that later changes to $value don't affect the saved value (e.g. T168040)
-		$value->v = 'other value';
+		$value->v = 'bogus';
 
 		// Set in tier 1
 		$this->assertEquals( $expectValue, $this->cache1->get( $key ), 'Written to tier 1' );
 		// Not yet set in tier 2
-		$this->assertFalse( $this->cache2->get( $key ), 'Not written to tier 2' );
+		$this->assertEquals( false, $this->cache2->get( $key ), 'Not written to tier 2' );
 
 		$dbw->commit();
 
@@ -136,17 +136,5 @@ class MultiWriteBagOStuffTest extends MediaWikiIntegrationTestCase {
 		$cache = new MultiWriteBagOStuff( [ 'caches' => [ $cache1, $cache2 ] ] );
 
 		$this->assertSame( 'special', $cache->makeGlobalKey( 'a', 'b' ) );
-	}
-
-	/**
-	 * @covers MultiWriteBagOStuff::add
-	 */
-	public function testDuplicateStoreAdd() {
-		$bag = new HashBagOStuff();
-		$cache = new MultiWriteBagOStuff( [
-			'caches' => [ $bag, $bag ],
-		] );
-
-		$this->assertTrue( $cache->add( 'key', 1, 30 ) );
 	}
 }

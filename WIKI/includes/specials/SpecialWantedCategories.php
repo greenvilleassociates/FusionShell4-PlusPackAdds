@@ -28,14 +28,14 @@
  *
  * @ingroup SpecialPage
  */
-class SpecialWantedCategories extends WantedQueryPage {
+class WantedCategoriesPage extends WantedQueryPage {
 	private $currentCategoryCounts;
 
-	public function __construct( $name = 'Wantedcategories' ) {
+	function __construct( $name = 'Wantedcategories' ) {
 		parent::__construct( $name );
 	}
 
-	public function getQueryInfo() {
+	function getQueryInfo() {
 		return [
 			'tables' => [ 'categorylinks', 'page' ],
 			'fields' => [
@@ -51,7 +51,7 @@ class SpecialWantedCategories extends WantedQueryPage {
 		];
 	}
 
-	public function preprocessResults( $db, $res ) {
+	function preprocessResults( $db, $res ) {
 		parent::preprocessResults( $db, $res );
 
 		$this->currentCategoryCounts = [];
@@ -87,10 +87,11 @@ class SpecialWantedCategories extends WantedQueryPage {
 	 * @param object $result Result row
 	 * @return string
 	 */
-	public function formatResult( $skin, $result ) {
-		$nt = Title::makeTitle( $result->namespace, $result->title );
+	function formatResult( $skin, $result ) {
+		global $wgContLang;
 
-		$text = new HtmlArmor( $this->getLanguageConverter()->convertHtml( $nt->getText() ) );
+		$nt = Title::makeTitle( $result->namespace, $result->title );
+		$text = $wgContLang->convert( $nt->getText() );
 
 		if ( !$this->isCached() ) {
 			// We can assume the freshest data
@@ -102,7 +103,9 @@ class SpecialWantedCategories extends WantedQueryPage {
 		} else {
 			$plink = $this->getLinkRenderer()->makeLink( $nt, $text );
 
-			$currentValue = $this->currentCategoryCounts[$result->title] ?? 0;
+			$currentValue = isset( $this->currentCategoryCounts[$result->title] )
+				? $this->currentCategoryCounts[$result->title]
+				: 0;
 			$cachedValue = intval( $result->value ); // T76910
 
 			// If the category has been created or emptied since the list was refreshed, strike it

@@ -36,14 +36,14 @@ require_once "$IP/maintenance/Maintenance.php";
 class CountFancyCaptchas extends Maintenance {
 	public function __construct() {
 		parent::__construct();
-		$this->addDescription( "Counts the number of fancy aptchas in storage" );
+		$this->mDescription = "Counts the number of fancy aptchas in storage";
 		$this->requireExtension( "FancyCaptcha" );
 	}
 
 	public function execute() {
 		$instance = ConfirmEditHooks::getInstance();
 		if ( !( $instance instanceof FancyCaptcha ) ) {
-			$this->fatalError( "\$wgCaptchaClass is not FancyCaptcha.\n", 1 );
+			$this->error( "\$wgCaptchaClass is not FancyCaptcha.\n", 1 );
 		}
 
 		$countAct = $instance->getCaptchaCount();
@@ -51,5 +51,5 @@ class CountFancyCaptchas extends Maintenance {
 	}
 }
 
-$maintClass = CountFancyCaptchas::class;
+$maintClass = "CountFancyCaptchas";
 require_once RUN_MAINTENANCE_IF_MAIN;

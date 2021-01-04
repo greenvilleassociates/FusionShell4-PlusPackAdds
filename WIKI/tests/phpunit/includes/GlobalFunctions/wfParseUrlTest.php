@@ -24,8 +24,8 @@
  * @group GlobalFunctions
  * @covers ::wfParseUrl
  */
-class WfParseUrlTest extends MediaWikiIntegrationTestCase {
-	protected function setUp() : void {
+class WfParseUrlTest extends MediaWikiTestCase {
+	protected function setUp() {
 		parent::setUp();
 
 		$this->setMwGlobals( 'wgUrlProtocols', [
@@ -151,46 +151,6 @@ class WfParseUrlTest extends MediaWikiIntegrationTestCase {
 			[
 				'invalid://test/',
 				false
-			],
-			// T212067
-			[
-				'//evil.com?example.org/foo/bar',
-				[
-					'scheme' => '',
-					'delimiter' => '//',
-					'host' => 'evil.com',
-					'query' => 'example.org/foo/bar',
-				]
-			],
-			[
-				'//evil.com?example.org/foo/bar?baz#quux',
-				[
-					'scheme' => '',
-					'delimiter' => '//',
-					'host' => 'evil.com',
-					'query' => 'example.org/foo/bar?baz',
-					'fragment' => 'quux',
-				]
-			],
-			[
-				'//evil.com?example.org?baz#quux',
-				[
-					'scheme' => '',
-					'delimiter' => '//',
-					'host' => 'evil.com',
-					'query' => 'example.org?baz',
-					'fragment' => 'quux',
-				]
-			],
-			[
-				'//evil.com?example.org#quux',
-				[
-					'scheme' => '',
-					'delimiter' => '//',
-					'host' => 'evil.com',
-					'query' => 'example.org',
-					'fragment' => 'quux',
-				]
 			],
 		];
 	}

@@ -22,16 +22,9 @@
 
 use MediaWiki\Auth\AuthManager;
 use MediaWiki\Auth\TemporaryPasswordAuthenticationRequest;
-use MediaWiki\Config\ServiceOptions;
-use MediaWiki\HookContainer\HookContainer;
-use MediaWiki\HookContainer\HookRunner;
-use MediaWiki\Logger\LoggerFactory;
-use MediaWiki\MediaWikiServices;
-use MediaWiki\Permissions\PermissionManager;
 use Psr\Log\LoggerAwareInterface;
-use Psr\Log\LoggerAwareTrait;
 use Psr\Log\LoggerInterface;
-use Wikimedia\Rdbms\ILoadBalancer;
+use MediaWiki\Logger\LoggerFactory;
 
 /**
  * Helper class for the password reset functionality shared by the web UI and the API.
@@ -41,87 +34,44 @@ use Wikimedia\Rdbms\ILoadBalancer;
  * functionality) to be enabled.
  */
 class PasswordReset implements LoggerAwareInterface {
-	use LoggerAwareTrait;
-
-	/** @var ServiceOptions|Config */
+	/** @var Config */
 	protected $config;
 
 	/** @var AuthManager */
 	protected $authManager;
 
-	/** @var PermissionManager */
-	protected $permissionManager;
-
-	/** @var ILoadBalancer */
-	protected $loadBalancer;
-
-	/** @var HookContainer */
-	private $hookContainer;
-
-	/** @var HookRunner */
-	private $hookRunner;
+	/** @var LoggerInterface */
+	protected $logger;
 
 	/**
 	 * In-process cache for isAllowed lookups, by username.
 	 * Contains a StatusValue object
-	 * @var MapCacheLRU
+	 * @var HashBagOStuff
 	 */
 	private $permissionCache;
 
-	public const CONSTRUCTOR_OPTIONS = [
-		'AllowRequiringEmailForResets',
-		'EnableEmail',
-		'PasswordResetRoutes',
-	];
-
-	/**
-	 * This class is managed by MediaWikiServices, don't instantiate directly.
-	 *
-	 * @param ServiceOptions|Config $config
-	 * @param AuthManager $authManager
-	 * @param PermissionManager $permissionManager
-	 * @param ILoadBalancer|null $loadBalancer
-	 * @param LoggerInterface|null $logger
-	 * @param HookContainer|null $hookContainer
-	 */
-	public function __construct(
-		$config,
-		AuthManager $authManager,
-		PermissionManager $permissionManager,
-		ILoadBalancer $loadBalancer = null,
-		LoggerInterface $logger = null,
-		HookContainer $hookContainer = null
-	) {
+	public function __construct( Config $config, AuthManager $authManager ) {
 		$this->config = $config;
 		$this->authManager = $authManager;
-		$this->permissionManager = $permissionManager;
+		$this->permissionCache = new HashBagOStuff( [ 'maxKeys' => 1 ] );
+		$this->logger = LoggerFactory::getInstance( 'authentication' );
+	}
 
-		if ( !$loadBalancer ) {
-			wfDeprecatedMsg( 'Not passing LoadBalancer to ' . __METHOD__ .
-				' was deprecated in MediaWiki 1.34', '1.34' );
-			$loadBalancer = MediaWikiServices::getInstance()->getDBLoadBalancer();
-		}
-		$this->loadBalancer = $loadBalancer;
-
-		if ( !$logger ) {
-			wfDeprecatedMsg( 'Not passing LoggerInterface to ' . __METHOD__ .
-				' was deprecated in MediaWiki 1.34', '1.34' );
-			$logger = LoggerFactory::getInstance( 'authentication' );
-		}
+	/**
+	 * Set the logger instance to use.
+	 *
+	 * @param LoggerInterface $logger
+	 * @since 1.29
+	 */
+	public function setLogger( LoggerInterface $logger ) {
 		$this->logger = $logger;
-
-		if ( !$hookContainer ) {
-			$hookContainer = MediaWikiServices::getInstance()->getHookContainer();
-		}
-		$this->hookContainer = $hookContainer;
-		$this->hookRunner = new HookRunner( $hookContainer );
-
-		$this->permissionCache = new MapCacheLRU( 1 );
 	}
 
 	/**
 	 * Check if a given user has permission to use this functionality.
 	 * @param User $user
+	 * @param bool $displayPassword If set, also check whether the user is allowed to reset the
+	 *   password of another user and see the temporary password.
 	 * @since 1.29 Second argument for displayPassword removed.
 	 * @return StatusValue
 	 */
@@ -131,7 +81,9 @@ class PasswordReset implements LoggerAwareInterface {
 			$resetRoutes = $this->config->get( 'PasswordResetRoutes' );
 			$status = StatusValue::newGood();
 
-			if ( !is_array( $resetRoutes ) || !in_array( true, $resetRoutes, true ) ) {
+			if ( !is_array( $resetRoutes ) ||
+				 !in_array( true, array_values( $resetRoutes ), true )
+			) {
 				// Maybe password resets are disabled, or there are no allowable routes
 				$status = StatusValue::newFatal( 'passwordreset-disabled' );
 			} elseif (
@@ -145,7 +97,7 @@ class PasswordReset implements LoggerAwareInterface {
 			} elseif ( !$this->config->get( 'EnableEmail' ) ) {
 				// Maybe email features have been disabled
 				$status = StatusValue::newFatal( 'passwordreset-emaildisabled' );
-			} elseif ( !$this->permissionManager->userHasRight( $user, 'editmyprivateinfo' ) ) {
+			} elseif ( !$user->isAllowed( 'editmyprivateinfo' ) ) {
 				// Maybe not all users have permission to change private data
 				$status = StatusValue::newFatal( 'badaccess' );
 			} elseif ( $this->isBlocked( $user ) ) {
@@ -170,9 +122,10 @@ class PasswordReset implements LoggerAwareInterface {
 	 *
 	 * @since 1.29 Fourth argument for displayPassword removed.
 	 * @param User $performingUser The user that does the password reset
-	 * @param string|null $username The user whose password is reset
-	 * @param string|null $email Alternative way to specify the user
-	 * @return StatusValue
+	 * @param string $username The user whose password is reset
+	 * @param string $email Alternative way to specify the user
+	 * @return StatusValue Will contain the passwords as a username => password array if the
+	 *   $displayPassword flag was set
 	 * @throws LogicException When the user is not allowed to perform the action
 	 * @throws MWException On unexpected DB errors
 	 */
@@ -184,107 +137,70 @@ class PasswordReset implements LoggerAwareInterface {
 				. ' is not allowed to reset passwords' );
 		}
 
-		// Check against the rate limiter. If the $wgRateLimit is reached, we want to pretend
-		// that the request was good to avoid displaying an error message.
-		if ( $performingUser->pingLimiter( 'mailpassword' ) ) {
-			return StatusValue::newGood();
-		}
-
-		// We need to have a valid IP address for the hook 'User::mailPasswordInternal', but per T20347,
-		// we should send the user's name if they're logged in.
-		$ip = $performingUser->getRequest()->getIP();
-		if ( !$ip ) {
-			return StatusValue::newFatal( 'badipaddress' );
-		}
-
-		$username = $username ?? '';
-		$email = $email ?? '';
-
 		$resetRoutes = $this->config->get( 'PasswordResetRoutes' )
 			+ [ 'username' => false, 'email' => false ];
 		if ( $resetRoutes['username'] && $username ) {
 			$method = 'username';
-			$users = [ $this->lookupUser( $username ) ];
+			$users = [ User::newFromName( $username ) ];
+			$email = null;
 		} elseif ( $resetRoutes['email'] && $email ) {
 			if ( !Sanitizer::validateEmail( $email ) ) {
-				// Only email was supplied but not valid: pretend everything's fine.
-				return StatusValue::newGood();
+				return StatusValue::newFatal( 'passwordreset-invalidemail' );
 			}
-			// Only email was provided
 			$method = 'email';
 			$users = $this->getUsersByEmail( $email );
 			$username = null;
-			// Remove users whose preference 'requireemail' is on since username was not submitted
-			if ( $this->config->get( 'AllowRequiringEmailForResets' ) ) {
-				foreach ( $users as $index => $user ) {
-					if ( $user->getBoolOption( 'requireemail' ) ) {
-						unset( $users[$index] );
-					}
-				}
-			}
 		} else {
 			// The user didn't supply any data
 			return StatusValue::newFatal( 'passwordreset-nodata' );
-		}
-
-		// If the username is not valid, tell the user.
-		if ( $username && !User::getCanonicalName( $username ) ) {
-			return StatusValue::newFatal( 'noname' );
 		}
 
 		// Check for hooks (captcha etc), and allow them to modify the users list
 		$error = [];
 		$data = [
 			'Username' => $username,
-			// Email gets set to null for backward compatibility
-			'Email' => $method === 'email' ? $email : null,
+			'Email' => $email,
 		];
-
-		// Recreate the $users array with its values so that we reset the numeric keys since
-		// the key '0' might have been unset from $users array. 'SpecialPasswordResetOnSubmit'
-		// hook assumes that index '0' is defined if $users is not empty.
-		$users = array_values( $users );
-
-		if ( !$this->hookRunner->onSpecialPasswordResetOnSubmit( $users, $data, $error ) ) {
+		if ( !Hooks::run( 'SpecialPasswordResetOnSubmit', [ &$users, $data, &$error ] ) ) {
 			return StatusValue::newFatal( Message::newFromSpecifier( $error ) );
-		}
-
-		// Get the first element in $users by using `reset` function just in case $users is changed
-		// in 'SpecialPasswordResetOnSubmit' hook.
-		$firstUser = reset( $users ) ?? null;
-
-		$requireEmail = $this->config->get( 'AllowRequiringEmailForResets' )
-			&& $method === 'username'
-			&& $firstUser
-			&& $firstUser->getBoolOption( 'requireemail' );
-		if ( $requireEmail && ( $email === '' || !Sanitizer::validateEmail( $email ) ) ) {
-			// Email is required, and not supplied or not valid: pretend everything's fine.
-			return StatusValue::newGood();
 		}
 
 		if ( !$users ) {
 			if ( $method === 'email' ) {
 				// Don't reveal whether or not an email address is in use
-				return StatusValue::newGood();
+				return StatusValue::newGood( [] );
 			} else {
 				return StatusValue::newFatal( 'noname' );
 			}
 		}
 
-		// If the user doesn't exist, or if the user doesn't have an email address,
-		// don't disclose the information. We want to pretend everything is ok per T238961.
-		// Note that all the users will have the same email address (or none),
-		// so there's no need to check more than the first.
-		if ( !$firstUser instanceof User || !$firstUser->getId() || !$firstUser->getEmail() ) {
-			return StatusValue::newGood();
+		$firstUser = $users[0];
+
+		if ( !$firstUser instanceof User || !$firstUser->getId() ) {
+			// Don't parse username as wikitext (T67501)
+			return StatusValue::newFatal( wfMessage( 'nosuchuser', wfEscapeWikiText( $username ) ) );
 		}
 
-		// Email is required but the email doesn't match: pretend everything's fine.
-		if ( $requireEmail && $firstUser->getEmail() !== $email ) {
-			return StatusValue::newGood();
+		// Check against the rate limiter
+		if ( $performingUser->pingLimiter( 'mailpassword' ) ) {
+			return StatusValue::newFatal( 'actionthrottledtext' );
 		}
 
-		$this->hookRunner->onUser__mailPasswordInternal( $performingUser, $ip, $firstUser );
+		// All the users will have the same email address
+		if ( !$firstUser->getEmail() ) {
+			// This won't be reachable from the email route, so safe to expose the username
+			return StatusValue::newFatal( wfMessage( 'noemail',
+				wfEscapeWikiText( $firstUser->getName() ) ) );
+		}
+
+		// We need to have a valid IP address for the hook, but per T20347, we should
+		// send the user's name if they're logged in.
+		$ip = $performingUser->getRequest()->getIP();
+		if ( !$ip ) {
+			return StatusValue::newFatal( 'badipaddress' );
+		}
+
+		Hooks::run( 'User::mailPasswordInternal', [ &$performingUser, &$ip, &$firstUser ] );
 
 		$result = StatusValue::newGood();
 		$reqs = [];
@@ -293,15 +209,7 @@ class PasswordReset implements LoggerAwareInterface {
 			$req->username = $user->getName();
 			$req->mailpassword = true;
 			$req->caller = $performingUser->getName();
-
 			$status = $this->authManager->allowsAuthenticationDataChange( $req, true );
-			// If status is good and the value is 'throttled-mailpassword', we want to pretend
-			// that the request was good to avoid displaying an error message and disclose
-			// if a reset password was previously sent.
-			if ( $status->isGood() && $status->getValue() === 'throttled-mailpassword' ) {
-				return StatusValue::newGood();
-			}
-
 			if ( $status->isGood() && $status->getValue() !== 'ignored' ) {
 				$reqs[] = $req;
 			} elseif ( $result->isGood() ) {
@@ -319,6 +227,7 @@ class PasswordReset implements LoggerAwareInterface {
 			'requestingUser' => $performingUser->getName(),
 			'targetUsername' => $username,
 			'targetEmail' => $email,
+			'actualUser' => $firstUser->getName(),
 		];
 
 		if ( !$result->isGood() ) {
@@ -329,12 +238,17 @@ class PasswordReset implements LoggerAwareInterface {
 			return $result;
 		}
 
-		DeferredUpdates::addUpdate(
-			new SendPasswordResetEmailUpdate( $this->authManager, $reqs, $logContext ),
-			DeferredUpdates::POSTSEND
+		$passwords = [];
+		foreach ( $reqs as $req ) {
+			$this->authManager->changeAuthenticationData( $req );
+		}
+
+		$this->logger->info(
+			"{requestingUser} did password reset of {actualUser}",
+			$logContext
 		);
 
-		return StatusValue::newGood();
+		return StatusValue::newGood( $passwords );
 	}
 
 	/**
@@ -349,7 +263,23 @@ class PasswordReset implements LoggerAwareInterface {
 		if ( !$block ) {
 			return false;
 		}
-		return $block->appliesToPasswordReset();
+		$type = $block->getSystemBlockType();
+		if ( in_array( $type, [ null, 'global-block' ], true ) ) {
+			// Normal block. Maybe it was meant for someone else and the user just needs to log in;
+			// or maybe it was issued specifically to prevent some IP from messing with password
+			// reset? Go out on a limb and use the registration allowed flag to decide.
+			return $block->prevents( 'createaccount' );
+		} elseif ( $type === 'proxy' ) {
+			// we disallow actions through proxy even if the user is logged in
+			// so it makes sense to disallow password resets as well
+			return true;
+		} elseif ( in_array( $type, [ 'dnsbl', 'wgSoftBlockRanges' ], true ) ) {
+			// these are just meant to force login so let's not prevent that
+			return false;
+		} else {
+			// some extension - we'll have to guess
+			return true;
+		}
 	}
 
 	/**
@@ -358,14 +288,11 @@ class PasswordReset implements LoggerAwareInterface {
 	 * @throws MWException On unexpected database errors
 	 */
 	protected function getUsersByEmail( $email ) {
-		$userQuery = User::getQueryInfo();
-		$res = $this->loadBalancer->getConnectionRef( DB_REPLICA )->select(
-			$userQuery['tables'],
-			$userQuery['fields'],
+		$res = wfGetDB( DB_REPLICA )->select(
+			'user',
+			User::selectFields(),
 			[ 'user_email' => $email ],
-			__METHOD__,
-			[],
-			$userQuery['joins']
+			__METHOD__
 		);
 
 		if ( !$res ) {
@@ -378,16 +305,5 @@ class PasswordReset implements LoggerAwareInterface {
 			$users[] = User::newFromRow( $row );
 		}
 		return $users;
-	}
-
-	/**
-	 * User object creation helper for testability
-	 * @codeCoverageIgnore
-	 *
-	 * @param string $username
-	 * @return User|false
-	 */
-	protected function lookupUser( $username ) {
-		return User::newFromName( $username );
 	}
 }

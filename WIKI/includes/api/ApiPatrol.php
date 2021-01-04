@@ -2,6 +2,8 @@
 /**
  * API for MediaWiki 1.14+
  *
+ * Created on Sep 2, 2008
+ *
  * Copyright © 2008 Soxred93 soxred93@gmail.com,
  *
  * This program is free software; you can redistribute it and/or modify
@@ -22,8 +24,6 @@
  * @file
  */
 
-use MediaWiki\MediaWikiServices;
-
 /**
  * Allows user to patrol pages
  * @ingroup API
@@ -43,12 +43,11 @@ class ApiPatrol extends ApiBase {
 				$this->dieWithError( [ 'apierror-nosuchrcid', $params['rcid'] ] );
 			}
 		} else {
-			$store = MediaWikiServices::getInstance()->getRevisionStore();
-			$rev = $store->getRevisionById( $params['revid'] );
+			$rev = Revision::newFromId( $params['revid'] );
 			if ( !$rev ) {
 				$this->dieWithError( [ 'apierror-nosuchrevid', $params['revid'] ] );
 			}
-			$rc = $store->getRecentChange( $rev );
+			$rc = $rev->getRecentChange();
 			if ( !$rc ) {
 				$this->dieWithError( [ 'apierror-notpatrollable', $params['revid'] ] );
 			}
@@ -58,7 +57,7 @@ class ApiPatrol extends ApiBase {
 		$tags = $params['tags'];
 
 		// Check if user can add tags
-		if ( $tags !== null ) {
+		if ( !is_null( $tags ) ) {
 			$ableToTag = ChangeTags::canAddTagsAccompanyingChange( $tags, $user );
 			if ( !$ableToTag->isOK() ) {
 				$this->dieStatus( $ableToTag );
@@ -71,7 +70,7 @@ class ApiPatrol extends ApiBase {
 			$this->dieStatus( $this->errorArrayToStatus( $retval, $user ) );
 		}
 
-		$result = [ 'rcid' => (int)$rc->getAttribute( 'rc_id' ) ];
+		$result = [ 'rcid' => intval( $rc->getAttribute( 'rc_id' ) ) ];
 		ApiQueryBase::addTitleInfo( $result, $rc->getTitle() );
 		$this->getResult()->addValue( null, $this->getModuleName(), $result );
 	}

@@ -20,16 +20,14 @@
  * Validates all loaded extensions and skins using the ExtensionRegistry
  * against the extension.json schema in the docs/ folder.
  */
-class ExtensionJsonValidationTest extends PHPUnit\Framework\TestCase {
-
-	use MediaWikiCoversValidator;
+class ExtensionJsonValidationTest extends PHPUnit_Framework_TestCase {
 
 	/**
 	 * @var ExtensionJsonValidator
 	 */
 	protected $validator;
 
-	protected function setUp() : void {
+	public function setUp() {
 		parent::setUp();
 
 		$this->validator = new ExtensionJsonValidator( [ $this, 'markTestSkipped' ] );
@@ -61,7 +59,7 @@ class ExtensionJsonValidationTest extends PHPUnit\Framework\TestCase {
 			// All good
 			$this->assertTrue( true );
 		} catch ( ExtensionJsonValidationError $e ) {
-			$this->assertFalse( $e->getMessage() );
+			$this->assertEquals( false, $e->getMessage() );
 		}
 	}
 }

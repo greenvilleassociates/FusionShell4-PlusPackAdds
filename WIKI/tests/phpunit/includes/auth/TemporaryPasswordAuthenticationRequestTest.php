@@ -4,7 +4,7 @@ namespace MediaWiki\Auth;
 
 /**
  * @group AuthManager
- * @covers \MediaWiki\Auth\TemporaryPasswordAuthenticationRequest
+ * @covers MediaWiki\Auth\TemporaryPasswordAuthenticationRequest
  */
 class TemporaryPasswordAuthenticationRequestTest extends AuthenticationRequestTestCase {
 
@@ -25,33 +25,17 @@ class TemporaryPasswordAuthenticationRequestTest extends AuthenticationRequestTe
 	public function testNewRandom() {
 		global $wgPasswordPolicy;
 
-		$policy = $wgPasswordPolicy;
-		unset( $policy['policies'] );
-		$policy['policies']['default'] = [
+		$this->stashMwGlobals( 'wgPasswordPolicy' );
+		$wgPasswordPolicy['policies']['default'] += [
 			'MinimalPasswordLength' => 1,
-			'MinimumPasswordLengthToLogin' => 1,
+			'MinimalPasswordLengthToLogin' => 1,
 		];
-
-		$this->setMwGlobals( [
-			'wgMinimalPasswordLength' => 10,
-			'wgPasswordPolicy' => $policy,
-		] );
 
 		$ret1 = TemporaryPasswordAuthenticationRequest::newRandom();
 		$ret2 = TemporaryPasswordAuthenticationRequest::newRandom();
-		$this->assertEquals( 10, strlen( $ret1->password ) );
-		$this->assertEquals( 10, strlen( $ret2->password ) );
+		$this->assertNotSame( '', $ret1->password );
+		$this->assertNotSame( '', $ret2->password );
 		$this->assertNotSame( $ret1->password, $ret2->password );
-
-		$policy['policies']['default']['MinimalPasswordLength'] = 15;
-		$this->setMwGlobals( 'wgPasswordPolicy', $policy );
-		$ret = TemporaryPasswordAuthenticationRequest::newRandom();
-		$this->assertEquals( 15, strlen( $ret->password ) );
-
-		$policy['policies']['default']['MinimalPasswordLength'] = [ 'value' => 20 ];
-		$this->setMwGlobals( 'wgPasswordPolicy', $policy );
-		$ret = TemporaryPasswordAuthenticationRequest::newRandom();
-		$this->assertEquals( 20, strlen( $ret->password ) );
 	}
 
 	public function testNewInvalid() {
@@ -84,12 +68,12 @@ class TemporaryPasswordAuthenticationRequestTest extends AuthenticationRequestTe
 		$req->action = AuthManager::ACTION_LOGIN;
 		$req->username = 'UTSysop';
 		$ret = $req->describeCredentials();
-		$this->assertIsArray( $ret );
+		$this->assertInternalType( 'array', $ret );
 		$this->assertArrayHasKey( 'provider', $ret );
-		$this->assertInstanceOf( \Message::class, $ret['provider'] );
+		$this->assertInstanceOf( 'Message', $ret['provider'] );
 		$this->assertSame( 'authmanager-provider-temporarypassword', $ret['provider']->getKey() );
 		$this->assertArrayHasKey( 'account', $ret );
-		$this->assertInstanceOf( \Message::class, $ret['account'] );
+		$this->assertInstanceOf( 'Message', $ret['account'] );
 		$this->assertSame( [ 'UTSysop' ], $ret['account']->getParams() );
 	}
 }

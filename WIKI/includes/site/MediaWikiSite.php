@@ -22,7 +22,7 @@ use MediaWiki\Site\MediaWikiPageNameNormalizer;
  *
  * @file
  * @ingroup Site
- * @license GPL-2.0-or-later
+ * @license GNU GPL v2+
  * @author John Erling Blad < jeblad@gmail.com >
  * @author Daniel Kinzler
  * @author Jeroen De Dauw < jeroendedauw@gmail.com >
@@ -36,8 +36,8 @@ use MediaWiki\Site\MediaWikiPageNameNormalizer;
  * @ingroup Site
  */
 class MediaWikiSite extends Site {
-	public const PATH_FILE = 'file_path';
-	public const PATH_PAGE = 'page_path';
+	const PATH_FILE = 'file_path';
+	const PATH_PAGE = 'page_path';
 
 	/**
 	 * @since 1.21
@@ -64,8 +64,7 @@ class MediaWikiSite extends Site {
 	/**
 	 * Returns the normalized form of the given page title, using the
 	 * normalization rules of the given site. If the given title is a redirect,
-	 * the redirect will be resolved and the redirect target is returned.
-	 * Only titles of existing pages will be returned.
+	 * the redirect weill be resolved and the redirect target is returned.
 	 *
 	 * @note This actually makes an API request to the remote site, so beware
 	 *   that this function is slow and depends on an external service.
@@ -80,13 +79,11 @@ class MediaWikiSite extends Site {
 	 *
 	 * @param string $pageName
 	 *
-	 * @return string|false The normalized form of the title,
-	 * or false to indicate an invalid title, a missing page,
-	 * or some other kind of error.
+	 * @return string
 	 * @throws MWException
 	 */
 	public function normalizePageName( $pageName ) {
-		if ( defined( 'MW_PHPUNIT_TEST' ) || defined( 'MW_DEV_ENV' ) ) {
+		if ( defined( 'MW_PHPUNIT_TEST' ) ) {
 			// If the code is under test, don't call out to other sites, just
 			// normalize locally.
 			// Note: this may cause results to be inconsistent with the actual
@@ -176,13 +173,13 @@ class MediaWikiSite extends Site {
 	 *
 	 * @param string|bool $pageName Page name or false (default: false)
 	 *
-	 * @return string|null
+	 * @return string
 	 */
 	public function getPageUrl( $pageName = false ) {
 		$url = $this->getLinkPath();
 
-		if ( $url === null ) {
-			return null;
+		if ( $url === false ) {
+			return false;
 		}
 
 		if ( $pageName !== false ) {

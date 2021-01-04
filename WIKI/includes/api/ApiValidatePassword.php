@@ -1,7 +1,6 @@
 <?php
 
-use MediaWiki\MediaWikiServices;
-use MediaWiki\ParamValidator\TypeDef\UserDef;
+use MediaWiki\Auth\AuthManager;
 
 /**
  * @ingroup API
@@ -24,9 +23,7 @@ class ApiValidatePassword extends ApiBase {
 				);
 			}
 
-			if ( !$user->isAnon() ||
-				MediaWikiServices::getInstance()->getAuthManager()->userExists( $user->getName() )
-			) {
+			if ( !$user->isAnon() || AuthManager::singleton()->userExists( $user->getName() ) ) {
 				$this->dieWithError( 'userexists' );
 			}
 
@@ -36,7 +33,6 @@ class ApiValidatePassword extends ApiBase {
 			$user = $this->getUser();
 		}
 
-		$r = [];
 		$validity = $user->checkPasswordValidity( $params['password'] );
 		$r['validity'] = $validity->isGood() ? 'Good' : ( $validity->isOK() ? 'Change' : 'Invalid' );
 		$messages = array_merge(
@@ -47,7 +43,7 @@ class ApiValidatePassword extends ApiBase {
 			$r['validitymessages'] = $messages;
 		}
 
-		$this->getHookRunner()->onApiValidatePassword( $this, $r );
+		Hooks::run( 'ApiValidatePassword', [ $this, &$r ] );
 
 		$this->getResult()->addValue( null, $this->getModuleName(), $r );
 	}
@@ -64,7 +60,6 @@ class ApiValidatePassword extends ApiBase {
 			],
 			'user' => [
 				ApiBase::PARAM_TYPE => 'user',
-				UserDef::PARAM_ALLOWED_USER_TYPES => [ 'name', 'id' ],
 			],
 			'email' => null,
 			'realname' => null,

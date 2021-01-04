@@ -20,8 +20,6 @@
  * @file
  */
 
-declare( strict_types = 1 );
-
 /**
  * Helper class for passwords that use another password hash underneath it
  * and encrypts that hash with a configured secret.
@@ -29,18 +27,18 @@ declare( strict_types = 1 );
  * @since 1.24
  */
 class EncryptedPassword extends ParameterizedPassword {
-	protected function getDelimiter() : string {
+	protected function getDelimiter() {
 		return ':';
 	}
 
-	protected function getDefaultParams() : array {
+	protected function getDefaultParams() {
 		return [
 			'cipher' => $this->config['cipher'],
 			'secret' => count( $this->config['secrets'] ) - 1
 		];
 	}
 
-	public function crypt( string $password ) : void {
+	public function crypt( $password ) {
 		$secret = $this->config['secrets'][$this->params['secret']];
 
 		// Clear error string
@@ -62,7 +60,7 @@ class EncryptedPassword extends ParameterizedPassword {
 		if ( count( $this->args ) ) {
 			$iv = base64_decode( $this->args[0] );
 		} else {
-			$iv = random_bytes( openssl_cipher_iv_length( $this->params['cipher'] ) );
+			$iv = MWCryptRand::generate( openssl_cipher_iv_length( $this->params['cipher'] ), true );
 		}
 
 		$this->hash = openssl_encrypt(
@@ -79,7 +77,7 @@ class EncryptedPassword extends ParameterizedPassword {
 	 * @throws MWException If the configuration is not valid
 	 * @return bool True if the password was updated
 	 */
-	public function update() : bool {
+	public function update() {
 		if ( count( $this->args ) != 1 || $this->params == $this->getDefaultParams() ) {
 			// Hash does not need updating
 			return false;
@@ -104,7 +102,7 @@ class EncryptedPassword extends ParameterizedPassword {
 		$this->params = $this->getDefaultParams();
 
 		// Check the key size with the new params
-		$iv = random_bytes( openssl_cipher_iv_length( $this->params['cipher'] ) );
+		$iv = MWCryptRand::generate( openssl_cipher_iv_length( $this->params['cipher'] ), true );
 		$this->hash = openssl_encrypt(
 				$underlyingHash,
 				$this->params['cipher'],

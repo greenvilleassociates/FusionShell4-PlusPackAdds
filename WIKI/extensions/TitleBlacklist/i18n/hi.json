@@ -1,12 +1,11 @@
 {
 	"@metadata": {
 		"authors": [
-			"Ankita-ks",
 			"Ansumang",
 			"Kaustubh",
-			"Sfic",
 			"Shyam",
-			"आलोक"
+			"आलोक",
+			"Sfic"
 		]
 	},
 	"action-titleblacklistlog": "शीर्षक कालीसूची लॉग देखें",

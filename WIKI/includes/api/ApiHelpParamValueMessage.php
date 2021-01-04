@@ -1,5 +1,9 @@
 <?php
 /**
+ *
+ *
+ * Created on Dec 22, 2014
+ *
  * Copyright © 2014 Wikimedia Foundation and contributors
  *
  * This program is free software; you can redistribute it and/or modify
@@ -27,40 +31,27 @@
  * include markup wikitext while still keeping the
  * 'APIGetParamDescriptionMessages' hook simple.
  *
- * @newable
  * @since 1.25
- * @ingroup API
  */
 class ApiHelpParamValueMessage extends Message {
 
 	protected $paramValue;
 	protected $deprecated;
-	protected $internal;
 
 	/**
 	 * @see Message::__construct
-	 * @stable to call
 	 *
 	 * @param string $paramValue Parameter value being documented
 	 * @param string $text Message to use.
 	 * @param array $params Parameters for the message.
 	 * @param bool $deprecated Whether the value is deprecated
-	 * @param bool $internal Whether the value is internal
 	 * @throws InvalidArgumentException
 	 * @since 1.30 Added the `$deprecated` parameter
-	 * @since 1.35 Added the `$internal` parameter
 	 */
-	public function __construct(
-		$paramValue,
-		$text,
-		$params = [],
-		$deprecated = false,
-		$internal = false
-	) {
+	public function __construct( $paramValue, $text, $params = [], $deprecated = false ) {
 		parent::__construct( $text, $params );
 		$this->paramValue = $paramValue;
 		$this->deprecated = (bool)$deprecated;
-		$this->internal = (bool)$internal;
 	}
 
 	/**
@@ -81,46 +72,24 @@ class ApiHelpParamValueMessage extends Message {
 	}
 
 	/**
-	 * Fetch the 'internal' flag
-	 * @since 1.35
-	 * @return bool
-	 */
-	public function isInternal() {
-		return $this->internal;
-	}
-
-	/**
 	 * Fetch the message.
 	 * @return string
 	 */
 	public function fetchMessage() {
 		if ( $this->message === null ) {
-			$prefix = '';
+			$dep = '';
 			if ( $this->isDeprecated() ) {
-				$prefix .= '<span class="apihelp-deprecated">' .
-					$this->subMessage( 'api-help-param-deprecated' ) .
-					'</span>' .
-					$this->subMessage( 'word-separator' );
-			}
-			if ( $this->isInternal() ) {
-				$prefix .= '<span class="apihelp-internal">' .
-					$this->subMessage( 'api-help-param-internal' ) .
-					'</span>' .
-					$this->subMessage( 'word-separator' );
+				$msg = new Message( 'api-help-param-deprecated' );
+				$msg->interface = $this->interface;
+				$msg->language = $this->language;
+				$msg->useDatabase = $this->useDatabase;
+				$msg->title = $this->title;
+				$dep = '<span class="apihelp-deprecated">' . $msg->fetchMessage() . '</span> ';
 			}
 			$this->message = ";<span dir=\"ltr\" lang=\"en\">{$this->paramValue}</span>:"
-				. $prefix . parent::fetchMessage();
+				. $dep . parent::fetchMessage();
 		}
 		return $this->message;
-	}
-
-	private function subMessage( $key ) {
-		$msg = new Message( $key );
-		$msg->interface = $this->interface;
-		$msg->language = $this->language;
-		$msg->useDatabase = $this->useDatabase;
-		$msg->title = $this->title;
-		return $msg->fetchMessage();
 	}
 
 }

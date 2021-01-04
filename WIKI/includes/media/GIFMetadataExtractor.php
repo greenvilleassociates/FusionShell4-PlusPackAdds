@@ -41,19 +41,19 @@ class GIFMetadataExtractor {
 	/** @var string */
 	private static $gifTerm;
 
-	public const VERSION = 1;
+	const VERSION = 1;
 
 	// Each sub-block is less than or equal to 255 bytes.
 	// Most of the time its 255 bytes, except for in XMP
 	// blocks, where it's usually between 32-127 bytes each.
-	private const MAX_SUBBLOCKS = 262144; // 5mb divided by 20.
+	const MAX_SUBBLOCKS = 262144; // 5mb divided by 20.
 
 	/**
 	 * @throws Exception
 	 * @param string $filename
 	 * @return array
 	 */
-	public static function getMetadata( $filename ) {
+	static function getMetadata( $filename ) {
 		self::$gifFrameSep = pack( "C", ord( "," ) ); // 2C
 		self::$gifExtensionSep = pack( "C", ord( "!" ) ); // 21
 		self::$gifTerm = pack( "C", ord( ";" ) ); // 3B
@@ -161,14 +161,13 @@ class GIFMetadataExtractor {
 					UtfNormal\Validator::quickIsNFCVerify( $dataCopy );
 
 					if ( $dataCopy !== $data ) {
-						Wikimedia\suppressWarnings();
+						MediaWiki\suppressWarnings();
 						$data = iconv( 'windows-1252', 'UTF-8', $data );
-						Wikimedia\restoreWarnings();
+						MediaWiki\restoreWarnings();
 					}
 
 					$commentCount = count( $comment );
 					if ( $commentCount === 0
-						// @phan-suppress-next-line PhanTypeInvalidDimOffset
 						|| $comment[$commentCount - 1] !== $data
 					) {
 						// Some applications repeat the same comment on each
@@ -187,7 +186,7 @@ class GIFMetadataExtractor {
 					$data = fread( $fh, $blockLength );
 
 					if ( $blockLength != 11 ) {
-						wfDebug( __METHOD__ . " GIF application block with wrong length" );
+						wfDebug( __METHOD__ . " GIF application block with wrong length\n" );
 						fseek( $fh, -( $blockLength + 1 ), SEEK_CUR );
 						self::skipBlock( $fh );
 						continue;
@@ -263,9 +262,9 @@ class GIFMetadataExtractor {
 	 * @param int $bpp
 	 * @return void
 	 */
-	private static function readGCT( $fh, $bpp ) {
+	static function readGCT( $fh, $bpp ) {
 		if ( $bpp > 0 ) {
-			$max = 2 ** $bpp;
+			$max = pow( 2, $bpp );
 			for ( $i = 1; $i <= $max; ++$i ) {
 				fread( $fh, 3 );
 			}
@@ -277,13 +276,12 @@ class GIFMetadataExtractor {
 	 * @throws Exception
 	 * @return int
 	 */
-	private static function decodeBPP( $data ) {
+	static function decodeBPP( $data ) {
 		if ( strlen( $data ) < 1 ) {
 			throw new Exception( "Ran out of input" );
 		}
 		$buf = unpack( 'C', $data )[1];
 		$bpp = ( $buf & 7 ) + 1;
-		// @phan-suppress-next-line PhanTypeInvalidLeftOperandOfIntegerOp
 		$buf >>= 7;
 
 		$have_map = $buf & 1;
@@ -295,7 +293,7 @@ class GIFMetadataExtractor {
 	 * @param resource $fh
 	 * @throws Exception
 	 */
-	private static function skipBlock( $fh ) {
+	static function skipBlock( $fh ) {
 		while ( !feof( $fh ) ) {
 			$buf = fread( $fh, 1 );
 			if ( strlen( $buf ) < 1 ) {
@@ -323,7 +321,7 @@ class GIFMetadataExtractor {
 	 * @throws Exception
 	 * @return string The data.
 	 */
-	private static function readBlock( $fh, $includeLengths = false ) {
+	static function readBlock( $fh, $includeLengths = false ) {
 		$data = '';
 		$subLength = fread( $fh, 1 );
 		$blocks = 0;

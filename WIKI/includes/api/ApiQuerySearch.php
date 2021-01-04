@@ -1,5 +1,9 @@
 <?php
 /**
+ *
+ *
+ * Created on July 30, 2007
+ *
  * Copyright © 2007 Yuri Astrakhan "<Firstname><Lastname>@gmail.com"
  *
  * This program is free software; you can redistribute it and/or modify
@@ -44,10 +48,11 @@ class ApiQuerySearch extends ApiQueryGeneratorBase {
 	}
 
 	/**
-	 * @param ApiPageSet|null $resultPageSet
+	 * @param ApiPageSet $resultPageSet
 	 * @return void
 	 */
 	private function run( $resultPageSet = null ) {
+		global $wgContLang;
 		$params = $this->extractRequestParams();
 
 		// Extract parameters
@@ -59,19 +64,12 @@ class ApiQuerySearch extends ApiQueryGeneratorBase {
 
 		// Create search engine instance and set options
 		$search = $this->buildSearchEngine( $params );
-		if ( isset( $params['sort'] ) ) {
-			$search->setSort( $params['sort'] );
-		}
 		$search->setFeatureData( 'rewrite', (bool)$params['enablerewrites'] );
 		$search->setFeatureData( 'interwiki', (bool)$interwiki );
 
-		$nquery = $search->replacePrefixes( $query );
-		if ( $nquery !== $query ) {
-			$query = $nquery;
-			wfDeprecatedMsg( 'SearchEngine::replacePrefixes() is overridden by ' .
-				get_class( $search ) . ', this was deprecated in MediaWiki 1.32',
-				'1.32' );
-		}
+		$query = $search->transformSearchTerm( $query );
+		$query = $search->replacePrefixes( $query );
+
 		// Perform the actual search
 		if ( $what == 'text' ) {
 			$matches = $search->searchText( $query );
@@ -94,7 +92,7 @@ class ApiQuerySearch extends ApiQueryGeneratorBase {
 			// for instance the Lucene-based engine we use on Wikipedia.
 			// In this case, fall back to full-text search (which will
 			// include titles in it!)
-			if ( $matches === null ) {
+			if ( is_null( $matches ) ) {
 				$what = 'text';
 				$matches = $search->searchText( $query );
 			}
@@ -116,7 +114,7 @@ class ApiQuerySearch extends ApiQueryGeneratorBase {
 			} else {
 				$this->dieStatus( $status );
 			}
-		} elseif ( $matches === null ) {
+		} elseif ( is_null( $matches ) ) {
 			$this->dieWithError( [ 'apierror-searchdisabled', $what ], "search-{$what}-disabled" );
 		}
 
@@ -134,32 +132,39 @@ class ApiQuerySearch extends ApiQueryGeneratorBase {
 				$apiResult->addValue( [ 'query', 'searchinfo' ],
 					'suggestion', $matches->getSuggestionQuery() );
 				$apiResult->addValue( [ 'query', 'searchinfo' ],
-					'suggestionsnippet', HtmlArmor::getHtml( $matches->getSuggestionSnippet() ) );
+					'suggestionsnippet', $matches->getSuggestionSnippet() );
 			}
 			if ( isset( $searchInfo['rewrittenquery'] ) && $matches->hasRewrittenQuery() ) {
 				$apiResult->addValue( [ 'query', 'searchinfo' ],
 					'rewrittenquery', $matches->getQueryAfterRewrite() );
 				$apiResult->addValue( [ 'query', 'searchinfo' ],
-					'rewrittenquerysnippet', HtmlArmor::getHtml( $matches->getQueryAfterRewriteSnippet() ) );
+					'rewrittenquerysnippet', $matches->getQueryAfterRewriteSnippet() );
 			}
 		}
 
+		// Add the search results to the result
+		$terms = $wgContLang->convertForSearchResult( $matches->termMatches() );
 		$titles = [];
 		$count = 0;
+		$result = $matches->next();
+		$limit = $params['limit'];
 
-		if ( $matches->hasMoreResults() ) {
-			$this->setContinueEnumParameter( 'offset', $params['offset'] + $params['limit'] );
-		}
+		while ( $result ) {
+			if ( ++$count > $limit ) {
+				// We've reached the one extra which shows that there are
+				// additional items to be had. Stop here...
+				$this->setContinueEnumParameter( 'offset', $params['offset'] + $params['limit'] );
+				break;
+			}
 
-		foreach ( $matches as $result ) {
-			$count++;
 			// Silently skip broken and missing titles
 			if ( $result->isBrokenTitle() || $result->isMissingRevision() ) {
+				$result = $matches->next();
 				continue;
 			}
 
 			if ( $resultPageSet === null ) {
-				$vals = $this->getSearchResultData( $result, $prop );
+				$vals = $this->getSearchResultData( $result, $prop, $terms );
 				if ( $vals ) {
 					// Add item to results and see whether it fits
 					$fit = $apiResult->addValue( [ 'query', $this->getModuleName() ], null, $vals );
@@ -171,6 +176,8 @@ class ApiQuerySearch extends ApiQueryGeneratorBase {
 			} else {
 				$titles[] = $result->getTitle();
 			}
+
+			$result = $matches->next();
 		}
 
 		// Here we assume interwiki results do not count with
@@ -180,14 +187,14 @@ class ApiQuerySearch extends ApiQueryGeneratorBase {
 		// Interwiki results inside main result set
 		$canAddInterwiki = (bool)$params['enablerewrites'] && ( $resultPageSet === null );
 		if ( $canAddInterwiki ) {
-			$this->addInterwikiResults( $matches, $apiResult, $prop, 'additional',
-				ISearchResultSet::INLINE_RESULTS );
+			$this->addInterwikiResults( $matches, $apiResult, $prop, $terms, 'additional',
+				SearchResultSet::INLINE_RESULTS );
 		}
 
 		// Interwiki results outside main result set
 		if ( $interwiki && $resultPageSet === null ) {
-			$this->addInterwikiResults( $matches, $apiResult, $prop, 'interwiki',
-				ISearchResultSet::SECONDARY_RESULTS );
+			$this->addInterwikiResults( $matches, $apiResult, $prop, $terms, 'interwiki',
+				SearchResultSet::SECONDARY_RESULTS );
 		}
 
 		if ( $resultPageSet === null ) {
@@ -212,10 +219,11 @@ class ApiQuerySearch extends ApiQueryGeneratorBase {
 	/**
 	 * Assemble search result data.
 	 * @param SearchResult $result Search result
-	 * @param array $prop Props to extract (as keys)
+	 * @param array        $prop Props to extract (as keys)
+	 * @param array        $terms Terms list
 	 * @return array|null Result data or null if result is broken in some way.
 	 */
-	private function getSearchResultData( SearchResult $result, $prop ) {
+	private function getSearchResultData( SearchResult $result, $prop, $terms ) {
 		// Silently skip broken and missing titles
 		if ( $result->isBrokenTitle() || $result->isMissingRevision() ) {
 			return null;
@@ -234,7 +242,7 @@ class ApiQuerySearch extends ApiQueryGeneratorBase {
 			$vals['wordcount'] = $result->getWordCount();
 		}
 		if ( isset( $prop['snippet'] ) ) {
-			$vals['snippet'] = $result->getTextSnippet();
+			$vals['snippet'] = $result->getTextSnippet( $terms );
 		}
 		if ( isset( $prop['timestamp'] ) ) {
 			$vals['timestamp'] = wfTimestamp( TS_ISO_8601, $result->getTimestamp() );
@@ -245,7 +253,7 @@ class ApiQuerySearch extends ApiQueryGeneratorBase {
 		if ( isset( $prop['categorysnippet'] ) ) {
 			$vals['categorysnippet'] = $result->getCategorySnippet();
 		}
-		if ( $result->getRedirectTitle() !== null ) {
+		if ( !is_null( $result->getRedirectTitle() ) ) {
 			if ( isset( $prop['redirecttitle'] ) ) {
 				$vals['redirecttitle'] = $result->getRedirectTitle()->getPrefixedText();
 			}
@@ -253,7 +261,7 @@ class ApiQuerySearch extends ApiQueryGeneratorBase {
 				$vals['redirectsnippet'] = $result->getRedirectSnippet();
 			}
 		}
-		if ( $result->getSectionTitle() !== null ) {
+		if ( !is_null( $result->getSectionTitle() ) ) {
 			if ( isset( $prop['sectiontitle'] ) ) {
 				$vals['sectiontitle'] = $result->getSectionTitle()->getFragment();
 			}
@@ -264,31 +272,22 @@ class ApiQuerySearch extends ApiQueryGeneratorBase {
 		if ( isset( $prop['isfilematch'] ) ) {
 			$vals['isfilematch'] = $result->isFileMatch();
 		}
-
-		if ( isset( $prop['extensiondata'] ) ) {
-			$extra = $result->getExtensionData();
-			// Add augmented data to the result. The data would be organized as a map:
-			// augmentorName => data
-			if ( $extra ) {
-				$vals['extensiondata'] = ApiResult::addMetadataToResultVars( $extra );
-			}
-		}
-
 		return $vals;
 	}
 
 	/**
 	 * Add interwiki results as a section in query results.
-	 * @param ISearchResultSet $matches
-	 * @param ApiResult $apiResult
-	 * @param array $prop Props to extract (as keys)
-	 * @param string $section Section name where results would go
-	 * @param int $type Interwiki result type
+	 * @param SearchResultSet $matches
+	 * @param ApiResult       $apiResult
+	 * @param array           $prop Props to extract (as keys)
+	 * @param array           $terms Terms list
+	 * @param string          $section Section name where results would go
+	 * @param int             $type Interwiki result type
 	 * @return int|null Number of total hits in the data or null if none was produced
 	 */
 	private function addInterwikiResults(
-		ISearchResultSet $matches, ApiResult $apiResult, $prop,
-		$section, $type
+		SearchResultSet $matches, ApiResult $apiResult, $prop,
+		$terms, $section, $type
 	) {
 		$totalhits = null;
 		if ( $matches->hasInterwikiResults( $type ) ) {
@@ -296,9 +295,10 @@ class ApiQuerySearch extends ApiQueryGeneratorBase {
 				// Include number of results if requested
 				$totalhits += $interwikiMatches->getTotalHits();
 
-				foreach ( $interwikiMatches as $result ) {
+				$result = $interwikiMatches->next();
+				while ( $result ) {
 					$title = $result->getTitle();
-					$vals = $this->getSearchResultData( $result, $prop );
+					$vals = $this->getSearchResultData( $result, $prop, $terms );
 
 					$vals['namespace'] = $result->getInterwikiNamespaceText();
 					$vals['title'] = $title->getText();
@@ -316,6 +316,8 @@ class ApiQuerySearch extends ApiQueryGeneratorBase {
 						// pagination info so just bail out
 						break;
 					}
+
+					$result = $interwikiMatches->next();
 				}
 			}
 			if ( $totalhits !== null ) {
@@ -370,7 +372,6 @@ class ApiQuerySearch extends ApiQueryGeneratorBase {
 					'categorysnippet',
 					'score', // deprecated
 					'hasrelated', // deprecated
-					'extensiondata',
 				],
 				ApiBase::PARAM_ISMULTI => true,
 				ApiBase::PARAM_HELP_MSG_PER_VALUE => [],
@@ -382,21 +383,6 @@ class ApiQuerySearch extends ApiQueryGeneratorBase {
 			'interwiki' => false,
 			'enablerewrites' => false,
 		];
-
-		// If we have more than one engine the list of available sorts is
-		// difficult to represent. For now don't expose it.
-		$services = MediaWiki\MediaWikiServices::getInstance();
-		$alternatives = $services
-			->getSearchEngineConfig()
-			->getSearchTypes();
-		if ( count( $alternatives ) == 1 ) {
-			$this->allowedParams['sort'] = [
-				ApiBase::PARAM_DFLT => 'relevance',
-				ApiBase::PARAM_TYPE => $services
-					->newSearchEngine()
-					->getValidSorts(),
-			];
-		}
 
 		return $this->allowedParams;
 	}

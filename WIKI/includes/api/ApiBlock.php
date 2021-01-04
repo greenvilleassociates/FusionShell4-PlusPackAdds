@@ -1,5 +1,9 @@
 <?php
 /**
+ *
+ *
+ * Created on Sep 4, 2007
+ *
  * Copyright © 2007 Roan Kattouw "<Firstname>.<Lastname>@gmail.com"
  *
  * This program is free software; you can redistribute it and/or modify
@@ -20,9 +24,6 @@
  * @file
  */
 
-use MediaWiki\Block\DatabaseBlock;
-use MediaWiki\ParamValidator\TypeDef\UserDef;
-
 /**
  * API module that facilitates the blocking of users. Requires API write mode
  * to be enabled.
@@ -30,8 +31,6 @@ use MediaWiki\ParamValidator\TypeDef\UserDef;
  * @ingroup API
  */
 class ApiBlock extends ApiBase {
-
-	use ApiBlockInfoTrait;
 
 	/**
 	 * Blocks the user specified in the parameters for the given expiry, with the
@@ -48,21 +47,16 @@ class ApiBlock extends ApiBase {
 		$this->requireOnlyOneParameter( $params, 'user', 'userid' );
 
 		# T17810: blocked admins should have limited access here
-		$block = $user->getBlock();
-		if ( $block ) {
+		if ( $user->isBlocked() ) {
 			$status = SpecialBlock::checkUnblockSelf( $params['user'], $user );
 			if ( $status !== true ) {
 				$this->dieWithError(
 					$status,
 					null,
-					[ 'blockinfo' => $this->getBlockDetails( $block ) ]
+					[ 'blockinfo' => ApiQueryUserInfo::getBlockInfo( $user->getBlock() ) ]
 				);
 			}
 		}
-
-		$editingRestriction = $params['partial'] ? 'partial' : 'sitewide';
-		$pageRestrictions = implode( "\n", (array)$params['pagerestrictions'] );
-		$namespaceRestrictions = implode( "\n", (array)$params['namespacerestrictions'] );
 
 		if ( $params['userid'] !== null ) {
 			$username = User::whoIs( $params['userid'] );
@@ -73,12 +67,12 @@ class ApiBlock extends ApiBase {
 				$params['user'] = $username;
 			}
 		} else {
-			list( $target, $type ) = SpecialBlock::getTargetAndType( $params['user'] );
+			$target = User::newFromName( $params['user'] );
 
 			// T40633 - if the target is a user (not an IP address), but it
 			// doesn't exist or is unusable, error.
-			if ( $type === DatabaseBlock::TYPE_USER &&
-				( $target->isAnon() /* doesn't exist */ || !User::isUsableName( $params['user'] ) )
+			if ( $target instanceof User &&
+				( $target->isAnon() /* doesn't exist */ || !User::isUsableName( $target->getName() ) )
 			) {
 				$this->dieWithError( [ 'nosuchusershort', $params['user'] ], 'nosuchuser' );
 			}
@@ -91,8 +85,7 @@ class ApiBlock extends ApiBase {
 			}
 		}
 
-		if ( $params['hidename'] &&
-			 !$this->getPermissionManager()->userHasRight( $user, 'hideuser' ) ) {
+		if ( $params['hidename'] && !$user->isAllowed( 'hideuser' ) ) {
 			$this->dieWithError( 'apierror-canthide' );
 		}
 		if ( $params['noemail'] && !SpecialBlock::canBlockEmail( $user ) ) {
@@ -118,35 +111,25 @@ class ApiBlock extends ApiBase {
 			'Watch' => $params['watchuser'],
 			'Confirm' => true,
 			'Tags' => $params['tags'],
-			'EditingRestriction' => $editingRestriction,
-			'PageRestrictions' => $pageRestrictions,
-			'NamespaceRestrictions' => $namespaceRestrictions,
 		];
-
-		$status = SpecialBlock::validateTarget( $params['user'], $user );
-		if ( !$status->isOK() ) {
-			$this->dieStatus( $status );
-		}
 
 		$retval = SpecialBlock::processForm( $data, $this->getContext() );
 		if ( $retval !== true ) {
 			$this->dieStatus( $this->errorArrayToStatus( $retval ) );
 		}
 
-		$res = [];
-
-		$res['user'] = $params['user'];
 		list( $target, /*...*/ ) = SpecialBlock::getTargetAndType( $params['user'] );
+		$res['user'] = $params['user'];
 		$res['userID'] = $target instanceof User ? $target->getId() : 0;
 
-		$block = DatabaseBlock::newFromTarget( $target, null, true );
-		if ( $block instanceof DatabaseBlock ) {
-			$res['expiry'] = ApiResult::formatExpiry( $block->getExpiry(), 'infinite' );
+		$block = Block::newFromTarget( $target, null, true );
+		if ( $block instanceof Block ) {
+			$res['expiry'] = ApiResult::formatExpiry( $block->mExpiry, 'infinite' );
 			$res['id'] = $block->getId();
 		} else {
 			# should be unreachable
-			$res['expiry'] = ''; // @codeCoverageIgnore
-			$res['id'] = ''; // @codeCoverageIgnore
+			$res['expiry'] = '';
+			$res['id'] = '';
 		}
 
 		$res['reason'] = $params['reason'];
@@ -157,9 +140,6 @@ class ApiBlock extends ApiBase {
 		$res['hidename'] = $params['hidename'];
 		$res['allowusertalk'] = $params['allowusertalk'];
 		$res['watchuser'] = $params['watchuser'];
-		$res['partial'] = $params['partial'];
-		$res['pagerestrictions'] = $params['pagerestrictions'];
-		$res['namespacerestrictions'] = $params['namespacerestrictions'];
 
 		$this->getResult()->addValue( null, $this->getModuleName(), $res );
 	}
@@ -176,11 +156,9 @@ class ApiBlock extends ApiBase {
 		return [
 			'user' => [
 				ApiBase::PARAM_TYPE => 'user',
-				UserDef::PARAM_ALLOWED_USER_TYPES => [ 'name', 'ip', 'cidr', 'id' ],
 			],
 			'userid' => [
 				ApiBase::PARAM_TYPE => 'integer',
-				ApiBase::PARAM_DEPRECATED => true,
 			],
 			'expiry' => 'never',
 			'reason' => '',
@@ -196,16 +174,6 @@ class ApiBlock extends ApiBase {
 				ApiBase::PARAM_TYPE => 'tags',
 				ApiBase::PARAM_ISMULTI => true,
 			],
-			'partial' => false,
-			'pagerestrictions' => [
-				ApiBase::PARAM_ISMULTI => true,
-				ApiBase::PARAM_ISMULTI_LIMIT1 => 10,
-				ApiBase::PARAM_ISMULTI_LIMIT2 => 10,
-			],
-			'namespacerestrictions' => [
-				ApiBase::PARAM_ISMULTI => true,
-				ApiBase::PARAM_TYPE => 'namespace',
-			],
 		];
 	}
 
@@ -214,14 +182,14 @@ class ApiBlock extends ApiBase {
 	}
 
 	protected function getExamplesMessages() {
-		// phpcs:disable Generic.Files.LineLength
+		// @codingStandardsIgnoreStart Generic.Files.LineLength
 		return [
 			'action=block&user=192.0.2.5&expiry=3%20days&reason=First%20strike&token=123ABC'
 				=> 'apihelp-block-example-ip-simple',
 			'action=block&user=Vandal&expiry=never&reason=Vandalism&nocreate=&autoblock=&noemail=&token=123ABC'
 				=> 'apihelp-block-example-user-complex',
 		];
-		// phpcs:enable
+		// @codingStandardsIgnoreEnd
 	}
 
 	public function getHelpUrls() {

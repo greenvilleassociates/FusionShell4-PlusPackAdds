@@ -24,7 +24,7 @@
  *
  * @author Katie Filbert < aude.wiki@gmail.com >
  */
-class HashSiteStoreTest extends \MediaWikiIntegrationTestCase {
+class HashSiteStoreTest extends MediaWikiTestCase {
 
 	/**
 	 * @covers HashSiteStore::getSites

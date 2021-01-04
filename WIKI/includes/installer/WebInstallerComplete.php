@@ -16,7 +16,7 @@
  * http://www.gnu.org/copyleft/gpl.html
  *
  * @file
- * @ingroup Installer
+ * @ingroup Deployment
  */
 
 class WebInstallerComplete extends WebInstallerPage {
@@ -45,21 +45,20 @@ class WebInstallerComplete extends WebInstallerPage {
 		}
 		$this->addHTML(
 			$this->parent->getInfoBox(
-				new HtmlArmor( wfMessage( $msg,
+				wfMessage( $msg,
 					$lsUrl,
 					$this->getVar( 'wgServer' ) .
-						$this->getVar( 'wgScriptPath' ) . '/index.php',
-					Message::rawParam( $this->parent->makeDownloadLinkHtml() ),
+					$this->getVar( 'wgScriptPath' ) . '/index.php',
+					'<downloadlink/>',
 					$location ?: ''
-				)->parse() ), 'tick-32.png'
+				)->plain(), 'tick-32.png'
 			)
 		);
 		$this->addHTML( $this->parent->getInfoBox(
-			wfMessage( 'config-extension-link' )->plain() ) );
+			wfMessage( 'config-extension-link' )->text() ) );
 
 		$this->parent->restoreLinkPopups();
 		$this->endForm( false, false );
-		return '';
 	}
 
 }

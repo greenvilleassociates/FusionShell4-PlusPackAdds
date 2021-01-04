@@ -4,7 +4,7 @@
  * Tests timestamp parsing and output.
  */
 class MWTimestampTest extends MediaWikiLangTestCase {
-	protected function setUp() : void {
+	protected function setUp() {
 		parent::setUp();
 
 		// Avoid 'GetHumanTimestamp' hook and others
@@ -23,7 +23,7 @@ class MWTimestampTest extends MediaWikiLangTestCase {
 		$expectedOutput, // The expected output
 		$desc // Description
 	) {
-		$user = $this->createMock( User::class );
+		$user = $this->createMock( 'User' );
 		$user->expects( $this->any() )
 			->method( 'getOption' )
 			->with( 'timecorrection' )
@@ -156,7 +156,7 @@ class MWTimestampTest extends MediaWikiLangTestCase {
 		$expectedOutput, // The expected output
 		$desc // Description
 	) {
-		$user = $this->createMock( User::class );
+		$user = $this->createMock( 'User' );
 		$user->expects( $this->any() )
 			->method( 'getOption' )
 			->with( 'timecorrection' )

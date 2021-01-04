@@ -1,22 +1,21 @@
 <?php
-
-use MediaWiki\Hook\MediaWikiServicesHook;
-use MediaWiki\HookContainer\HookContainer;
-use MediaWiki\HookContainer\StaticHookRegistry;
+use Liuggio\StatsdClient\Factory\StatsdDataFactory;
+use MediaWiki\Interwiki\InterwikiLookup;
+use MediaWiki\Linker\LinkRenderer;
+use MediaWiki\Linker\LinkRendererFactory;
 use MediaWiki\MediaWikiServices;
-use Wikimedia\Services\DestructibleService;
-use Wikimedia\Services\SalvageableService;
-use Wikimedia\Services\ServiceDisabledException;
+use MediaWiki\Services\DestructibleService;
+use MediaWiki\Services\SalvageableService;
+use MediaWiki\Services\ServiceDisabledException;
+use Wikimedia\Rdbms\LBFactory;
+use MediaWiki\Shell\CommandFactory;
 
 /**
  * @covers MediaWiki\MediaWikiServices
  *
  * @group MediaWiki
  */
-class MediaWikiServicesTest extends MediaWikiIntegrationTestCase {
-	private $deprecatedServices = [];
-
-	public static $mockServiceWiring = [];
+class MediaWikiServicesTest extends MediaWikiTestCase {
 
 	/**
 	 * @return Config
@@ -34,8 +33,11 @@ class MediaWikiServicesTest extends MediaWikiIntegrationTestCase {
 	/**
 	 * @return MediaWikiServices
 	 */
-	private function newMediaWikiServices() {
-		$config = $this->newTestConfig();
+	private function newMediaWikiServices( Config $config = null ) {
+		if ( $config === null ) {
+			$config = $this->newTestConfig();
+		}
+
 		$instance = new MediaWikiServices( $config );
 
 		// Load the default wiring from the specified files.
@@ -45,22 +47,16 @@ class MediaWikiServicesTest extends MediaWikiIntegrationTestCase {
 		return $instance;
 	}
 
-	private function newConfigWithMockWiring() {
-		$config = new HashConfig;
-		$config->set( 'ServiceWiringFiles', [ __DIR__ . '/MockServiceWiring.php' ] );
-		return $config;
-	}
-
 	public function testGetInstance() {
 		$services = MediaWikiServices::getInstance();
-		$this->assertInstanceOf( MediaWikiServices::class, $services );
+		$this->assertInstanceOf( 'MediaWiki\\MediaWikiServices', $services );
 	}
 
 	public function testForceGlobalInstance() {
 		$newServices = $this->newMediaWikiServices();
 		$oldServices = MediaWikiServices::forceGlobalInstance( $newServices );
 
-		$this->assertInstanceOf( MediaWikiServices::class, $oldServices );
+		$this->assertInstanceOf( 'MediaWiki\\MediaWikiServices', $oldServices );
 		$this->assertNotSame( $oldServices, $newServices );
 
 		$theServices = MediaWikiServices::getInstance();
@@ -145,53 +141,11 @@ class MediaWikiServicesTest extends MediaWikiIntegrationTestCase {
 		MediaWikiServices::forceGlobalInstance( $oldServices );
 	}
 
-	public function testResetGlobalInstance_T263925() {
-		$newServices = $this->newMediaWikiServices();
-		$oldServices = MediaWikiServices::forceGlobalInstance( $newServices );
-		self::$mockServiceWiring = [
-			'HookContainer' => function ( MediaWikiServices $services ) {
-				return new HookContainer(
-					new StaticHookRegistry(
-						[],
-						[
-							'MediaWikiServices' => [
-								[
-									'handler' => [
-										'name' => 'test',
-										'factory' => function () {
-											return new class implements MediaWikiServicesHook {
-												public function onMediaWikiServices( $services ) {
-												}
-											};
-										}
-									],
-									'deprecated' => false,
-									'extensionPath' => 'path'
-								],
-							]
-						],
-						[]
-					),
-					$this->createSimpleObjectFactory()
-				);
-			}
-		];
-		$newServices->redefineService( 'HookContainer',
-			self::$mockServiceWiring['HookContainer'] );
-
-		$newServices->getHookContainer()->run( 'MediaWikiServices', [ $newServices ] );
-		MediaWikiServices::resetGlobalInstance( $this->newConfigWithMockWiring(), 'quick' );
-		$this->assertTrue( true, 'expected no exception from above' );
-
-		self::$mockServiceWiring = [];
-		MediaWikiServices::forceGlobalInstance( $oldServices );
-	}
-
 	public function testDisableStorageBackend() {
 		$newServices = $this->newMediaWikiServices();
 		$oldServices = MediaWikiServices::forceGlobalInstance( $newServices );
 
-		$lbFactory = $this->getMockBuilder( \Wikimedia\Rdbms\LBFactorySimple::class )
+		$lbFactory = $this->getMockBuilder( 'LBFactorySimple' )
 			->disableOriginalConstructor()
 			->getMock();
 
@@ -219,9 +173,6 @@ class MediaWikiServicesTest extends MediaWikiIntegrationTestCase {
 
 		MediaWikiServices::forceGlobalInstance( $oldServices );
 		$newServices->destroy();
-
-		// No exception was thrown, avoid being risky
-		$this->assertTrue( true );
 	}
 
 	public function testResetChildProcessServices() {
@@ -269,7 +220,7 @@ class MediaWikiServicesTest extends MediaWikiIntegrationTestCase {
 			'Test',
 			function () use ( &$serviceCounter ) {
 				$serviceCounter++;
-				$service = $this->createMock( Wikimedia\Services\DestructibleService::class );
+				$service = $this->createMock( 'MediaWiki\Services\DestructibleService' );
 				$service->expects( $this->once() )->method( 'destroy' );
 				return $service;
 			}
@@ -277,10 +228,10 @@ class MediaWikiServicesTest extends MediaWikiIntegrationTestCase {
 
 		// This should do nothing. In particular, it should not create a service instance.
 		$services->resetServiceForTesting( 'Test' );
-		$this->assertSame( 0, $serviceCounter, 'No service instance should be created yet.' );
+		$this->assertEquals( 0, $serviceCounter, 'No service instance should be created yet.' );
 
 		$oldInstance = $services->getService( 'Test' );
-		$this->assertSame( 1, $serviceCounter, 'A service instance should exit now.' );
+		$this->assertEquals( 1, $serviceCounter, 'A service instance should exit now.' );
 
 		// The old instance should be detached, and destroy() called.
 		$services->resetServiceForTesting( 'Test' );
@@ -298,7 +249,7 @@ class MediaWikiServicesTest extends MediaWikiIntegrationTestCase {
 		$services->defineService(
 			'Test',
 			function () {
-				$service = $this->createMock( Wikimedia\Services\DestructibleService::class );
+				$service = $this->createMock( 'MediaWiki\Services\DestructibleService' );
 				$service->expects( $this->never() )->method( 'destroy' );
 				return $service;
 			}
@@ -327,7 +278,6 @@ class MediaWikiServicesTest extends MediaWikiIntegrationTestCase {
 			$getterCases[$name] = [
 				'get' . $service,
 				$class,
-				in_array( $service, $this->deprecatedServices )
 			];
 		}
 
@@ -337,11 +287,7 @@ class MediaWikiServicesTest extends MediaWikiIntegrationTestCase {
 	/**
 	 * @dataProvider provideGetters
 	 */
-	public function testGetters( $getter, $type, $isDeprecated = false ) {
-		if ( $isDeprecated ) {
-			$this->hideDeprecated( MediaWikiServices::class . "::$getter" );
-		}
-
+	public function testGetters( $getter, $type ) {
 		// Test against the default instance, since the dummy will not know the default services.
 		$services = MediaWikiServices::getInstance();
 		$service = $services->$getter();
@@ -349,20 +295,45 @@ class MediaWikiServicesTest extends MediaWikiIntegrationTestCase {
 	}
 
 	public function provideGetService() {
-		global $IP;
-		$serviceList = require "$IP/includes/ServiceWiring.php";
-		$ret = [];
-		foreach ( $serviceList as $name => $callback ) {
-			$fun = new ReflectionFunction( $callback );
-			if ( !$fun->hasReturnType() ) {
-				throw new MWException( 'All service callbacks must have a return type defined, ' .
-					"none found for $name" );
-			}
-
-			$returnType = $fun->getReturnType();
-			$ret[$name] = [ $name, $returnType->getName() ];
-		}
-		return $ret;
+		// NOTE: This should list all service getters defined in ServiceWiring.php.
+		// NOTE: For every test case defined here there should be a corresponding
+		// test case defined in provideGetters().
+		return [
+			'BootstrapConfig' => [ 'BootstrapConfig', Config::class ],
+			'ConfigFactory' => [ 'ConfigFactory', ConfigFactory::class ],
+			'MainConfig' => [ 'MainConfig', Config::class ],
+			'SiteStore' => [ 'SiteStore', SiteStore::class ],
+			'SiteLookup' => [ 'SiteLookup', SiteLookup::class ],
+			'StatsdDataFactory' => [ 'StatsdDataFactory', IBufferingStatsdDataFactory::class ],
+			'InterwikiLookup' => [ 'InterwikiLookup', InterwikiLookup::class ],
+			'EventRelayerGroup' => [ 'EventRelayerGroup', EventRelayerGroup::class ],
+			'SearchEngineFactory' => [ 'SearchEngineFactory', SearchEngineFactory::class ],
+			'SearchEngineConfig' => [ 'SearchEngineConfig', SearchEngineConfig::class ],
+			'SkinFactory' => [ 'SkinFactory', SkinFactory::class ],
+			'DBLoadBalancerFactory' => [ 'DBLoadBalancerFactory', Wikimedia\Rdbms\LBFactory::class ],
+			'DBLoadBalancer' => [ 'DBLoadBalancer', 'LoadBalancer' ],
+			'WatchedItemStore' => [ 'WatchedItemStore', WatchedItemStore::class ],
+			'WatchedItemQueryService' => [ 'WatchedItemQueryService', WatchedItemQueryService::class ],
+			'CryptRand' => [ 'CryptRand', CryptRand::class ],
+			'CryptHKDF' => [ 'CryptHKDF', CryptHKDF::class ],
+			'MediaHandlerFactory' => [ 'MediaHandlerFactory', MediaHandlerFactory::class ],
+			'Parser' => [ 'Parser', Parser::class ],
+			'ParserCache' => [ 'ParserCache', ParserCache::class ],
+			'GenderCache' => [ 'GenderCache', GenderCache::class ],
+			'LinkCache' => [ 'LinkCache', LinkCache::class ],
+			'LinkRenderer' => [ 'LinkRenderer', LinkRenderer::class ],
+			'LinkRendererFactory' => [ 'LinkRendererFactory', LinkRendererFactory::class ],
+			'_MediaWikiTitleCodec' => [ '_MediaWikiTitleCodec', MediaWikiTitleCodec::class ],
+			'MimeAnalyzer' => [ 'MimeAnalyzer', MimeAnalyzer::class ],
+			'TitleFormatter' => [ 'TitleFormatter', TitleFormatter::class ],
+			'TitleParser' => [ 'TitleParser', TitleParser::class ],
+			'ProxyLookup' => [ 'ProxyLookup', ProxyLookup::class ],
+			'MainObjectStash' => [ 'MainObjectStash', BagOStuff::class ],
+			'MainWANObjectCache' => [ 'MainWANObjectCache', WANObjectCache::class ],
+			'LocalServerObjectCache' => [ 'LocalServerObjectCache', BagOStuff::class ],
+			'VirtualRESTServiceClient' => [ 'VirtualRESTServiceClient', VirtualRESTServiceClient::class ],
+			'ShellCommandFactory' => [ 'ShellCommandFactory', CommandFactory::class ],
+		];
 	}
 
 	/**
@@ -386,39 +357,8 @@ class MediaWikiServicesTest extends MediaWikiIntegrationTestCase {
 		foreach ( $names as $name ) {
 			$this->assertTrue( $services->hasService( $name ) );
 			$service = $services->getService( $name );
-			$this->assertIsObject( $service );
+			$this->assertInternalType( 'object', $service );
 		}
 	}
 
-	public function testDefaultServiceWiringServicesHaveTests() {
-		global $IP;
-		$testedServices = array_keys( $this->provideGetService() );
-		$allServices = array_keys( require "$IP/includes/ServiceWiring.php" );
-		$this->assertEquals(
-			[],
-			array_diff( $allServices, $testedServices ),
-			'The following services have not been added to MediaWikiServicesTest::provideGetService'
-		);
-	}
-
-	public function testGettersAreSorted() {
-		$methods = ( new ReflectionClass( MediaWikiServices::class ) )
-			->getMethods( ReflectionMethod::IS_STATIC | ReflectionMethod::IS_PUBLIC );
-
-		$names = array_map( function ( $method ) {
-			return $method->getName();
-		}, $methods );
-		$serviceNames = array_map( function ( $name ) {
-			return "get$name";
-		}, array_keys( $this->provideGetService() ) );
-		$names = array_values( array_filter( $names, function ( $name ) use ( $serviceNames ) {
-			return in_array( $name, $serviceNames );
-		} ) );
-
-		$sortedNames = $names;
-		natcasesort( $sortedNames );
-
-		$this->assertSame( $sortedNames, $names,
-			'Please keep service getters sorted alphabetically' );
-	}
 }

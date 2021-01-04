@@ -16,7 +16,7 @@
  * http://www.gnu.org/copyleft/gpl.html
  *
  * @file
- * @ingroup Installer
+ * @ingroup Deployment
  */
 
 class WebInstallerCopying extends WebInstallerDocument {

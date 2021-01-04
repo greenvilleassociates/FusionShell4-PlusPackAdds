@@ -2,28 +2,28 @@
 
 /**
  * @covers ZipDirectoryReader
+ * NOTE: this test is more like an integration test than a unit test
  */
-class ZipDirectoryReaderTest extends MediaWikiIntegrationTestCase {
-
+class ZipDirectoryReaderTest extends PHPUnit_Framework_TestCase {
 	protected $zipDir;
 	protected $entries;
 
-	protected function setUp() : void {
+	protected function setUp() {
 		parent::setUp();
 		$this->zipDir = __DIR__ . '/../../data/zip';
 	}
 
-	public function zipCallback( $entry ) {
+	function zipCallback( $entry ) {
 		$this->entries[] = $entry;
 	}
 
-	public function readZipAssertError( $file, $error, $assertMessage ) {
+	function readZipAssertError( $file, $error, $assertMessage ) {
 		$this->entries = [];
 		$status = ZipDirectoryReader::read( "{$this->zipDir}/$file", [ $this, 'zipCallback' ] );
 		$this->assertTrue( $status->hasMessage( $error ), $assertMessage );
 	}
 
-	public function readZipAssertSuccess( $file, $assertMessage ) {
+	function readZipAssertSuccess( $file, $assertMessage ) {
 		$this->entries = [];
 		$status = ZipDirectoryReader::read( "{$this->zipDir}/$file", [ $this, 'zipCallback' ] );
 		$this->assertTrue( $status->isOK(), $assertMessage );
@@ -58,8 +58,7 @@ class ZipDirectoryReaderTest extends MediaWikiIntegrationTestCase {
 	}
 
 	public function testTrailingBytes() {
-		// Due to T40432 this is now zip-wrong-format instead of zip-bad
-		$this->readZipAssertError( 'trail.zip', 'zip-wrong-format',
+		$this->readZipAssertError( 'trail.zip', 'zip-bad',
 			'Trailing bytes error' );
 	}
 

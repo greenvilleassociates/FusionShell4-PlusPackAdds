@@ -21,16 +21,14 @@
  * @ingroup SpecialPage
  */
 
-use MediaWiki\MediaWikiServices;
-
 /**
  * Implements Special:Ancientpages
  *
  * @ingroup SpecialPage
  */
-class SpecialAncientPages extends QueryPage {
+class AncientPagesPage extends QueryPage {
 
-	public function __construct( $name = 'Ancientpages' ) {
+	function __construct( $name = 'Ancientpages' ) {
 		parent::__construct( $name );
 	}
 
@@ -38,37 +36,23 @@ class SpecialAncientPages extends QueryPage {
 		return true;
 	}
 
-	public function isSyndicated() {
+	function isSyndicated() {
 		return false;
 	}
 
 	public function getQueryInfo() {
-		$tables = [ 'page', 'revision' ];
-		$conds = [
-			'page_namespace' =>
-				MediaWikiServices::getInstance()->getNamespaceInfo()->getContentNamespaces(),
-			'page_is_redirect' => 0
-		];
-		$joinConds = [
-			'revision' => [
-				'JOIN', [
-					'page_latest = rev_id'
-				]
-			],
-		];
-
-		// Allow extensions to modify the query
-		$this->getHookRunner()->onAncientPagesQuery( $tables, $conds, $joinConds );
-
 		return [
-			'tables' => $tables,
+			'tables' => [ 'page', 'revision' ],
 			'fields' => [
 				'namespace' => 'page_namespace',
 				'title' => 'page_title',
 				'value' => 'rev_timestamp'
 			],
-			'conds' => $conds,
-			'join_conds' => $joinConds
+			'conds' => [
+				'page_namespace' => MWNamespace::getContentNamespaces(),
+				'page_is_redirect' => 0,
+				'page_latest=rev_id'
+			]
 		];
 	}
 
@@ -76,7 +60,7 @@ class SpecialAncientPages extends QueryPage {
 		return true;
 	}
 
-	protected function sortDescending() {
+	function sortDescending() {
 		return false;
 	}
 
@@ -89,14 +73,15 @@ class SpecialAncientPages extends QueryPage {
 	 * @param object $result Result row
 	 * @return string
 	 */
-	public function formatResult( $skin, $result ) {
+	function formatResult( $skin, $result ) {
+		global $wgContLang;
+
 		$d = $this->getLanguage()->userTimeAndDate( $result->value, $this->getUser() );
 		$title = Title::makeTitle( $result->namespace, $result->title );
 		$linkRenderer = $this->getLinkRenderer();
-
 		$link = $linkRenderer->makeKnownLink(
 			$title,
-			new HtmlArmor( $this->getLanguageConverter()->convertHtml( $title->getPrefixedText() ) )
+			$wgContLang->convert( $title->getPrefixedText() )
 		);
 
 		return $this->getLanguage()->specialList( $link, htmlspecialchars( $d ) );

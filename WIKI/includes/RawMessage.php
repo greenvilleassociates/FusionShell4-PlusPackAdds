@@ -29,7 +29,6 @@
  * All other functionality (parsing, escaping, etc.)
  * is preserved.
  *
- * @newable
  * @since 1.21
  */
 class RawMessage extends Message {
@@ -38,7 +37,6 @@ class RawMessage extends Message {
 	 * Call the parent constructor, then store the key as
 	 * the message.
 	 *
-	 * @stable to call
 	 * @see Message::__construct
 	 *
 	 * @param string $text Message to use.

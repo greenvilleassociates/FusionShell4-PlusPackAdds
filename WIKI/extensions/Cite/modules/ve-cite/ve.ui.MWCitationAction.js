@@ -1,8 +1,8 @@
 /*!
  * VisualEditor UserInterface MWCitationAction class.
  *
- * @copyright 2011-2018 VisualEditor Team's Cite sub-team and others; see AUTHORS.txt
- * @license MIT
+ * @copyright 2011-2017 Cite VisualEditor Team and others; see AUTHORS.txt
+ * @license The MIT License (MIT); see LICENSE.txt
  */
 
 /**
@@ -40,15 +40,16 @@ ve.ui.MWCitationAction.static.methods = [ 'open' ];
  * dialog name.
  *
  * @method
+ * @param {string} windowName Dialog name to open
  * @param {Object} windowData Data to send to the dialog
  * @return {boolean} Action was executed
  */
-ve.ui.MWCitationAction.prototype.open = function ( windowData ) {
+ve.ui.MWCitationAction.prototype.open = function ( windowName, windowData ) {
 	windowData = $.extend( {
 		inDialog: this.surface.getInDialog()
 	}, windowData );
 
-	this.surface.execute( 'window', 'open', 'cite', windowData );
+	this.surface.execute( 'window', 'open', windowName, windowData );
 	return true;
 };
 

@@ -2,10 +2,10 @@
 	"@metadata": {
 		"authors": [
 			"Davidpar",
-			"Joan manel",
-			"Pgellida",
 			"SMP",
-			"Ssola"
+			"Ssola",
+			"Joan manel",
+			"Pgellida"
 		]
 	},
 	"fancycaptcha-addurl": "La vostra modificació inclou nous enllaços externs. Com a protecció contra la propaganda automatitzada heu d'escriure en la caixa les paraules que apareixen a continuació ([[Special:Captcha/help|més informació]]):",

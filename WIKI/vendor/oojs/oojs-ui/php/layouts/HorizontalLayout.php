@@ -11,14 +11,14 @@ class HorizontalLayout extends Layout {
 
 	/**
 	 * @param array $config Configuration options
-	 *      - Widget[]|Layout[] $config['items'] Widgets or other layouts to add to the layout.
+	 * @param Widget[]|Layout[] $config['items'] Widgets or other layouts to add to the layout.
 	 */
 	public function __construct( array $config = [] ) {
 		// Parent constructor
 		parent::__construct( $config );
 
 		// Traits
-		$this->initializeGroupElement( array_merge( [ 'group' => $this ], $config ) );
+		$this->initializeGroupElement( array_merge( $config, [ 'group' => $this ] ) );
 
 		// Initialization
 		$this->addClasses( [ 'oo-ui-horizontalLayout' ] );

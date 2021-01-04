@@ -4,6 +4,8 @@
  * the usual skin elements but still using CSS, JS, and such via OutputPage and
  * ResourceLoader.
  *
+ * Created on Sep 08, 2014
+ *
  * Copyright © 2014 Wikimedia Foundation and contributors
  *
  * This program is free software; you can redistribute it and/or modify
@@ -28,11 +30,42 @@
  * SkinTemplate class for API output
  * @since 1.25
  */
-class SkinApi extends SkinMustache {
+class SkinApi extends SkinTemplate {
 	public $skinname = 'apioutput';
-	/**
-	 * Extension of class methods is discouraged.
-	 * Developers are encouraged to improve the flexibility of SkinMustache
-	 * whereever possible.
-	 */
+	public $template = 'SkinApiTemplate';
+
+	public function setupSkinUserCss( OutputPage $out ) {
+		parent::setupSkinUserCss( $out );
+		$out->addModuleStyles( 'mediawiki.skinning.interface' );
+	}
+
+	// Skip work and hooks for stuff we don't use
+
+	function buildSidebar() {
+		return [];
+	}
+
+	function getNewtalks() {
+		return '';
+	}
+
+	function getSiteNotice() {
+		return '';
+	}
+
+	public function getLanguages() {
+		return [];
+	}
+
+	protected function buildPersonalUrls() {
+		return [];
+	}
+
+	protected function buildContentNavigationUrls() {
+		return [];
+	}
+
+	protected function buildNavUrls() {
+		return [];
+	}
 }

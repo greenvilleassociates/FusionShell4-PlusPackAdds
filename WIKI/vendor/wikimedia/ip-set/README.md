@@ -7,13 +7,12 @@ specifications.
 Here is how you use it:
 
 <pre lang="php">
-use Wikimedia\IPSet;
 // At startup, calculate the optimized data structure for the set:
-$ipset = new IPSet( [
+$ipset = new IPSet( array(
     '208.80.154.0/26',
     '2620:0:861:1::/64',
     '10.64.0.0/22',
-] );
+) );
 
 // Runtime check against cached set (returns bool):
 if ( $ipset->match( $ip ) ) {
@@ -48,16 +47,16 @@ For example, given these inputs:
 The v4 tree would look like:
 
 <pre lang="php">
-root4 => [
+root4 => array(
     'comp' => 25,
-    'next' => [
+    'next' => array(
         0 => true,
-        1 => [
+        1 => array(
             0 => false,
             1 => true,
-        ],
-    ],
-];
+        ),
+    ),
+);
 </pre>
 
 (multi-byte compression nodes were attempted as well, but were

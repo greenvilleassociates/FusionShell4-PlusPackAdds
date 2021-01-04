@@ -20,9 +20,8 @@
  * @file
  * @ingroup LockManager
  */
-use MediaWiki\Logger\LoggerFactory;
 use MediaWiki\MediaWikiServices;
-use Wikimedia\Rdbms\LBFactory;
+use MediaWiki\Logger\LoggerFactory;
 
 /**
  * Class to handle file lock manager registration
@@ -31,27 +30,59 @@ use Wikimedia\Rdbms\LBFactory;
  * @since 1.19
  */
 class LockManagerGroup {
-	/** @var string domain (usually wiki ID) */
-	protected $domain;
+	/** @var LockManagerGroup[] (domain => LockManagerGroup) */
+	protected static $instances = [];
 
-	/** @var LBFactory */
-	protected $lbFactory;
+	protected $domain; // string; domain (usually wiki ID)
 
 	/** @var array Array of (name => ('class' => ..., 'config' => ..., 'instance' => ...)) */
 	protected $managers = [];
 
 	/**
-	 * Do not call this directly. Use LockManagerGroupFactory.
-	 *
 	 * @param string $domain Domain (usually wiki ID)
-	 * @param array[] $lockManagerConfigs In format of $wgLockManagers
-	 * @param LBFactory $lbFactory
 	 */
-	public function __construct( $domain, array $lockManagerConfigs, LBFactory $lbFactory ) {
+	protected function __construct( $domain ) {
 		$this->domain = $domain;
-		$this->lbFactory = $lbFactory;
+	}
 
-		foreach ( $lockManagerConfigs as $config ) {
+	/**
+	 * @param bool|string $domain Domain (usually wiki ID). Default: false.
+	 * @return LockManagerGroup
+	 */
+	public static function singleton( $domain = false ) {
+		$domain = ( $domain === false ) ? wfWikiID() : $domain;
+		if ( !isset( self::$instances[$domain] ) ) {
+			self::$instances[$domain] = new self( $domain );
+			self::$instances[$domain]->initFromGlobals();
+		}
+
+		return self::$instances[$domain];
+	}
+
+	/**
+	 * Destroy the singleton instances
+	 */
+	public static function destroySingletons() {
+		self::$instances = [];
+	}
+
+	/**
+	 * Register lock managers from the global variables
+	 */
+	protected function initFromGlobals() {
+		global $wgLockManagers;
+
+		$this->register( $wgLockManagers );
+	}
+
+	/**
+	 * Register an array of file lock manager configurations
+	 *
+	 * @param array $configs
+	 * @throws Exception
+	 */
+	protected function register( array $configs ) {
+		foreach ( $configs as $config ) {
 			$config['domain'] = $this->domain;
 			if ( !isset( $config['name'] ) ) {
 				throw new Exception( "Cannot register a lock manager with no name." );
@@ -71,26 +102,6 @@ class LockManagerGroup {
 	}
 
 	/**
-	 * @deprecated since 1.34, use LockManagerGroupFactory
-	 *
-	 * @param bool|string $domain Domain (usually wiki ID). Default: false.
-	 * @return LockManagerGroup
-	 */
-	public static function singleton( $domain = false ) {
-		return MediaWikiServices::getInstance()->getLockManagerGroupFactory()
-			->getLockManagerGroup( $domain );
-	}
-
-	/**
-	 * Destroy the singleton instances
-	 *
-	 * @deprecated since 1.34, use resetServiceForTesting() on LockManagerGroupFactory
-	 */
-	public static function destroySingletons() {
-		MediaWikiServices::getInstance()->resetServiceForTesting( 'LockManagerGroupFactory' );
-	}
-
-	/**
 	 * Get the lock manager object with a given name
 	 *
 	 * @param string $name
@@ -104,8 +115,15 @@ class LockManagerGroup {
 		// Lazy-load the actual lock manager instance
 		if ( !isset( $this->managers[$name]['instance'] ) ) {
 			$class = $this->managers[$name]['class'];
-			'@phan-var string $class';
 			$config = $this->managers[$name]['config'];
+			if ( $class === 'DBLockManager' ) {
+				$lbFactory = MediaWikiServices::getInstance()->getDBLoadBalancerFactory();
+				$lb = $lbFactory->newMainLB( $config['domain'] );
+				$dbw = $lb->getLazyConnectionRef( DB_MASTER, [], $config['domain'] );
+
+				$config['dbServers']['localDBMaster'] = $dbw;
+				$config['srvCache'] = ObjectCache::getLocalServerInstance( 'hash' );
+			}
 			$config['logger'] = LoggerFactory::getInstance( 'LockManager' );
 
 			$this->managers[$name]['instance'] = new $class( $config );
@@ -134,13 +152,9 @@ class LockManagerGroup {
 	 * Get the default lock manager configured for the site.
 	 * Returns NullLockManager if no lock manager could be found.
 	 *
-	 * @codeCoverageIgnore
-	 * @deprecated since 1.35, seemingly unused, just call get() and catch any exception instead
 	 * @return LockManager
 	 */
 	public function getDefault() {
-		wfDeprecated( __METHOD__, '1.35' );
-
 		return isset( $this->managers['default'] )
 			? $this->get( 'default' )
 			: new NullLockManager( [] );
@@ -151,14 +165,10 @@ class LockManagerGroup {
 	 * or at least some other effective configured lock manager.
 	 * Throws an exception if no lock manager could be found.
 	 *
-	 * @codeCoverageIgnore
-	 * @deprecated since 1.35, seemingly unused, just call get() and catch any exception instead
 	 * @return LockManager
 	 * @throws Exception
 	 */
 	public function getAny() {
-		wfDeprecated( __METHOD__, '1.35' );
-
 		return isset( $this->managers['default'] )
 			? $this->get( 'default' )
 			: $this->get( 'fsLockManager' );

@@ -1,19 +1,17 @@
 <?php
-
-use PHPUnit\Framework\MockObject\MockObject;
 use Wikimedia\ScopedCallback;
 
 /**
  * @group Database
  */
-class RecentChangeTest extends MediaWikiIntegrationTestCase {
+class RecentChangeTest extends MediaWikiTestCase {
 	protected $title;
 	protected $target;
 	protected $user;
 	protected $user_comment;
 	protected $context;
 
-	protected function setUp() : void {
+	public function setUp() {
 		parent::setUp();
 
 		$this->title = Title::newFromText( 'SomeTitle' );
@@ -29,17 +27,12 @@ class RecentChangeTest extends MediaWikiIntegrationTestCase {
 	 * @covers RecentChange::loadFromRow
 	 */
 	public function testNewFromRow() {
-		$user = $this->getTestUser()->getUser();
-		$actorId = $user->getActorId();
-
-		$row = (object)[
-			'rc_foo' => 'AAA',
-			'rc_timestamp' => '20150921134808',
-			'rc_deleted' => 'bar',
-			'rc_comment_text' => 'comment',
-			'rc_comment_data' => null,
-			'rc_user' => $user->getId(),
-		];
+		$row = new stdClass();
+		$row->rc_foo = 'AAA';
+		$row->rc_timestamp = '20150921134808';
+		$row->rc_deleted = 'bar';
+		$row->rc_comment_text = 'comment';
+		$row->rc_comment_data = null;
 
 		$rc = RecentChange::newFromRow( $row );
 
@@ -50,23 +43,18 @@ class RecentChangeTest extends MediaWikiIntegrationTestCase {
 			'rc_comment' => 'comment',
 			'rc_comment_text' => 'comment',
 			'rc_comment_data' => null,
-			'rc_user' => $user->getId(),
-			'rc_user_text' => $user->getName(),
-			'rc_actor' => $actorId,
 		];
 		$this->assertEquals( $expected, $rc->getAttributes() );
 
-		$row = (object)[
-			'rc_foo' => 'AAA',
-			'rc_timestamp' => '20150921134808',
-			'rc_deleted' => 'bar',
-			'rc_comment' => 'comment',
-			'rc_user' => $user->getId(),
-		];
+		$row = new stdClass();
+		$row->rc_foo = 'AAA';
+		$row->rc_timestamp = '20150921134808';
+		$row->rc_deleted = 'bar';
+		$row->rc_comment = 'comment';
 
-		Wikimedia\suppressWarnings();
+		MediaWiki\suppressWarnings();
 		$rc = RecentChange::newFromRow( $row );
-		Wikimedia\restoreWarnings();
+		MediaWiki\restoreWarnings();
 
 		$expected = [
 			'rc_foo' => 'AAA',
@@ -75,9 +63,6 @@ class RecentChangeTest extends MediaWikiIntegrationTestCase {
 			'rc_comment' => 'comment',
 			'rc_comment_text' => 'comment',
 			'rc_comment_data' => null,
-			'rc_user' => $user->getId(),
-			'rc_user_text' => $user->getName(),
-			'rc_actor' => $actorId,
 		];
 		$this->assertEquals( $expected, $rc->getAttributes() );
 	}
@@ -179,7 +164,7 @@ class RecentChangeTest extends MediaWikiIntegrationTestCase {
 	}
 
 	/**
-	 * @return MockObject|PageProps
+	 * @return PHPUnit_Framework_MockObject_MockObject|PageProps
 	 */
 	private function getMockPageProps() {
 		return $this->getMockBuilder( PageProps::class )

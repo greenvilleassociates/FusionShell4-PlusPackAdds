@@ -24,15 +24,15 @@
  * @author Rob Church <robchur@gmail.com>
  */
 
+use Wikimedia\Rdbms\ResultWrapper;
 use Wikimedia\Rdbms\IDatabase;
-use Wikimedia\Rdbms\IResultWrapper;
 
 /**
  * Special:Listredirects - Lists all the redirects on the wiki.
  * @ingroup SpecialPage
  */
-class SpecialListRedirects extends QueryPage {
-	public function __construct( $name = 'Listredirects' ) {
+class ListredirectsPage extends QueryPage {
+	function __construct( $name = 'Listredirects' ) {
 		parent::__construct( $name );
 	}
 
@@ -40,11 +40,11 @@ class SpecialListRedirects extends QueryPage {
 		return true;
 	}
 
-	public function isSyndicated() {
+	function isSyndicated() {
 		return false;
 	}
 
-	protected function sortDescending() {
+	function sortDescending() {
 		return false;
 	}
 
@@ -53,6 +53,7 @@ class SpecialListRedirects extends QueryPage {
 			'tables' => [ 'p1' => 'page', 'redirect', 'p2' => 'page' ],
 			'fields' => [ 'namespace' => 'p1.page_namespace',
 				'title' => 'p1.page_title',
+				'value' => 'p1.page_title',
 				'rd_namespace',
 				'rd_title',
 				'rd_fragment',
@@ -67,7 +68,7 @@ class SpecialListRedirects extends QueryPage {
 		];
 	}
 
-	protected function getOrderFields() {
+	function getOrderFields() {
 		return [ 'p1.page_namespace', 'p1.page_title' ];
 	}
 
@@ -75,9 +76,9 @@ class SpecialListRedirects extends QueryPage {
 	 * Cache page existence for performance
 	 *
 	 * @param IDatabase $db
-	 * @param IResultWrapper $res
+	 * @param ResultWrapper $res
 	 */
-	public function preprocessResults( $db, $res ) {
+	function preprocessResults( $db, $res ) {
 		if ( !$res->numRows() ) {
 			return;
 		}
@@ -119,7 +120,7 @@ class SpecialListRedirects extends QueryPage {
 	 * @param object $result Result row
 	 * @return string
 	 */
-	public function formatResult( $skin, $result ) {
+	function formatResult( $skin, $result ) {
 		$linkRenderer = $this->getLinkRenderer();
 		# Make a link to the redirect itself
 		$rd_title = Title::makeTitle( $result->namespace, $result->title );
@@ -142,11 +143,6 @@ class SpecialListRedirects extends QueryPage {
 		} else {
 			return "<del>$rd_link</del>";
 		}
-	}
-
-	public function execute( $par ) {
-		$this->addHelpLink( 'Help:Redirects' );
-		parent::execute( $par );
 	}
 
 	protected function getGroupName() {

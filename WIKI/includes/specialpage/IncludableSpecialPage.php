@@ -27,7 +27,7 @@
  * @ingroup SpecialPage
  */
 class IncludableSpecialPage extends SpecialPage {
-	public function __construct(
+	function __construct(
 		$name, $restriction = '', $listed = true, $function = false, $file = 'default'
 	) {
 		parent::__construct( $name, $restriction, $listed, $function, $file, true );

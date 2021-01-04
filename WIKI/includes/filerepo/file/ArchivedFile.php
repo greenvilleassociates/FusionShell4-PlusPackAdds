@@ -21,13 +21,9 @@
  * @ingroup FileAbstraction
  */
 
-use MediaWiki\MediaWikiServices;
-use MediaWiki\Revision\RevisionRecord;
-
 /**
  * Class representing a row of the 'filearchive' table
  *
- * @stable to extend
  * @ingroup FileAbstraction
  */
 class ArchivedFile {
@@ -67,8 +63,11 @@ class ArchivedFile {
 	/** @var string Upload description */
 	private $description;
 
-	/** @var User|null Uploader */
+	/** @var int User ID of uploader */
 	private $user;
+
+	/** @var string User name of uploader */
+	private $user_text;
 
 	/** @var string Time of upload */
 	private $timestamp;
@@ -96,18 +95,14 @@ class ArchivedFile {
 	/** @var Title */
 	protected $title; # image title
 
-	/** @var bool */
-	protected $exists;
-
 	/**
-	 * @stable to call
 	 * @throws MWException
 	 * @param Title $title
 	 * @param int $id
 	 * @param string $key
 	 * @param string $sha1
 	 */
-	public function __construct( $title, $id = 0, $key = '', $sha1 = '' ) {
+	function __construct( $title, $id = 0, $key = '', $sha1 = '' ) {
 		$this->id = -1;
 		$this->title = false;
 		$this->name = false;
@@ -121,7 +116,8 @@ class ArchivedFile {
 		$this->mime = "unknown/unknown";
 		$this->media_type = '';
 		$this->description = '';
-		$this->user = null;
+		$this->user = 0;
+		$this->user_text = '';
 		$this->timestamp = null;
 		$this->deleted = 0;
 		$this->dataLoaded = false;
@@ -152,7 +148,6 @@ class ArchivedFile {
 
 	/**
 	 * Loads a file object from the filearchive table
-	 * @stable to override
 	 * @throws MWException
 	 * @return bool|null True on success or null
 	 */
@@ -176,21 +171,19 @@ class ArchivedFile {
 			$conds['fa_sha1'] = $this->sha1;
 		}
 
-		if ( $conds === [] ) {
+		if ( !count( $conds ) ) {
 			throw new MWException( "No specific information for retrieving archived file" );
 		}
 
 		if ( !$this->title || $this->title->getNamespace() == NS_FILE ) {
 			$this->dataLoaded = true; // set it here, to have also true on miss
 			$dbr = wfGetDB( DB_REPLICA );
-			$fileQuery = self::getQueryInfo();
 			$row = $dbr->selectRow(
-				$fileQuery['tables'],
-				$fileQuery['fields'],
+				'filearchive',
+				self::selectFields(),
 				$conds,
 				__METHOD__,
-				[ 'ORDER BY' => 'fa_timestamp DESC' ],
-				$fileQuery['joins']
+				[ 'ORDER BY' => 'fa_timestamp DESC' ]
 			);
 			if ( !$row ) {
 				// this revision does not exist?
@@ -209,7 +202,6 @@ class ArchivedFile {
 
 	/**
 	 * Loads a file object from the filearchive table
-	 * @stable to override
 	 *
 	 * @param stdClass $row
 	 * @return ArchivedFile
@@ -222,46 +214,37 @@ class ArchivedFile {
 	}
 
 	/**
-	 * Return the tables, fields, and join conditions to be selected to create
-	 * a new archivedfile object.
-	 * @since 1.31
-	 * @stable to override
-	 * @return array[] With three keys:
-	 *   - tables: (string[]) to include in the `$table` to `IDatabase->select()`
-	 *   - fields: (string[]) to include in the `$vars` to `IDatabase->select()`
-	 *   - joins: (array) to include in the `$join_conds` to `IDatabase->select()`
+	 * Fields in the filearchive table
+	 * @todo Deprecate this in favor of a method that returns tables and joins
+	 *  as well, and use CommentStore::getJoin().
+	 * @return array
 	 */
-	public static function getQueryInfo() {
-		$commentQuery = MediaWikiServices::getInstance()->getCommentStore()->getJoin( 'fa_description' );
-		$actorQuery = ActorMigration::newMigration()->getJoin( 'fa_user' );
+	static function selectFields() {
 		return [
-			'tables' => [ 'filearchive' ] + $commentQuery['tables'] + $actorQuery['tables'],
-			'fields' => [
-				'fa_id',
-				'fa_name',
-				'fa_archive_name',
-				'fa_storage_key',
-				'fa_storage_group',
-				'fa_size',
-				'fa_bits',
-				'fa_width',
-				'fa_height',
-				'fa_metadata',
-				'fa_media_type',
-				'fa_major_mime',
-				'fa_minor_mime',
-				'fa_timestamp',
-				'fa_deleted',
-				'fa_deleted_timestamp', /* Used by LocalFileRestoreBatch */
-				'fa_sha1',
-			] + $commentQuery['fields'] + $actorQuery['fields'],
-			'joins' => $commentQuery['joins'] + $actorQuery['joins'],
-		];
+			'fa_id',
+			'fa_name',
+			'fa_archive_name',
+			'fa_storage_key',
+			'fa_storage_group',
+			'fa_size',
+			'fa_bits',
+			'fa_width',
+			'fa_height',
+			'fa_metadata',
+			'fa_media_type',
+			'fa_major_mime',
+			'fa_minor_mime',
+			'fa_user',
+			'fa_user_text',
+			'fa_timestamp',
+			'fa_deleted',
+			'fa_deleted_timestamp', /* Used by LocalFileRestoreBatch */
+			'fa_sha1',
+		] + CommentStore::newKey( 'fa_description' )->getFields();
 	}
 
 	/**
 	 * Load ArchivedFile object fields from a DB row.
-	 * @stable to override
 	 *
 	 * @param stdClass $row Object database row
 	 * @since 1.21
@@ -279,10 +262,11 @@ class ArchivedFile {
 		$this->metadata = $row->fa_metadata;
 		$this->mime = "$row->fa_major_mime/$row->fa_minor_mime";
 		$this->media_type = $row->fa_media_type;
-		$this->description = MediaWikiServices::getInstance()->getCommentStore()
-			// Legacy because $row may have come from self::selectFields()
-			->getCommentLegacy( wfGetDB( DB_REPLICA ), 'fa_description', $row )->text;
-		$this->user = User::newFromAnyId( $row->fa_user, $row->fa_user_text, $row->fa_actor );
+		$this->description = CommentStore::newKey( 'fa_description' )
+			// Legacy because $row probably came from self::selectFields()
+			->getCommentLegacy( wfGetDB( DB_REPLICA ), $row )->text;
+		$this->user = $row->fa_user;
+		$this->user_text = $row->fa_user_text;
 		$this->timestamp = $row->fa_timestamp;
 		$this->deleted = $row->fa_deleted;
 		if ( isset( $row->fa_sha1 ) ) {
@@ -429,7 +413,7 @@ class ArchivedFile {
 	 * Get a MediaHandler instance for this file
 	 * @return MediaHandler
 	 */
-	private function getHandler() {
+	function getHandler() {
 		if ( !isset( $this->handler ) ) {
 			$this->handler = MediaHandler::getHandler( $this->getMimeType() );
 		}
@@ -440,15 +424,12 @@ class ArchivedFile {
 	/**
 	 * Returns the number of pages of a multipage document, or false for
 	 * documents which aren't multipage documents
-	 * @stable to override
-	 * @return int|false
+	 * @return bool|int
 	 */
-	public function pageCount() {
+	function pageCount() {
 		if ( !isset( $this->pageCount ) ) {
 			// @FIXME: callers expect File objects
-			// @phan-suppress-next-line PhanTypeMismatchArgument
 			if ( $this->getHandler() && $this->handler->isMultiPage( $this ) ) {
-				// @phan-suppress-next-line PhanTypeMismatchArgument
 				$this->pageCount = $this->handler->pageCount( $this );
 			} else {
 				$this->pageCount = false;
@@ -486,7 +467,7 @@ class ArchivedFile {
 	 * @return string
 	 * @since 1.21
 	 */
-	public function getSha1() {
+	function getSha1() {
 		$this->load();
 
 		return $this->sha1;
@@ -498,20 +479,17 @@ class ArchivedFile {
 	 * @note Prior to MediaWiki 1.23, this method always
 	 *   returned the user id, and was inconsistent with
 	 *   the rest of the file classes.
-	 * @param string $type 'text', 'id', or 'object'
-	 * @return int|string|User|null
+	 * @param string $type 'text' or 'id'
+	 * @return int|string
 	 * @throws MWException
-	 * @since 1.31 added 'object'
 	 */
 	public function getUser( $type = 'text' ) {
 		$this->load();
 
-		if ( $type === 'object' ) {
-			return $this->user;
-		} elseif ( $type === 'text' ) {
-			return $this->user ? $this->user->getName() : '';
-		} elseif ( $type === 'id' ) {
-			return $this->user ? $this->user->getId() : 0;
+		if ( $type == 'text' ) {
+			return $this->user_text;
+		} elseif ( $type == 'id' ) {
+			return (int)$this->user;
 		}
 
 		throw new MWException( "Unknown type '$type'." );
@@ -537,7 +515,9 @@ class ArchivedFile {
 	 * @return int
 	 */
 	public function getRawUser() {
-		return $this->getUser( 'id' );
+		$this->load();
+
+		return $this->user;
 	}
 
 	/**
@@ -546,7 +526,9 @@ class ArchivedFile {
 	 * @return string
 	 */
 	public function getRawUserText() {
-		return $this->getUser( 'text' );
+		$this->load();
+
+		return $this->user_text;
 	}
 
 	/**
@@ -586,24 +568,13 @@ class ArchivedFile {
 	 * Determine if the current user is allowed to view a particular
 	 * field of this FileStore image file, if it's marked as deleted.
 	 * @param int $field
-	 * @param null|User $user User object to check, or null to use $wgUser (deprecated since 1.35)
+	 * @param null|User $user User object to check, or null to use $wgUser
 	 * @return bool
 	 */
 	public function userCan( $field, User $user = null ) {
 		$this->load();
+
 		$title = $this->getTitle();
-
-		if ( !$user ) {
-			wfDeprecated( __METHOD__ . ' without passing a $user parameter', '1.35' );
-			global $wgUser;
-			$user = $wgUser;
-		}
-
-		return RevisionRecord::userCanBitfield(
-			$this->deleted,
-			$field,
-			$user,
-			$title ?: null
-		);
+		return Revision::userCanBitfield( $this->deleted, $field, $user, $title ?: null );
 	}
 }

@@ -23,9 +23,8 @@
 
 require_once __DIR__ . '/Maintenance.php';
 
-use MediaWiki\MediaWikiServices;
+use Wikimedia\Rdbms\ResultWrapper;
 use Wikimedia\Rdbms\IDatabase;
-use Wikimedia\Rdbms\IResultWrapper;
 
 /**
  * Maintenance script to convert user options to the new `user_properties` table.
@@ -52,7 +51,6 @@ class ConvertUserOptions extends Maintenance {
 
 			return;
 		}
-		$lbFactory = MediaWikiServices::getInstance()->getDBLoadBalancerFactory();
 		while ( $id !== null ) {
 			$res = $dbw->select( 'user',
 				[ 'user_id', 'user_options' ],
@@ -63,12 +61,12 @@ class ConvertUserOptions extends Maintenance {
 				__METHOD__,
 				[
 					'ORDER BY' => 'user_id',
-					'LIMIT' => $this->getBatchSize(),
+					'LIMIT' => $this->mBatchSize,
 				]
 			);
 			$id = $this->convertOptionBatch( $res, $dbw );
 
-			$lbFactory->waitForReplication();
+			wfWaitForSlaves();
 
 			if ( $id ) {
 				$this->output( "--Converted to ID $id\n" );
@@ -78,11 +76,11 @@ class ConvertUserOptions extends Maintenance {
 	}
 
 	/**
-	 * @param IResultWrapper $res
+	 * @param ResultWrapper $res
 	 * @param IDatabase $dbw
 	 * @return null|int
 	 */
-	private function convertOptionBatch( $res, $dbw ) {
+	function convertOptionBatch( $res, $dbw ) {
 		$id = null;
 		foreach ( $res as $row ) {
 			$this->mConversionCount++;
@@ -96,7 +94,7 @@ class ConvertUserOptions extends Maintenance {
 				// MW < 1.16 would save even default values. Filter them out
 				// here (as in User) to avoid adding many unnecessary rows.
 				$defaultOption = User::getDefaultOption( $m[1] );
-				if ( $defaultOption === null || $m[2] != $defaultOption ) {
+				if ( is_null( $defaultOption ) || $m[2] != $defaultOption ) {
 					$insertRows[] = [
 						'up_user' => $row->user_id,
 						'up_property' => $m[1],
@@ -122,5 +120,5 @@ class ConvertUserOptions extends Maintenance {
 	}
 }
 
-$maintClass = ConvertUserOptions::class;
+$maintClass = "ConvertUserOptions";
 require_once RUN_MAINTENANCE_IF_MAIN;

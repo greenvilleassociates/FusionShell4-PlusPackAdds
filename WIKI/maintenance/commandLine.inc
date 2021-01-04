@@ -23,34 +23,29 @@
 
 require_once __DIR__ . '/Maintenance.php';
 
-// phpcs:ignore MediaWiki.NamingConventions.ValidGlobalName.wgPrefix
-global $optionsWithArgs, $optionsWithoutArgs, $allowUnregisteredOptions;
-
+// @codingStandardsIgnoreStart MediaWiki.NamingConventions.ValidGlobalName.wgPrefix
+global $optionsWithArgs;
+global $optionsWithoutArgs;
+// @codingStandardsIgnoreEnd
 if ( !isset( $optionsWithArgs ) ) {
 	$optionsWithArgs = [];
 }
 if ( !isset( $optionsWithoutArgs ) ) {
 	$optionsWithoutArgs = [];
 }
-if ( !isset( $allowUnregisteredOptions ) ) {
-	$allowUnregisteredOptions = false;
-}
 
 class CommandLineInc extends Maintenance {
 	public function __construct() {
-		// phpcs:ignore MediaWiki.NamingConventions.ValidGlobalName.wgPrefix
-		global $optionsWithArgs, $optionsWithoutArgs, $allowUnregisteredOptions;
-
+		// @codingStandardsIgnoreStart MediaWiki.NamingConventions.ValidGlobalName.wgPrefix
+		global $optionsWithArgs, $optionsWithoutArgs;
+		// @codingStandardsIgnoreEnd
 		parent::__construct();
-
 		foreach ( $optionsWithArgs as $name ) {
 			$this->addOption( $name, '', false, true );
 		}
 		foreach ( $optionsWithoutArgs as $name ) {
 			$this->addOption( $name, '', false, false );
 		}
-
-		$this->setAllowUnregisteredOptions( $allowUnregisteredOptions );
 	}
 
 	/**
@@ -65,13 +60,13 @@ class CommandLineInc extends Maintenance {
 	}
 
 	public function execute() {
-		// phpcs:ignore MediaWiki.NamingConventions.ValidGlobalName.wgPrefix
+		// @codingStandardsIgnoreStart MediaWiki.NamingConventions.ValidGlobalName.wgPrefix
 		global $args, $options;
-
+		// @codingStandardsIgnoreEnd
 		$args = $this->mArgs;
 		$options = $this->mOptions;
 	}
 }
 
-$maintClass = CommandLineInc::class;
+$maintClass = 'CommandLineInc';
 require RUN_MAINTENANCE_IF_MAIN;

@@ -23,7 +23,6 @@
 
 use MediaWiki\Auth\AuthManager;
 use MediaWiki\Logger\LoggerFactory;
-use MediaWiki\MediaWikiServices;
 
 /**
  * Implements Special:CreateAccount
@@ -51,23 +50,18 @@ class SpecialCreateAccount extends LoginSignupSpecialPage {
 	}
 
 	public function isRestricted() {
-		return !MediaWikiServices::getInstance()
-			->getPermissionManager()
-			->groupHasPermission( '*', 'createaccount' );
+		return !User::groupHasPermission( '*', 'createaccount' );
 	}
 
 	public function userCanExecute( User $user ) {
-		return MediaWikiServices::getInstance()
-			->getPermissionManager()
-			->userHasRight( $user, 'createaccount' );
+		return $user->isAllowed( 'createaccount' );
 	}
 
 	public function checkPermissions() {
 		parent::checkPermissions();
 
 		$user = $this->getUser();
-		$status = MediaWikiServices::getInstance()->getAuthManager()
-			->checkAccountCreatePermissions( $user );
+		$status = AuthManager::singleton()->checkAccountCreatePermissions( $user );
 		if ( !$status->isGood() ) {
 			throw new ErrorPageError( 'createacct-error', $status->getMessage() );
 		}
@@ -103,7 +97,7 @@ class SpecialCreateAccount extends LoginSignupSpecialPage {
 		if ( $direct ) {
 			# Only save preferences if the user is not creating an account for someone else.
 			if ( !$this->proxyAccountCreation ) {
-				$this->getHookRunner()->onAddNewAccount( $user, false );
+				Hooks::run( 'AddNewAccount', [ $user, false ] );
 
 				// If the user does not have a session cookie at this point, they probably need to
 				// do something to their browser.
@@ -116,12 +110,10 @@ class SpecialCreateAccount extends LoginSignupSpecialPage {
 			} else {
 				$byEmail = false; // FIXME no way to set this
 
-				$this->getHookRunner()->onAddNewAccount( $user, $byEmail );
+				Hooks::run( 'AddNewAccount', [ $user, $byEmail ] );
 
 				$out = $this->getOutput();
-				// @phan-suppress-next-line PhanImpossibleCondition
 				$out->setPageTitle( $this->msg( $byEmail ? 'accmailtitle' : 'accountcreated' ) );
-				// @phan-suppress-next-line PhanImpossibleCondition
 				if ( $byEmail ) {
 					$out->addWikiMsg( 'accmailtext', $user->getName(), $user->getEmail() );
 				} else {
@@ -142,14 +134,14 @@ class SpecialCreateAccount extends LoginSignupSpecialPage {
 		# Run any hooks; display injected HTML
 		$injected_html = '';
 		$welcome_creation_msg = 'welcomecreation-msg';
-		$this->getHookRunner()->onUserLoginComplete( $user, $injected_html, $direct );
+		Hooks::run( 'UserLoginComplete', [ &$user, &$injected_html, $direct ] );
 
 		/**
 		 * Let any extensions change what message is shown.
 		 * @see https://www.mediawiki.org/wiki/Manual:Hooks/BeforeWelcomeCreation
 		 * @since 1.18
 		 */
-		$this->getHookRunner()->onBeforeWelcomeCreation( $welcome_creation_msg, $injected_html );
+		Hooks::run( 'BeforeWelcomeCreation', [ &$welcome_creation_msg, &$injected_html ] );
 
 		$this->showSuccessPage( 'signup', $this->msg( 'welcomeuser', $this->getUser()->getName() ),
 			$welcome_creation_msg, $injected_html, $extraMessages );

@@ -1,5 +1,9 @@
 <?php
 /**
+ *
+ *
+ * Created on March 5, 2011
+ *
  * Copyright © 2011 Bryan Tong Minh <Bryan.TongMinh@Gmail.com>
  *
  * This program is free software; you can redistribute it and/or modify
@@ -19,8 +23,6 @@
  *
  * @file
  */
-
-use MediaWiki\MediaWikiServices;
 
 /**
  * @ingroup API
@@ -75,12 +77,12 @@ class ApiFileRevert extends ApiBase {
 	protected function validateParameters() {
 		// Validate the input title
 		$title = Title::makeTitleSafe( NS_FILE, $this->params['filename'] );
-		if ( $title === null ) {
+		if ( is_null( $title ) ) {
 			$this->dieWithError(
 				[ 'apierror-invalidtitle', wfEscapeWikiText( $this->params['filename'] ) ]
 			);
 		}
-		$localRepo = MediaWikiServices::getInstance()->getRepoGroup()->getLocalRepo();
+		$localRepo = RepoGroup::singleton()->getLocalRepo();
 
 		// Check if the file really exists
 		$this->file = $localRepo->newFile( $title );

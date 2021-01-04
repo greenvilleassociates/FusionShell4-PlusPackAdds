@@ -1,48 +1,37 @@
 <?php
 
-/*
- * @stable to extend
- */
 class HTMLTextAreaField extends HTMLFormField {
-	protected const DEFAULT_COLS = 80;
-	protected const DEFAULT_ROWS = 25;
+	const DEFAULT_COLS = 80;
+	const DEFAULT_ROWS = 25;
 
 	protected $mPlaceholder = '';
-	protected $mUseEditFont = false;
 
 	/**
-	 * @stable to call
-	 *
 	 * @param array $params
 	 *   - cols, rows: textarea size
 	 *   - placeholder/placeholder-message: set HTML placeholder attribute
 	 *   - spellcheck: set HTML spellcheck attribute
-	 *   - useeditfont: add CSS classes to use the same font as the wikitext editor
 	 */
 	public function __construct( $params ) {
 		parent::__construct( $params );
 
 		if ( isset( $params['placeholder-message'] ) ) {
-			$this->mPlaceholder = $this->getMessage( $params['placeholder-message'] )->text();
+			$this->mPlaceholder = $this->getMessage( $params['placeholder-message'] )->parse();
 		} elseif ( isset( $params['placeholder'] ) ) {
 			$this->mPlaceholder = $params['placeholder'];
-		}
-
-		if ( isset( $params['useeditfont'] ) ) {
-			$this->mUseEditFont = $params['useeditfont'];
 		}
 	}
 
 	public function getCols() {
-		return $this->mParams['cols'] ?? static::DEFAULT_COLS;
+		return isset( $this->mParams['cols'] ) ? $this->mParams['cols'] : static::DEFAULT_COLS;
 	}
 
 	public function getRows() {
-		return $this->mParams['rows'] ?? static::DEFAULT_ROWS;
+		return isset( $this->mParams['rows'] ) ? $this->mParams['rows'] : static::DEFAULT_ROWS;
 	}
 
 	public function getSpellCheck() {
-		$val = $this->mParams['spellcheck'] ?? null;
+		$val = isset( $this->mParams['spellcheck'] ) ? $this->mParams['spellcheck'] : null;
 		if ( is_bool( $val ) ) {
 			// "spellcheck" attribute literally requires "true" or "false" to work.
 			return $val === true ? 'true' : 'false';
@@ -50,13 +39,7 @@ class HTMLTextAreaField extends HTMLFormField {
 		return null;
 	}
 
-	/**
-	 * @inheritDoc
-	 * @stable to override
-	 */
 	public function getInputHTML( $value ) {
-		$classes = [];
-
 		$attribs = [
 				'id' => $this->mID,
 				'cols' => $this->getCols(),
@@ -65,24 +48,10 @@ class HTMLTextAreaField extends HTMLFormField {
 			] + $this->getTooltipAndAccessKey();
 
 		if ( $this->mClass !== '' ) {
-			array_push( $classes, $this->mClass );
-		}
-		if ( $this->mUseEditFont ) {
-			// The following classes can be used here:
-			// * mw-editfont-monospace
-			// * mw-editfont-sans-serif
-			// * mw-editfont-serif
-			array_push(
-				$classes,
-				'mw-editfont-' . $this->mParent->getUser()->getOption( 'editfont' )
-			);
-			$this->mParent->getOutput()->addModuleStyles( 'mediawiki.editfont.styles' );
+			$attribs['class'] = $this->mClass;
 		}
 		if ( $this->mPlaceholder !== '' ) {
 			$attribs['placeholder'] = $this->mPlaceholder;
-		}
-		if ( count( $classes ) ) {
-			$attribs['class'] = implode( ' ', $classes );
 		}
 
 		$allowedParams = [
@@ -97,13 +66,7 @@ class HTMLTextAreaField extends HTMLFormField {
 		return Html::textarea( $this->mName, $value, $attribs );
 	}
 
-	/**
-	 * @inheritDoc
-	 * @stable to override
-	 */
-	public function getInputOOUI( $value ) {
-		$classes = [];
-
+	function getInputOOUI( $value ) {
 		if ( isset( $this->mParams['cols'] ) ) {
 			throw new Exception( "OOUIHTMLForm does not support the 'cols' parameter for textareas" );
 		}
@@ -111,24 +74,10 @@ class HTMLTextAreaField extends HTMLFormField {
 		$attribs = $this->getTooltipAndAccessKeyOOUI();
 
 		if ( $this->mClass !== '' ) {
-			array_push( $classes, $this->mClass );
-		}
-		if ( $this->mUseEditFont ) {
-			// The following classes can be used here:
-			// * mw-editfont-monospace
-			// * mw-editfont-sans-serif
-			// * mw-editfont-serif
-			array_push(
-				$classes,
-				'mw-editfont-' . $this->mParent->getUser()->getOption( 'editfont' )
-			);
-			$this->mParent->getOutput()->addModuleStyles( 'mediawiki.editfont.styles' );
+			$attribs['classes'] = [ $this->mClass ];
 		}
 		if ( $this->mPlaceholder !== '' ) {
 			$attribs['placeholder'] = $this->mPlaceholder;
-		}
-		if ( count( $classes ) ) {
-			$attribs['classes'] = $classes;
 		}
 
 		$allowedParams = [
@@ -143,9 +92,10 @@ class HTMLTextAreaField extends HTMLFormField {
 			$this->getAttributes( $allowedParams )
 		);
 
-		return new OOUI\MultilineTextInputWidget( [
+		return new OOUI\TextInputWidget( [
 			'id' => $this->mID,
 			'name' => $this->mName,
+			'multiline' => true,
 			'value' => $value,
 			'rows' => $this->getRows(),
 		] + $attribs );

@@ -5,7 +5,7 @@ use Wikimedia\TestingAccessWrapper;
 /**
  * @group API
  */
-class ApiMessageTest extends MediaWikiIntegrationTestCase {
+class ApiMessageTest extends MediaWikiTestCase {
 
 	private function compareMessages( Message $msg, Message $msg2 ) {
 		$this->assertSame( $msg->getKey(), $msg2->getKey(), 'getKey' );
@@ -37,10 +37,6 @@ class ApiMessageTest extends MediaWikiIntegrationTestCase {
 
 		$msg = new ApiMessage( 'apiwarn-baz' );
 		$this->assertSame( 'baz', $msg->getApiCode() );
-
-		// Weird "message key"
-		$msg = new ApiMessage( "<foo> bar\nbaz" );
-		$this->assertSame( '_foo__bar_baz', $msg->getApiCode() );
 
 		// BC case
 		$msg = new ApiMessage( 'actionthrottledtext' );
@@ -76,9 +72,6 @@ class ApiMessageTest extends MediaWikiIntegrationTestCase {
 		return [
 			[ '' ],
 			[ 42 ],
-			[ 'A bad code' ],
-			[ 'Project:A_page_title' ],
-			[ "WTF\nnewlines" ],
 		];
 	}
 

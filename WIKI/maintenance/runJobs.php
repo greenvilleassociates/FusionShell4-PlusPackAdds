@@ -21,15 +21,9 @@
  * @ingroup Maintenance
  */
 
-if ( !defined( 'MEDIAWIKI' ) ) {
-	// So extensions (and other code) can check whether they're running in job mode.
-	// This is not defined if this script is included from installer/updater or phpunit.
-	define( 'MEDIAWIKI_JOB_RUNNER', true );
-}
-
 require_once __DIR__ . '/Maintenance.php';
 
-use MediaWiki\MediaWikiServices;
+use MediaWiki\Logger\LoggerFactory;
 
 /**
  * Maintenance script that runs pending jobs.
@@ -45,7 +39,7 @@ class RunJobs extends Maintenance {
 		$this->addOption( 'type', 'Type of job to run', false, true );
 		$this->addOption( 'procs', 'Number of processes to use', false, true );
 		$this->addOption( 'nothrottle', 'Ignore job throttling configuration', false, false );
-		$this->addOption( 'result', 'Set to "json" to print only a JSON response', false, true );
+		$this->addOption( 'result', 'Set to JSON to print only a JSON response', false, true );
 		$this->addOption( 'wait', 'Wait for new jobs instead of exiting', false, false );
 	}
 
@@ -62,7 +56,7 @@ class RunJobs extends Maintenance {
 		if ( $this->hasOption( 'procs' ) ) {
 			$procs = intval( $this->getOption( 'procs' ) );
 			if ( $procs < 1 || $procs > 1000 ) {
-				$this->fatalError( "Invalid argument to --procs" );
+				$this->error( "Invalid argument to --procs", true );
 			} elseif ( $procs != 1 ) {
 				$fc = new ForkController( $procs );
 				if ( $fc->start() != 'child' ) {
@@ -74,7 +68,7 @@ class RunJobs extends Maintenance {
 		$outputJSON = ( $this->getOption( 'result' ) === 'json' );
 		$wait = $this->hasOption( 'wait' );
 
-		$runner = MediaWikiServices::getInstance()->getJobRunner();
+		$runner = new JobRunner( LoggerFactory::getInstance( 'runJobs' ) );
 		if ( !$outputJSON ) {
 			$runner->setDebugHandler( [ $this, 'debugInternal' ] );
 		}
@@ -102,10 +96,6 @@ class RunJobs extends Maintenance {
 				$response['reached'] === 'job-limit' ||
 				$response['reached'] === 'memory-limit'
 			) {
-				// If job queue is empty, output it
-				if ( !$outputJSON && $response['jobs'] === [] ) {
-					$this->output( "Job queue is empty.\n" );
-				}
 				break;
 			}
 
@@ -125,5 +115,5 @@ class RunJobs extends Maintenance {
 	}
 }
 
-$maintClass = RunJobs::class;
+$maintClass = "RunJobs";
 require_once RUN_MAINTENANCE_IF_MAIN;

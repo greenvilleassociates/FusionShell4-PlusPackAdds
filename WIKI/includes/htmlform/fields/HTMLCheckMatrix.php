@@ -9,23 +9,20 @@
  *
  * Options:
  *   - columns
- *     - Required associative array mapping column labels (as HTML) to their tags.
+ *     - Required list of columns in the matrix.
  *   - rows
- *     - Required associative array mapping row labels (as HTML) to their tags.
+ *     - Required list of rows in the matrix.
  *   - force-options-on
- *     - Array of column-row tags to be displayed as enabled but unavailable to change.
+ *     - Accepts array of column-row tags to be displayed as enabled but unavailable to change
  *   - force-options-off
- *     - Array of column-row tags to be displayed as disabled but unavailable to change.
+ *     - Accepts array of column-row tags to be displayed as disabled but unavailable to change.
  *   - tooltips
- *     - Optional associative array mapping row labels to tooltips (as text, will be escaped).
+ *     - Optional array mapping row label to tooltip content
  *   - tooltip-class
  *     - Optional CSS class used on tooltip container span. Defaults to mw-icon-question.
- *       Not used by OOUI form fields.
- *
- * @stable to extend
  */
 class HTMLCheckMatrix extends HTMLFormField implements HTMLNestedFilterable {
-	private static $requiredParams = [
+	static private $requiredParams = [
 		// Required by underlying HTMLFormField
 		'fieldname',
 		// Required by HTMLCheckMatrix
@@ -33,9 +30,6 @@ class HTMLCheckMatrix extends HTMLFormField implements HTMLNestedFilterable {
 		'columns'
 	];
 
-	/*
-	 * @stable to call
-	 */
 	public function __construct( $params ) {
 		$missing = array_diff( self::$requiredParams, array_keys( $params ) );
 		if ( $missing ) {
@@ -94,12 +88,11 @@ class HTMLCheckMatrix extends HTMLFormField implements HTMLNestedFilterable {
 		$attribs = $this->getAttributes( [ 'disabled', 'tabindex' ] );
 
 		// Build the column headers
-		$headerContents = Html::rawElement( 'td', [], "\u{00A0}" );
+		$headerContents = Html::rawElement( 'td', [], '&#160;' );
 		foreach ( $columns as $columnLabel => $columnTag ) {
-			$headerContents .= Html::rawElement( 'th', [], $columnLabel );
+			$headerContents .= Html::rawElement( 'td', [], $columnLabel );
 		}
-		$thead = Html::rawElement( 'tr', [], "\n$headerContents\n" );
-		$tableContents .= Html::rawElement( 'thead', [], "\n$thead\n" );
+		$tableContents .= Html::rawElement( 'tr', [], "\n$headerContents\n" );
 
 		$tooltipClass = 'mw-icon-question';
 		if ( isset( $this->mParams['tooltip-class'] ) ) {
@@ -113,7 +106,6 @@ class HTMLCheckMatrix extends HTMLFormField implements HTMLNestedFilterable {
 				$tooltipAttribs = [
 					'class' => "mw-htmlform-tooltip $tooltipClass",
 					'title' => $this->mParams['tooltips'][$rowLabel],
-					'aria-label' => $this->mParams['tooltips'][$rowLabel]
 				];
 				$rowLabel .= ' ' . Html::element( 'span', $tooltipAttribs, '' );
 			}
@@ -129,14 +121,12 @@ class HTMLCheckMatrix extends HTMLFormField implements HTMLNestedFilterable {
 				if ( $this->isTagForcedOff( $thisTag ) ) {
 					$checked = false;
 					$thisAttribs['disabled'] = 1;
-					$thisAttribs['class'] = 'checkmatrix-forced checkmatrix-forced-off';
 				} elseif ( $this->isTagForcedOn( $thisTag ) ) {
 					$checked = true;
 					$thisAttribs['disabled'] = 1;
-					$thisAttribs['class'] = 'checkmatrix-forced checkmatrix-forced-on';
 				}
 
-				$checkbox = $this->getOneCheckboxHTML( $checked, $attribs + $thisAttribs );
+				$checkbox = $this->getOneCheckbox( $checked, $attribs + $thisAttribs );
 
 				$rowContents .= Html::rawElement(
 					'td',
@@ -155,33 +145,24 @@ class HTMLCheckMatrix extends HTMLFormField implements HTMLNestedFilterable {
 		return $html;
 	}
 
-	public function getInputOOUI( $value ) {
-		$attribs = $this->getAttributes( [ 'disabled', 'tabindex' ] );
-
-		return new MediaWiki\Widget\CheckMatrixWidget(
-			[
-				'name' => $this->mName,
-				'infusable' => true,
-				'id' => $this->mID,
-				'rows' => $this->mParams['rows'],
-				'columns' => $this->mParams['columns'],
-				'tooltips' => $this->mParams['tooltips'] ?? [],
-				'forcedOff' => $this->mParams['force-options-off'] ?? [],
-				'forcedOn' => $this->mParams['force-options-on'] ?? [],
-				'values' => $value,
-			] + OOUI\Element::configFromHtmlAttributes( $attribs )
-		);
-	}
-
-	protected function getOneCheckboxHTML( $checked, $attribs ) {
-		$checkbox = Xml::check( "{$this->mName}[]", $checked, $attribs );
-		if ( $this->mParent->getConfig()->get( 'UseMediaWikiUIEverywhere' ) ) {
-			$checkbox = Html::openElement( 'div', [ 'class' => 'mw-ui-checkbox' ] ) .
-				$checkbox .
-				Html::element( 'label', [ 'for' => $attribs['id'] ] ) .
-				Html::closeElement( 'div' );
+	protected function getOneCheckbox( $checked, $attribs ) {
+		if ( $this->mParent instanceof OOUIHTMLForm ) {
+			return new OOUI\CheckboxInputWidget( [
+				'name' => "{$this->mName}[]",
+				'selected' => $checked,
+			] + OOUI\Element::configFromHtmlAttributes(
+				$attribs
+			) );
+		} else {
+			$checkbox = Xml::check( "{$this->mName}[]", $checked, $attribs );
+			if ( $this->mParent->getConfig()->get( 'UseMediaWikiUIEverywhere' ) ) {
+				$checkbox = Html::openElement( 'div', [ 'class' => 'mw-ui-checkbox' ] ) .
+					$checkbox .
+					Html::element( 'label', [ 'for' => $attribs['id'] ] ) .
+					Html::closeElement( 'div' );
+			}
+			return $checkbox;
 		}
-		return $checkbox;
 	}
 
 	protected function isTagForcedOff( $tag ) {
@@ -201,7 +182,7 @@ class HTMLCheckMatrix extends HTMLFormField implements HTMLNestedFilterable {
 	 * line above the options in the case of a checkbox matrix, i.e. it's always
 	 * a "vertical-label".
 	 *
-	 * @param string|array $value The value to set the input to
+	 * @param string $value The value to set the input to
 	 *
 	 * @return string Complete HTML table row
 	 */
@@ -255,7 +236,11 @@ class HTMLCheckMatrix extends HTMLFormField implements HTMLNestedFilterable {
 	}
 
 	public function getDefault() {
-		return $this->mDefault ?? [];
+		if ( isset( $this->mDefault ) ) {
+			return $this->mDefault;
+		} else {
+			return [];
+		}
 	}
 
 	public function filterDataForSubmit( $data ) {
@@ -277,13 +262,5 @@ class HTMLCheckMatrix extends HTMLFormField implements HTMLNestedFilterable {
 		}
 
 		return $res;
-	}
-
-	protected function getOOUIModules() {
-		return [ 'mediawiki.widgets.CheckMatrixWidget' ];
-	}
-
-	protected function shouldInfuseOOUI() {
-		return true;
 	}
 }

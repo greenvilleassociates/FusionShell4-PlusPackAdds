@@ -3,7 +3,7 @@
  *
  * @copyright 2011-2016 VisualEditor Team and others; see http://ve.mit-license.org
  */
-( function () {
+( function ( $, mw ) {
 
 	/**
 	 * API Results Provider object.
@@ -61,10 +61,16 @@
 
 		xhr = $.getJSON( this.getAPIurl(), allParams )
 			.done( function ( data ) {
-				if ( Array.isArray( data ) && data.length ) {
-					deferred.resolve( data );
-				} else {
+				if (
+					$.type( data ) !== 'array' ||
+					(
+						$.type( data ) === 'array' &&
+						data.length === 0
+					)
+				) {
 					deferred.resolve();
+				} else {
+					deferred.resolve( data );
 				}
 			} );
 		return deferred.promise( { abort: xhr.abort } );
@@ -220,4 +226,4 @@
 	mw.widgets.APIResultsProvider.prototype.setAjaxSettings = function ( settings ) {
 		this.ajaxSettings = settings;
 	};
-}() );
+}( jQuery, mediaWiki ) );

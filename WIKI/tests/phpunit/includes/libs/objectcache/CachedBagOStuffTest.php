@@ -5,13 +5,11 @@ use Wikimedia\TestingAccessWrapper;
 /**
  * @group BagOStuff
  */
-class CachedBagOStuffTest extends PHPUnit\Framework\TestCase {
-
-	use MediaWikiCoversValidator;
+class CachedBagOStuffTest extends PHPUnit_Framework_TestCase {
 
 	/**
 	 * @covers CachedBagOStuff::__construct
-	 * @covers CachedBagOStuff::get
+	 * @covers CachedBagOStuff::doGet
 	 */
 	public function testGetFromBackend() {
 		$backend = new HashBagOStuff;
@@ -34,12 +32,11 @@ class CachedBagOStuffTest extends PHPUnit\Framework\TestCase {
 
 		for ( $i = 0; $i < 10; $i++ ) {
 			$cache->set( "key$i", 1 );
-			$this->assertSame( 1, $cache->get( "key$i" ) );
-			$this->assertSame( 1, $backend->get( "key$i" ) );
-
+			$this->assertEquals( 1, $cache->get( "key$i" ) );
+			$this->assertEquals( 1, $backend->get( "key$i" ) );
 			$cache->delete( "key$i" );
-			$this->assertFalse( $cache->get( "key$i" ) );
-			$this->assertFalse( $backend->get( "key$i" ) );
+			$this->assertEquals( false, $cache->get( "key$i" ) );
+			$this->assertEquals( false, $backend->get( "key$i" ) );
 		}
 	}
 
@@ -68,24 +65,24 @@ class CachedBagOStuffTest extends PHPUnit\Framework\TestCase {
 	}
 
 	/**
-	 * @covers CachedBagOStuff::get
+	 * @covers CachedBagOStuff::doGet
 	 */
 	public function testCacheBackendMisses() {
 		$backend = new HashBagOStuff;
 		$cache = new CachedBagOStuff( $backend );
 
 		// First hit primes the cache with miss from the backend
-		$this->assertFalse( $cache->get( 'foo' ) );
+		$this->assertEquals( false, $cache->get( 'foo' ) );
 
 		// Change the value in the backend
 		$backend->set( 'foo', true );
 
 		// Second hit returns the cached miss
-		$this->assertFalse( $cache->get( 'foo' ) );
+		$this->assertEquals( false, $cache->get( 'foo' ) );
 
 		// But a fresh value is read from the backend
 		$backend->set( 'bar', true );
-		$this->assertTrue( $cache->get( 'bar' ) );
+		$this->assertEquals( true, $cache->get( 'bar' ) );
 	}
 
 	/**

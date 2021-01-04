@@ -21,27 +21,16 @@
  * @ingroup Pager
  */
 
-use MediaWiki\Linker\LinkRenderer;
-
 /**
  * Table-based display with a user-selectable sort order
- * @stable to extend
  * @ingroup Pager
  */
 abstract class TablePager extends IndexPager {
-	/** @var string */
 	protected $mSort;
 
-	/** @var stdClass */
 	protected $mCurrentRow;
 
-	/**
-	 * @stable to call
-	 *
-	 * @param IContextSource|null $context
-	 * @param LinkRenderer|null $linkRenderer
-	 */
-	public function __construct( IContextSource $context = null, LinkRenderer $linkRenderer = null ) {
+	public function __construct( IContextSource $context = null ) {
 		if ( $context ) {
 			$this->setContext( $context );
 		}
@@ -58,8 +47,7 @@ abstract class TablePager extends IndexPager {
 			$this->mDefaultDirection = IndexPager::DIR_DESCENDING;
 		} /* Else leave it at whatever the class default is */
 
-		// Parent constructor needs mSort set, so we call it last
-		parent::__construct( null, $linkRenderer );
+		parent::__construct();
 	}
 
 	/**
@@ -119,10 +107,10 @@ abstract class TablePager extends IndexPager {
 	}
 
 	/**
-	 * @stable to override
+	 * @protected
 	 * @return string
 	 */
-	protected function getStartBody() {
+	function getStartBody() {
 		$sortClass = $this->getSortHeaderClass();
 
 		$s = '';
@@ -131,7 +119,7 @@ abstract class TablePager extends IndexPager {
 		// Make table header
 		foreach ( $fields as $field => $name ) {
 			if ( strval( $name ) == '' ) {
-				$s .= Html::rawElement( 'th', [], "\u{00A0}" ) . "\n";
+				$s .= Html::rawElement( 'th', [], '&#160;' ) . "\n";
 			} elseif ( $this->isFieldSortable( $field ) ) {
 				$query = [ 'sort' => $field, 'limit' => $this->mLimit ];
 				$linkType = null;
@@ -142,12 +130,12 @@ abstract class TablePager extends IndexPager {
 					// We don't actually know in which direction other fields will be sorted by default…
 					if ( $this->mDefaultDirection == IndexPager::DIR_DESCENDING ) {
 						$linkType = 'asc';
-						$class = "$sortClass mw-datatable-is-sorted mw-datatable-is-descending";
+						$class = "$sortClass TablePager_sort-descending";
 						$query['asc'] = '1';
 						$query['desc'] = '';
 					} else {
 						$linkType = 'desc';
-						$class = "$sortClass mw-datatable-is-sorted mw-datatable-is-ascending";
+						$class = "$sortClass TablePager_sort-ascending";
 						$query['asc'] = '';
 						$query['desc'] = '1';
 					}
@@ -162,7 +150,7 @@ abstract class TablePager extends IndexPager {
 
 		$tableClass = $this->getTableClass();
 		$ret = Html::openElement( 'table', [
-			'class' => " $tableClass" ]
+			'class' => "mw-datatable $tableClass" ]
 		);
 		$ret .= Html::rawElement( 'thead', [], Html::rawElement( 'tr', [], "\n" . $s . "\n" ) );
 		$ret .= Html::openElement( 'tbody' ) . "\n";
@@ -171,17 +159,18 @@ abstract class TablePager extends IndexPager {
 	}
 
 	/**
-	 * @stable to override
+	 * @protected
 	 * @return string
 	 */
-	protected function getEndBody() {
+	function getEndBody() {
 		return "</tbody></table>\n";
 	}
 
 	/**
+	 * @protected
 	 * @return string
 	 */
-	protected function getEmptyBody() {
+	function getEmptyBody() {
 		$colspan = count( $this->getFieldNames() );
 		$msgEmpty = $this->msg( 'table_pager_empty' )->text();
 		return Html::rawElement( 'tr', [],
@@ -189,21 +178,21 @@ abstract class TablePager extends IndexPager {
 	}
 
 	/**
-	 * @stable to override
+	 * @protected
 	 * @param stdClass $row
 	 * @return string HTML
 	 */
-	public function formatRow( $row ) {
+	function formatRow( $row ) {
 		$this->mCurrentRow = $row; // In case formatValue etc need to know
 		$s = Html::openElement( 'tr', $this->getRowAttrs( $row ) ) . "\n";
 		$fieldNames = $this->getFieldNames();
 
 		foreach ( $fieldNames as $field => $name ) {
-			$value = $row->$field ?? null;
+			$value = isset( $row->$field ) ? $row->$field : null;
 			$formatted = strval( $this->formatValue( $field, $value ) );
 
 			if ( $formatted == '' ) {
-				$formatted = "\u{00A0}";
+				$formatted = '&#160;';
 			}
 
 			$s .= Html::rawElement( 'td', $this->getCellAttrs( $field, $value ), $formatted ) . "\n";
@@ -217,24 +206,24 @@ abstract class TablePager extends IndexPager {
 	/**
 	 * Get a class name to be applied to the given row.
 	 *
-	 * @stable to override
+	 * @protected
 	 *
 	 * @param object $row The database result row
 	 * @return string
 	 */
-	protected function getRowClass( $row ) {
+	function getRowClass( $row ) {
 		return '';
 	}
 
 	/**
 	 * Get attributes to be applied to the given row.
 	 *
-	 * @stable to override
+	 * @protected
 	 *
 	 * @param object $row The database result row
 	 * @return array Array of attribute => value
 	 */
-	protected function getRowAttrs( $row ) {
+	function getRowAttrs( $row ) {
 		$class = $this->getRowClass( $row );
 		if ( $class === '' ) {
 			// Return an empty array to avoid clutter in HTML like class=""
@@ -256,36 +245,32 @@ abstract class TablePager extends IndexPager {
 	 * take this as an excuse to hardcode styles; use classes and
 	 * CSS instead.  Row context is available in $this->mCurrentRow
 	 *
-	 * @stable to override
+	 * @protected
 	 *
 	 * @param string $field The column
 	 * @param string $value The cell contents
 	 * @return array Array of attr => value
 	 */
-	protected function getCellAttrs( $field, $value ) {
+	function getCellAttrs( $field, $value ) {
 		return [ 'class' => 'TablePager_col_' . $field ];
 	}
 
 	/**
-	 * @inheritDoc
-	 * @stable to override
+	 * @protected
+	 * @return string
 	 */
-	public function getIndexField() {
+	function getIndexField() {
 		return $this->mSort;
 	}
 
 	/**
-	 * TablePager relies on `mw-datatable` for styling, see T214208
-	 *
-	 * @stable to override
 	 * @return string
 	 */
 	protected function getTableClass() {
-		return 'mw-datatable';
+		return 'TablePager';
 	}
 
 	/**
-	 * @stable to override
 	 * @return string
 	 */
 	protected function getNavClass() {
@@ -293,7 +278,6 @@ abstract class TablePager extends IndexPager {
 	}
 
 	/**
-	 * @stable to override
 	 * @return string
 	 */
 	protected function getSortHeaderClass() {
@@ -302,8 +286,6 @@ abstract class TablePager extends IndexPager {
 
 	/**
 	 * A navigation bar with images
-	 *
-	 * @stable to override
 	 * @return string HTML
 	 */
 	public function getNavigationBar() {
@@ -316,6 +298,7 @@ abstract class TablePager extends IndexPager {
 		$types = [ 'first', 'prev', 'next', 'last' ];
 
 		$queries = $this->getPagingQueries();
+		$links = [];
 
 		$buttons = [];
 
@@ -328,9 +311,6 @@ abstract class TablePager extends IndexPager {
 				// * table_pager_prev
 				// * table_pager_next
 				// * table_pager_last
-				'classes' => [ 'TablePager-button-' . $type ],
-				'flags' => [ 'progressive' ],
-				'framed' => false,
 				'label' => $this->msg( 'table_pager_' . $type )->text(),
 				'href' => $queries[ $type ] ?
 					$title->getLinkURL( $queries[ $type ] + $this->getDefaultQuery() ) :
@@ -347,8 +327,6 @@ abstract class TablePager extends IndexPager {
 
 	/**
 	 * ResourceLoader modules that must be loaded to provide correct styling for this pager
-	 *
-	 * @stable to override
 	 * @since 1.24
 	 * @return string[]
 	 */
@@ -410,7 +388,7 @@ abstract class TablePager extends IndexPager {
 	 * @param array $blacklist Parameters from the request query which should not be resubmitted
 	 * @return string HTML fragment
 	 */
-	public function getHiddenFields( $blacklist = [] ) {
+	function getHiddenFields( $blacklist = [] ) {
 		$blacklist = (array)$blacklist;
 		$query = $this->getRequest()->getQueryValues();
 		foreach ( $blacklist as $name ) {
@@ -428,7 +406,7 @@ abstract class TablePager extends IndexPager {
 	 *
 	 * @return string HTML fragment
 	 */
-	public function getLimitForm() {
+	function getLimitForm() {
 		return Html::rawElement(
 			'form',
 			[
@@ -444,7 +422,7 @@ abstract class TablePager extends IndexPager {
 	 *
 	 * @return string
 	 */
-	private function getLimitDropdown() {
+	function getLimitDropdown() {
 		# Make the select with some explanatory text
 		$msgSubmit = $this->msg( 'table_pager_limit_submit' )->escaped();
 
@@ -460,7 +438,7 @@ abstract class TablePager extends IndexPager {
 	 *
 	 * @param string $field
 	 */
-	abstract protected function isFieldSortable( $field );
+	abstract function isFieldSortable( $field );
 
 	/**
 	 * Format a table cell. The return value should be HTML, but use an empty
@@ -469,21 +447,21 @@ abstract class TablePager extends IndexPager {
 	 * The current result row is available as $this->mCurrentRow, in case you
 	 * need more context.
 	 *
+	 * @protected
+	 *
 	 * @param string $name The database field name
 	 * @param string $value The value retrieved from the database
 	 */
-	abstract public function formatValue( $name, $value );
+	abstract function formatValue( $name, $value );
 
 	/**
 	 * The database field name used as a default sort order.
 	 *
-	 * Note that this field will only be sorted on if isFieldSortable returns
-	 * true for this field. If not (e.g. paginating on multiple columns), this
-	 * should return empty string, and getIndexField should be overridden.
+	 * @protected
 	 *
 	 * @return string
 	 */
-	abstract public function getDefaultSort();
+	abstract function getDefaultSort();
 
 	/**
 	 * An array mapping database field names to a textual description of the
@@ -492,5 +470,5 @@ abstract class TablePager extends IndexPager {
 	 *
 	 * @return array
 	 */
-	abstract protected function getFieldNames();
+	abstract function getFieldNames();
 }

@@ -2,12 +2,12 @@
 	"@metadata": {
 		"authors": [
 			"Crazymadlover",
-			"Fitoschido",
 			"Icvav",
-			"Macofe",
 			"MetalBrasil",
 			"Muro de Aguas",
-			"Sanbec"
+			"Sanbec",
+			"Fitoschido",
+			"Macofe"
 		]
 	},
 	"inputbox-desc": "Permite la inclusión de formularios HTML predefinidos",

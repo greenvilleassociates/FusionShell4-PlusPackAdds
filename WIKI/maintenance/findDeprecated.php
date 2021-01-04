@@ -20,7 +20,6 @@
  *
  * @file
  * @ingroup Maintenance
- * @phan-file-suppress PhanUndeclaredProperty Lots of custom properties
  */
 
 require_once __DIR__ . '/Maintenance.php';
@@ -60,7 +59,7 @@ class DeprecatedInterfaceFinder extends FileAwareNodeVisitor {
 		// Sort results by version, then by filename, then by name.
 		foreach ( $this->foundNodes as $version => &$nodes ) {
 			uasort( $nodes, function ( $a, $b ) {
-				return ( $a['filename'] . $a['name'] ) <=> ( $b['filename'] . $b['name'] );
+				return ( $a['filename'] . $a['name'] ) < ( $b['filename'] . $b['name'] ) ? -1 : 1;
 			} );
 		}
 		ksort( $this->foundNodes );
@@ -133,9 +132,6 @@ class FindDeprecated extends Maintenance {
 		$this->addDescription( 'Find deprecated interfaces' );
 	}
 
-	/**
-	 * @return SplFileInfo[]
-	 */
 	public function getFiles() {
 		global $IP;
 
@@ -167,7 +163,7 @@ class FindDeprecated extends Maintenance {
 			}
 
 			$finder->setCurrentFile( substr( $file->getPathname(), strlen( $IP ) + 1 ) );
-			$nodes = $parser->parse( $code );
+			$nodes = $parser->parse( $code, [ 'throwOnError' => false ] );
 			$traverser->traverse( $nodes );
 
 			if ( $i % $chunkSize === 0 ) {
@@ -203,5 +199,5 @@ class FindDeprecated extends Maintenance {
 	}
 }
 
-$maintClass = FindDeprecated::class;
+$maintClass = 'FindDeprecated';
 require_once RUN_MAINTENANCE_IF_MAIN;

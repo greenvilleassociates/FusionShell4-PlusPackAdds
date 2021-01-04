@@ -6,7 +6,7 @@ use Wikimedia\TestingAccessWrapper;
 
 /**
  * @group AuthManager
- * @covers \MediaWiki\Auth\RememberMeAuthenticationRequest
+ * @covers MediaWiki\Auth\RememberMeAuthenticationRequest
  */
 class RememberMeAuthenticationRequestTest extends AuthenticationRequestTestCase {
 
@@ -25,7 +25,7 @@ class RememberMeAuthenticationRequestTest extends AuthenticationRequestTestCase 
 		$this->assertNotEmpty( $req->getFieldInfo() );
 
 		$reqWrapper->expiration = null;
-		$this->assertSame( [], $req->getFieldInfo() );
+		$this->assertEmpty( $req->getFieldInfo() );
 	}
 
 	protected function getInstance( array $args = [] ) {

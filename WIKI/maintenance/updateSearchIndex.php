@@ -40,7 +40,7 @@ class UpdateSearchIndex extends Maintenance {
 	public function __construct() {
 		parent::__construct();
 		$this->addDescription( 'Script for periodic off-peak updating of the search index' );
-		$this->addOption( 's', 'Starting timestamp', false, true );
+		$this->addOption( 's', 'starting timestamp', false, true );
 		$this->addOption( 'e', 'Ending timestamp', false, true );
 		$this->addOption(
 			'p',
@@ -61,8 +61,7 @@ class UpdateSearchIndex extends Maintenance {
 	}
 
 	public function execute() {
-		$dbDomain = WikiMap::getCurrentWikiDbDomain()->getId();
-		$posFile = $this->getOption( 'p', 'searchUpdate.' . rawurlencode( $dbDomain ) . '.pos' );
+		$posFile = $this->getOption( 'p', 'searchUpdate.' . wfWikiID() . '.pos' );
 		$end = $this->getOption( 'e', wfTimestampNow() );
 		if ( $this->hasOption( 's' ) ) {
 			$start = $this->getOption( 's' );
@@ -117,10 +116,10 @@ class UpdateSearchIndex extends Maintenance {
 		$this->output( "Done\n" );
 	}
 
-	public function searchIndexUpdateCallback( $row ) {
-		$this->updateSearchIndexForPage( $row->rc_cur_id );
+	public function searchIndexUpdateCallback( $dbw, $row ) {
+		$this->updateSearchIndexForPage( $dbw, $row->rc_cur_id );
 	}
 }
 
-$maintClass = UpdateSearchIndex::class;
+$maintClass = "UpdateSearchIndex";
 require_once RUN_MAINTENANCE_IF_MAIN;

@@ -1,14 +1,8 @@
 <?php
 
-/*
- * @stable to extend
- */
 class HTMLHiddenField extends HTMLFormField {
 	protected $outputAsDefault = true;
 
-	/*
-	 * @stable to call
-	 */
 	public function __construct( $params ) {
 		parent::__construct( $params );
 

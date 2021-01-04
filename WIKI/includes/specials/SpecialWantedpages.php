@@ -28,15 +28,15 @@
  */
 class WantedPagesPage extends WantedQueryPage {
 
-	public function __construct( $name = 'Wantedpages' ) {
+	function __construct( $name = 'Wantedpages' ) {
 		parent::__construct( $name );
 	}
 
-	public function isIncludable() {
+	function isIncludable() {
 		return true;
 	}
 
-	public function execute( $par ) {
+	function execute( $par ) {
 		$inc = $this->including();
 
 		if ( $inc ) {
@@ -48,7 +48,7 @@ class WantedPagesPage extends WantedQueryPage {
 		parent::execute( $par );
 	}
 
-	public function getQueryInfo() {
+	function getQueryInfo() {
 		$dbr = wfGetDB( DB_REPLICA );
 		$count = $this->getConfig()->get( 'WantedPagesThreshold' ) - 1;
 		$query = [
@@ -85,7 +85,9 @@ class WantedPagesPage extends WantedQueryPage {
 			]
 		];
 		// Replacement for the WantedPages::getSQL hook
-		$this->getHookRunner()->onWantedPages__getQueryInfo( $this, $query );
+		// Avoid PHP 7.1 warning from passing $this by reference
+		$wantedPages = $this;
+		Hooks::run( 'WantedPages::getQueryInfo', [ &$wantedPages, &$query ] );
 
 		return $query;
 	}

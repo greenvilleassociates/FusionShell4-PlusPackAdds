@@ -20,7 +20,10 @@
 		]
 	},
 	"AutoloadClasses": {
-		"Poem": "includes/Poem.php"
+		"Poem": "Poem.class.php"
 	},
+	"ParserTestFiles": [
+		"poemParserTests.txt"
+	],
 	"manifest_version": 1
 }

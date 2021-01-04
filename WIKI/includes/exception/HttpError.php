@@ -24,8 +24,6 @@ use MediaWiki\Logger\LoggerFactory;
  * Show an error that looks like an HTTP server error.
  * Replacement for wfHttpError().
  *
- * @newable
- * @stable to extend
  * @since 1.19
  * @ingroup Exception
  */
@@ -33,7 +31,6 @@ class HttpError extends MWException {
 	private $httpCode, $header, $content;
 
 	/**
-	 * @stable to call
 	 * @param int $httpCode HTTP status code to send to the client
 	 * @param string|Message $content Content of the message
 	 * @param string|Message|null $header Content of the header (\<title\> and \<h1\>)

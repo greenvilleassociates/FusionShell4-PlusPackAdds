@@ -100,3 +100,4 @@ class Constants {
 	const UTF8_TAIL = true;
 
 }
+

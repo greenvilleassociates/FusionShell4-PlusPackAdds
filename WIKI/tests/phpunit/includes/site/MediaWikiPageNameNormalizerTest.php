@@ -1,7 +1,6 @@
 <?php
 
 use MediaWiki\Site\MediaWikiPageNameNormalizer;
-use PHPUnit\Framework\Assert;
 
 /**
  * @covers MediaWiki\Site\MediaWikiPageNameNormalizer
@@ -28,7 +27,7 @@ use PHPUnit\Framework\Assert;
  *
  * @author Marius Hoch
  */
-class MediaWikiPageNameNormalizerTest extends MediaWikiIntegrationTestCase {
+class MediaWikiPageNameNormalizerTest extends PHPUnit_Framework_TestCase {
 
 	/**
 	 * @dataProvider normalizePageTitleProvider
@@ -106,9 +105,10 @@ class MediaWikiPageNameNormalizerTestMockHttp extends Http {
 	 */
 	public static $response;
 
-	public static function get( $url, array $options = [], $caller = __METHOD__ ) {
-		Assert::assertIsString( $url );
-		Assert::assertIsString( $caller );
+	public static function get( $url, $options = [], $caller = __METHOD__ ) {
+		PHPUnit_Framework_Assert::assertInternalType( 'string', $url );
+		PHPUnit_Framework_Assert::assertInternalType( 'array', $options );
+		PHPUnit_Framework_Assert::assertInternalType( 'string', $caller );
 
 		return self::$response;
 	}

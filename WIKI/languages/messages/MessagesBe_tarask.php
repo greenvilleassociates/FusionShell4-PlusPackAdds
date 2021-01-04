@@ -233,9 +233,14 @@ $dateFormats = [
 ];
 
 $separatorTransformTable = [
-	',' => "\u{00A0}", # nbsp
+	',' => "\xc2\xa0", # nbsp
 	'.' => ','
 ];
-$minimumGroupingDigits = 2;
 
 $linkTrail = '/^([абвгґджзеёжзійклмнопрстуўфхцчшыьэюяćčłńśšŭźža-z]+)(.*)$/sDu';
+
+$imageFiles = [
+	'button-bold'     => 'be-tarask/button_bold.png',
+	'button-italic'   => 'be-tarask/button_italic.png',
+	'button-link'     => 'be-tarask/button_link.png',
+];

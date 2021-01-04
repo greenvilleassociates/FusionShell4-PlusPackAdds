@@ -70,7 +70,7 @@ class ScopedLock {
 	public static function factory(
 		LockManager $manager, array $paths, $type, StatusValue $status, $timeout = 0
 	) {
-		$pathsByType = is_int( $type ) ? [ $type => $paths ] : $paths;
+		$pathsByType = is_integer( $type ) ? [ $type => $paths ] : $paths;
 		$lockStatus = $manager->lockByType( $pathsByType, $timeout );
 		$status->merge( $lockStatus );
 		if ( $lockStatus->isOK() ) {
@@ -85,7 +85,7 @@ class ScopedLock {
 	 * This is useful for early release of locks before function scope is destroyed.
 	 * This is the same as setting the lock object to null.
 	 *
-	 * @param ScopedLock|null &$lock
+	 * @param ScopedLock &$lock
 	 * @since 1.21
 	 */
 	public static function release( ScopedLock &$lock = null ) {
@@ -95,7 +95,7 @@ class ScopedLock {
 	/**
 	 * Release the locks when this goes out of scope
 	 */
-	public function __destruct() {
+	function __destruct() {
 		$wasOk = $this->status->isOK();
 		$this->status->merge( $this->manager->unlockByType( $this->pathsByType ) );
 		if ( $wasOk ) {

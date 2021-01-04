@@ -26,13 +26,13 @@
  * @since 1.28
  */
 class MWFileProps {
-	/** @var MimeAnalyzer */
+	/** @var MimeMagic */
 	private $magic;
 
 	/**
-	 * @param MimeAnalyzer $magic
+	 * @param MimeMagic $magic
 	 */
-	public function __construct( MimeAnalyzer $magic ) {
+	public function __construct( MimeMagic $magic ) {
 		$this->magic = $magic;
 	}
 
@@ -73,9 +73,6 @@ class MWFileProps {
 			$info['file-mime'] = $this->magic->guessMimeType( $path, false );
 			# Logical MIME type
 			$ext = ( $ext === true ) ? FileBackend::extensionFromPath( $path ) : $ext;
-
-			# XXX: MimeAnalyzer::improveTypeFromExtension() may return null (T253483).
-			# Unclear if callers of this method expect that.
 			$info['mime'] = $this->magic->improveTypeFromExtension( $info['file-mime'], $ext );
 
 			list( $info['major_mime'], $info['minor_mime'] ) = File::splitMime( $info['mime'] );
@@ -85,7 +82,7 @@ class MWFileProps {
 			$handler = MediaHandler::getHandler( $info['mime'] );
 			if ( $handler ) {
 				$info['metadata'] = $handler->getMetadata( $fsFile, $path );
-				// @phan-suppress-next-line PhanParamTooMany
+				/** @noinspection PhpMethodParametersCountMismatchInspection */
 				$gis = $handler->getImageSize( $fsFile, $path, $info['metadata'] );
 				if ( is_array( $gis ) ) {
 					$info = $this->extractImageSizeInfo( $gis ) + $info;
@@ -107,7 +104,11 @@ class MWFileProps {
 		# NOTE: $gis[2] contains a code for the image type. This is no longer used.
 		$info['width'] = $gis[0];
 		$info['height'] = $gis[1];
-		$info['bits'] = $gis['bits'] ?? 0;
+		if ( isset( $gis['bits'] ) ) {
+			$info['bits'] = $gis['bits'];
+		} else {
+			$info['bits'] = 0;
+		}
 
 		return $info;
 	}

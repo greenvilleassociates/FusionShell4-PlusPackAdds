@@ -21,41 +21,38 @@
  * @ingroup SpecialPage
  */
 
-use MediaWiki\MediaWikiServices;
-
 /**
  * A special page looking for articles with no article linking to them,
  * thus being lonely.
  *
  * @ingroup SpecialPage
  */
-class SpecialLonelyPages extends PageQueryPage {
-	public function __construct( $name = 'Lonelypages' ) {
+class LonelyPagesPage extends PageQueryPage {
+	function __construct( $name = 'Lonelypages' ) {
 		parent::__construct( $name );
 	}
 
-	protected function getPageHeader() {
+	function getPageHeader() {
 		return $this->msg( 'lonelypagestext' )->parseAsBlock();
 	}
 
-	protected function sortDescending() {
+	function sortDescending() {
 		return false;
 	}
 
-	public function isExpensive() {
+	function isExpensive() {
 		return true;
 	}
 
-	public function isSyndicated() {
+	function isSyndicated() {
 		return false;
 	}
 
-	public function getQueryInfo() {
+	function getQueryInfo() {
 		$tables = [ 'page', 'pagelinks', 'templatelinks' ];
 		$conds = [
 			'pl_namespace IS NULL',
-			'page_namespace' => MediaWikiServices::getInstance()->getNamespaceInfo()->
-				getContentNamespaces(),
+			'page_namespace' => MWNamespace::getContentNamespaces(),
 			'page_is_redirect' => 0,
 			'tl_namespace IS NULL'
 		];
@@ -75,25 +72,24 @@ class SpecialLonelyPages extends PageQueryPage {
 		];
 
 		// Allow extensions to modify the query
-		$this->getHookRunner()->onLonelyPagesQuery( $tables, $conds, $joinConds );
+		Hooks::run( 'LonelyPagesQuery', [ &$tables, &$conds, &$joinConds ] );
 
 		return [
 			'tables' => $tables,
 			'fields' => [
 				'namespace' => 'page_namespace',
 				'title' => 'page_title',
+				'value' => 'page_title'
 			],
 			'conds' => $conds,
 			'join_conds' => $joinConds
 		];
 	}
 
-	protected function getOrderFields() {
+	function getOrderFields() {
 		// For some crazy reason ordering by a constant
 		// causes a filesort in MySQL 5
-		if ( count( MediaWikiServices::getInstance()->getNamespaceInfo()->
-			getContentNamespaces() ) > 1
-		) {
+		if ( count( MWNamespace::getContentNamespaces() ) > 1 ) {
 			return [ 'page_namespace', 'page_title' ];
 		} else {
 			return [ 'page_title' ];

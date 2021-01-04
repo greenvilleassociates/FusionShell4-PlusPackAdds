@@ -12,3 +12,4 @@ DROP TABLE /*_*/user_former_groups;
 ALTER TABLE /*_*/user_former_groups_tmp RENAME TO /*_*/user_former_groups;
 
 CREATE UNIQUE INDEX /*i*/ufg_user_group ON /*_*/user_former_groups (ufg_user,ufg_group);
+

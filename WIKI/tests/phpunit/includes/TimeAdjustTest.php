@@ -1,20 +1,23 @@
 <?php
 
-use MediaWiki\MediaWikiServices;
-
 class TimeAdjustTest extends MediaWikiLangTestCase {
+	protected function setUp() {
+		parent::setUp();
+	}
+
 	/**
 	 * Test offset usage for a given Language::userAdjust
 	 * @dataProvider dataUserAdjust
 	 * @covers Language::userAdjust
 	 */
 	public function testUserAdjust( $date, $localTZoffset, $expected ) {
+		global $wgContLang;
+
 		$this->setMwGlobals( 'wgLocalTZoffset', $localTZoffset );
 
 		$this->assertEquals(
 			$expected,
-			strval( MediaWikiServices::getInstance()->getContentLanguage()->
-				userAdjust( $date, '' ) ),
+			strval( $wgContLang->userAdjust( $date, '' ) ),
 			"User adjust {$date} by {$localTZoffset} minutes should give {$expected}"
 		);
 	}

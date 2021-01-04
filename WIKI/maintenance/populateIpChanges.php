@@ -27,7 +27,6 @@
 require_once __DIR__ . '/Maintenance.php';
 
 use MediaWiki\MediaWikiServices;
-use Wikimedia\IPUtils;
 
 /**
  * Maintenance script that will find all rows in the revision table where
@@ -65,8 +64,8 @@ TEXT
 	public function doDBUpdates() {
 		$dbw = $this->getDB( DB_MASTER );
 
-		if ( !$dbw->tableExists( 'ip_changes', __METHOD__ ) ) {
-			$this->fatalError( 'ip_changes table does not exist' );
+		if ( !$dbw->tableExists( 'ip_changes' ) ) {
+			$this->error( 'ip_changes table does not exist', true );
 		}
 
 		$lbFactory = MediaWikiServices::getInstance()->getDBLoadBalancerFactory();
@@ -76,32 +75,20 @@ TEXT
 		$start = $this->getOption( 'rev-id', 0 );
 		$end = $maxRevId > 0
 			? $maxRevId
-			: $dbw->selectField( 'revision', 'MAX(rev_id)', '', __METHOD__ );
-
-		if ( empty( $end ) ) {
-			$this->output( "No revisions found, aborting.\n" );
-			return true;
-		}
-
+			: $dbw->selectField( 'revision', 'MAX(rev_id)', false, __METHOD__ );
 		$blockStart = $start;
 		$attempted = 0;
 		$inserted = 0;
 
 		$this->output( "Copying IP revisions to ip_changes, from rev_id $start to rev_id $end\n" );
 
-		$actorMigration = ActorMigration::newMigration();
-		$actorQuery = $actorMigration->getJoin( 'rev_user' );
-		$revUserIsAnon = $actorMigration->isAnon( $actorQuery['fields']['rev_user'] );
-
 		while ( $blockStart <= $end ) {
-			$blockEnd = min( $blockStart + $this->getBatchSize(), $end );
+			$blockEnd = min( $blockStart + $this->mBatchSize, $end );
 			$rows = $dbr->select(
-				[ 'revision' ] + $actorQuery['tables'],
-				[ 'rev_id', 'rev_timestamp', 'rev_user_text' => $actorQuery['fields']['rev_user_text'] ],
-				[ "rev_id BETWEEN " . (int)$blockStart . " AND " . (int)$blockEnd, $revUserIsAnon ],
-				__METHOD__,
-				[],
-				$actorQuery['joins']
+				'revision',
+				[ 'rev_id', 'rev_timestamp', 'rev_user_text' ],
+				[ "rev_id BETWEEN $blockStart AND $blockEnd", 'rev_user' => 0 ],
+				__METHOD__
 			);
 
 			$numRows = $rows->numRows();
@@ -117,11 +104,11 @@ TEXT
 			$insertRows = [];
 			foreach ( $rows as $row ) {
 				// Make sure this is really an IP, e.g. not maintenance user or imported revision.
-				if ( IPUtils::isValid( $row->rev_user_text ) ) {
+				if ( IP::isValid( $row->rev_user_text ) ) {
 					$insertRows[] = [
 						'ipc_rev_id' => $row->rev_id,
 						'ipc_rev_timestamp' => $row->rev_timestamp,
-						'ipc_hex' => IPUtils::toHex( $row->rev_user_text ),
+						'ipc_hex' => IP::toHex( $row->rev_user_text ),
 					];
 
 					$attempted++;
@@ -129,7 +116,7 @@ TEXT
 			}
 
 			if ( $insertRows ) {
-				$dbw->insert( 'ip_changes', $insertRows, __METHOD__, [ 'IGNORE' ] );
+				$dbw->insert( 'ip_changes', $insertRows, __METHOD__, 'IGNORE' );
 
 				$inserted += $dbw->affectedRows();
 			}
@@ -150,5 +137,5 @@ TEXT
 	}
 }
 
-$maintClass = PopulateIpChanges::class;
+$maintClass = "PopulateIpChanges";
 require_once RUN_MAINTENANCE_IF_MAIN;

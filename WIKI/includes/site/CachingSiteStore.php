@@ -24,7 +24,7 @@
  * @file
  * @ingroup Site
  *
- * @license GPL-2.0-or-later
+ * @license GNU GPL v2+
  * @author Jeroen De Dauw < jeroendedauw@gmail.com >
  * @author Katie Filbert < aude.wiki@gmail.com >
  */

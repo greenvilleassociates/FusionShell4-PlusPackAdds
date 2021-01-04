@@ -1,6 +1,5 @@
 <?php
 
-use MediaWiki\MediaWikiServices;
 use Wikimedia\TestingAccessWrapper;
 
 /**
@@ -20,16 +19,13 @@ use Wikimedia\TestingAccessWrapper;
  * http://www.gnu.org/copyleft/gpl.html
  */
 
-class ContentHandlerSanityTest extends MediaWikiIntegrationTestCase {
+class ContentHandlerSanityTest extends MediaWikiTestCase {
 
 	public static function provideHandlers() {
 		$models = ContentHandler::getContentModels();
-		$contentHandlerFactory = MediaWikiServices::getInstance()->getContentHandlerFactory();
 		$handlers = [];
 		foreach ( $models as $model ) {
-			$handlers[] = [
-				$contentHandlerFactory->getContentHandler( $model )
-			];
+			$handlers[] = [ ContentHandler::getForModelID( $model ) ];
 		}
 
 		return $handlers;

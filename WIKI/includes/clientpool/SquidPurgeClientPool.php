@@ -19,14 +19,8 @@
  *
  * @file
  */
-
-/**
- * SquidPurgeClient helper class
- *
- * @deprecated Since 1.35 Use MultiHttpClient
- */
 class SquidPurgeClientPool {
-	/** @var SquidPurgeClient[] */
+	/** @var array Array of SquidPurgeClient */
 	protected $clients = [];
 
 	/** @var int */
@@ -35,7 +29,7 @@ class SquidPurgeClientPool {
 	/**
 	 * @param array $options
 	 */
-	public function __construct( $options = [] ) {
+	function __construct( $options = [] ) {
 		if ( isset( $options['timeout'] ) ) {
 			$this->timeout = $options['timeout'];
 		}
@@ -52,9 +46,11 @@ class SquidPurgeClientPool {
 	public function run() {
 		$done = false;
 		$startTime = microtime( true );
-
 		while ( !$done ) {
 			$readSockets = $writeSockets = [];
+			/**
+			 * @var $client SquidPurgeClient
+			 */
 			foreach ( $this->clients as $clientIndex => $client ) {
 				$sockets = $client->getReadSocketsForSelect();
 				foreach ( $sockets as $i => $socket ) {
@@ -65,25 +61,23 @@ class SquidPurgeClientPool {
 					$writeSockets["$clientIndex/$i"] = $socket;
 				}
 			}
-			if ( $readSockets === [] && $writeSockets === [] ) {
+			if ( !count( $readSockets ) && !count( $writeSockets ) ) {
 				break;
 			}
-
 			$exceptSockets = null;
 			$timeout = min( $startTime + $this->timeout - microtime( true ), 1 );
-			Wikimedia\suppressWarnings();
+			MediaWiki\suppressWarnings();
 			$numReady = socket_select( $readSockets, $writeSockets, $exceptSockets, $timeout );
-			Wikimedia\restoreWarnings();
+			MediaWiki\restoreWarnings();
 			if ( $numReady === false ) {
 				wfDebugLog( 'squid', __METHOD__ . ': Error in stream_select: ' .
-					socket_strerror( socket_last_error() ) );
+					socket_strerror( socket_last_error() ) . "\n" );
 				break;
 			}
-
 			// Check for timeout, use 1% tolerance since we aimed at having socket_select()
 			// exit at precisely the overall timeout
 			if ( microtime( true ) - $startTime > $this->timeout * 0.99 ) {
-				wfDebugLog( 'squid', __CLASS__ . ": timeout ({$this->timeout}s)" );
+				wfDebugLog( 'squid', __CLASS__ . ": timeout ({$this->timeout}s)\n" );
 				break;
 			} elseif ( !$numReady ) {
 				continue;
@@ -107,7 +101,6 @@ class SquidPurgeClientPool {
 				}
 			}
 		}
-
 		foreach ( $this->clients as $client ) {
 			$client->close();
 		}

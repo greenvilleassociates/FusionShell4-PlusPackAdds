@@ -121,5 +121,5 @@ $dateFormats = [
  */
 $separatorTransformTable = [
 	'.' => ',',
-	',' => "\u{00A0}", # nbsp
+	',' => "\xc2\xa0", # nbsp
 ];

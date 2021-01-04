@@ -1,13 +1,9 @@
 <?php
 
-use MediaWiki\MediaWikiServices;
-use Wikimedia\TestingAccessWrapper;
-
 /**
  * @group API
  * @group medium
  * @group Database
- * @covers ApiPageSet
  */
 class ApiPageSetTest extends ApiTestCase {
 	public static function provideRedirectMergePolicy() {
@@ -59,11 +55,11 @@ class ApiPageSetTest extends ApiTestCase {
 		);
 	}
 
-	protected function createPageSetWithRedirect( $targetContent = 'api page set test' ) {
+	protected function createPageSetWithRedirect() {
 		$target = Title::makeTitle( NS_MAIN, 'UTRedirectTarget' );
 		$sourceA = Title::makeTitle( NS_MAIN, 'UTRedirectSourceA' );
 		$sourceB = Title::makeTitle( NS_MAIN, 'UTRedirectSourceB' );
-		self::editPage( 'UTRedirectTarget', $targetContent );
+		self::editPage( 'UTRedirectTarget', 'api page set test' );
 		self::editPage( 'UTRedirectSourceA', '#REDIRECT [[UTRedirectTarget]]' );
 		self::editPage( 'UTRedirectSourceB', '#REDIRECT [[UTRedirectTarget]]' );
 
@@ -78,34 +74,6 @@ class ApiPageSetTest extends ApiTestCase {
 		$pageSet->populateFromTitles( [ $sourceA, $sourceB ] );
 
 		return [ $target, $pageSet ];
-	}
-
-	public function testRedirectMergePolicyRedirectLoop() {
-		$loopA = Title::makeTitle( NS_MAIN, 'UTPageRedirectOne' );
-		$loopB = Title::makeTitle( NS_MAIN, 'UTPageRedirectTwo' );
-		self::editPage( 'UTPageRedirectOne', '#REDIRECT [[UTPageRedirectTwo]]' );
-		self::editPage( 'UTPageRedirectTwo', '#REDIRECT [[UTPageRedirectOne]]' );
-		list( $target, $pageSet ) = $this->createPageSetWithRedirect(
-			'#REDIRECT [[UTPageRedirectOne]]'
-		);
-		$pageSet->setRedirectMergePolicy( function ( $cur, $new ) {
-			throw new \RuntimeException( 'unreachable, no merge when target is redirect loop' );
-		} );
-		// This could infinite loop in a bugged impl, but php doesn't offer
-		// a great way to time constrain this.
-		$result = new ApiResult( false );
-		$pageSet->populateGeneratorData( $result );
-		// Assert something, mostly we care that the above didn't infinite loop.
-		// This verifies the page set followed our redirect chain and saw the loop.
-		$this->assertEqualsCanonicalizing(
-			[
-				'UTRedirectSourceA', 'UTRedirectSourceB', 'UTRedirectTarget',
-				'UTPageRedirectOne', 'UTPageRedirectTwo',
-			],
-			array_map( function ( $x ) {
-				return $x->getPrefixedText();
-			}, $pageSet->getTitles() )
-		);
 	}
 
 	public function testHandleNormalization() {
@@ -131,15 +99,15 @@ class ApiPageSetTest extends ApiTestCase {
 
 	public function testSpecialRedirects() {
 		$id1 = self::editPage( 'UTApiPageSet', 'UTApiPageSet in the default language' )
-			->value['revision-record']->getPageId();
+			->value['revision']->getTitle()->getArticleID();
 		$id2 = self::editPage( 'UTApiPageSet/de', 'UTApiPageSet in German' )
-			->value['revision-record']->getPageId();
+			->value['revision']->getTitle()->getArticleID();
 
 		$user = $this->getTestUser()->getUser();
 		$userName = $user->getName();
 		$userDbkey = str_replace( ' ', '_', $userName );
 		$request = new FauxRequest( [
-			'titles' => implode( '|', [
+			'titles' => join( '|', [
 				'Special:MyContributions',
 				'Special:MyPage',
 				'Special:MyTalk/subpage',
@@ -206,45 +174,5 @@ class ApiPageSetTest extends ApiTestCase {
 			2 => [ $userDbkey => -2 ],
 			3 => [ "$userDbkey/subpage" => -3 ],
 		], $pageSet->getAllTitlesByNamespace() );
-	}
-
-	/**
-	 * Test that ApiPageSet is calling GenderCache for provided user names to prefill the
-	 * GenderCache and avoid a performance issue when loading each users' gender on it's own.
-	 * The test is setting the "missLimit" to 0 on the GenderCache to trigger misses logic.
-	 * When the "misses" property is no longer 0 at the end of the test,
-	 * something was requested which is not part of the cache. Than the test is failing.
-	 */
-	public function testGenderCaching() {
-		// Set up the user namespace to have gender aliases to trigger the gender cache
-		$this->setMwGlobals( [
-			'wgExtraGenderNamespaces' => [ NS_USER => [ 'male' => 'Male', 'female' => 'Female' ] ]
-		] );
-		$this->overrideMwServices();
-
-		// User names to test with - it is not needed that the user exists in the database
-		// to trigger gender cache
-		$userNames = [
-			'Female',
-			'Unknown',
-			'Male',
-		];
-
-		// Prepare the gender cache for testing - this is a fresh instance due to service override
-		$genderCache = TestingAccessWrapper::newFromObject(
-			MediaWikiServices::getInstance()->getGenderCache()
-		);
-		$genderCache->missLimit = 0;
-
-		// Do an api request to trigger ApiPageSet code
-		$this->doApiRequest( [
-			'action' => 'query',
-			'titles' => 'User:' . implode( '|User:', $userNames ),
-		] );
-
-		$this->assertSame( 0, $genderCache->misses,
-			'ApiPageSet does not prefill the gender cache correctly' );
-		$this->assertEquals( $userNames, array_keys( $genderCache->cache ),
-			'ApiPageSet does not prefill all users into the gender cache' );
 	}
 }

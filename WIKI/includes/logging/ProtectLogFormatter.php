@@ -18,10 +18,9 @@
  * http://www.gnu.org/copyleft/gpl.html
  *
  * @file
- * @license GPL-2.0-or-later
+ * @license http://www.gnu.org/copyleft/gpl.html GNU General Public License 2.0 or later
  * @since 1.26
  */
-
 use MediaWiki\MediaWikiServices;
 
 /**
@@ -79,7 +78,7 @@ class ProtectLogFormatter extends LogFormatter {
 	}
 
 	public function getActionLinks() {
-		$linkRenderer = $this->getLinkRenderer();
+		$linkRenderer = MediaWikiServices::getInstance()->getLinkRenderer();
 		$subtype = $this->entry->getSubtype();
 		if ( $this->entry->isDeleted( LogPage::DELETED_ACTION ) // Action is hidden
 			|| $subtype === 'move_prot' // the move log entry has the right action link
@@ -87,25 +86,21 @@ class ProtectLogFormatter extends LogFormatter {
 			return '';
 		}
 
-		// Show history link for pages that exist otherwise show nothing
+		// Show history link for all changes after the protection
 		$title = $this->entry->getTarget();
-		$links = [];
-		if ( $title->exists() ) {
-			$links [] = $linkRenderer->makeLink( $title,
+		$links = [
+			$linkRenderer->makeLink( $title,
 				$this->msg( 'hist' )->text(),
 				[],
 				[
 					'action' => 'history',
 					'offset' => $this->entry->getTimestamp(),
 				]
-			);
-		}
+			)
+		];
 
 		// Show change protection link
-		if ( MediaWikiServices::getInstance()
-				->getPermissionManager()
-				->userHasRight( $this->context->getUser(), 'protect' )
-		) {
+		if ( $this->context->getUser()->isAllowed( 'protect' ) ) {
 			$links[] = $linkRenderer->makeKnownLink(
 				$title,
 				$this->msg( 'protect_change' )->text(),
@@ -114,13 +109,8 @@ class ProtectLogFormatter extends LogFormatter {
 			);
 		}
 
-		if ( empty( $links ) ) {
-			return '';
-		} else {
-			return $this->msg( 'parentheses' )->rawParams(
-				$this->context->getLanguage()->pipeList( $links )
-			)->escaped();
-		}
+		return $this->msg( 'parentheses' )->rawParams(
+			$this->context->getLanguage()->pipeList( $links ) )->escaped();
 	}
 
 	protected function getParametersForApi() {
@@ -157,13 +147,13 @@ class ProtectLogFormatter extends LogFormatter {
 	}
 
 	public function formatParametersForApi() {
+		global $wgContLang;
+
 		$ret = parent::formatParametersForApi();
 		if ( isset( $ret['details'] ) && is_array( $ret['details'] ) ) {
-			$contLang = MediaWikiServices::getInstance()->getContentLanguage();
 			foreach ( $ret['details'] as &$detail ) {
 				if ( isset( $detail['expiry'] ) ) {
-					$detail['expiry'] = $contLang->
-						formatExpiry( $detail['expiry'], TS_ISO_8601, 'infinite' );
+					$detail['expiry'] = $wgContLang->formatExpiry( $detail['expiry'], TS_ISO_8601, 'infinite' );
 				}
 			}
 		}
@@ -174,7 +164,7 @@ class ProtectLogFormatter extends LogFormatter {
 	/**
 	 * Create the protect description to show in the log formatter
 	 *
-	 * @param array[] $details
+	 * @param array $details
 	 * @return string
 	 */
 	public function createProtectDescription( array $details ) {

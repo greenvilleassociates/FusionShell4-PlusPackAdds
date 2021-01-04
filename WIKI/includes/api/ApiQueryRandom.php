@@ -1,6 +1,10 @@
 <?php
 
 /**
+ *
+ *
+ * Created on Monday, January 28, 2008
+ *
  * Copyright © 2008 Brent Garber
  *
  * This program is free software; you can redistribute it and/or modify
@@ -54,7 +58,7 @@ class ApiQueryRandom extends ApiQueryGeneratorBase {
 		$this->resetQueryParams();
 		$this->addTables( 'page' );
 		$this->addFields( [ 'page_id', 'page_random' ] );
-		if ( $resultPageSet === null ) {
+		if ( is_null( $resultPageSet ) ) {
 			$this->addFields( [ 'page_title', 'page_namespace' ] );
 		} else {
 			$this->addFields( $resultPageSet->getPageTableFields() );
@@ -64,7 +68,7 @@ class ApiQueryRandom extends ApiQueryGeneratorBase {
 			$this->addWhereFld( 'page_is_redirect', 1 );
 		} elseif ( $params['filterredir'] === 'nonredirects' ) {
 			$this->addWhereFld( 'page_is_redirect', 0 );
-		} elseif ( $resultPageSet === null ) {
+		} elseif ( is_null( $resultPageSet ) ) {
 			$this->addFields( [ 'page_is_redirect' ] );
 		}
 		$this->addOption( 'LIMIT', $limit + 1 );
@@ -87,17 +91,12 @@ class ApiQueryRandom extends ApiQueryGeneratorBase {
 		$path = [ 'query', $this->getModuleName() ];
 
 		$res = $this->select( __METHOD__ );
-
-		if ( $resultPageSet === null ) {
-			$this->executeGenderCacheFromResultWrapper( $res, __METHOD__ );
-		}
-
 		$count = 0;
 		foreach ( $res as $row ) {
 			if ( $count++ >= $limit ) {
 				return [ 0, "{$row->page_random}|{$row->page_id}" ];
 			}
-			if ( $resultPageSet === null ) {
+			if ( is_null( $resultPageSet ) ) {
 				$title = Title::makeTitle( $row->page_namespace, $row->page_title );
 				$page = [
 					'id' => (int)$row->page_id,
@@ -173,7 +172,7 @@ class ApiQueryRandom extends ApiQueryGeneratorBase {
 			$this->setContinueEnumParameter( 'continue', "$rand|$continue|$endFlag" );
 		}
 
-		if ( $resultPageSet === null ) {
+		if ( is_null( $resultPageSet ) ) {
 			$this->getResult()->addIndexedTagName( [ 'query', $this->getModuleName() ], 'page' );
 		}
 	}

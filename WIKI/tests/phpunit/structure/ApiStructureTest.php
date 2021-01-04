@@ -11,7 +11,7 @@ use Wikimedia\TestingAccessWrapper;
  *
  * @group API
  */
-class ApiStructureTest extends MediaWikiIntegrationTestCase {
+class ApiStructureTest extends MediaWikiTestCase {
 
 	/** @var ApiMain */
 	private static $main;
@@ -20,9 +20,11 @@ class ApiStructureTest extends MediaWikiIntegrationTestCase {
 	private static $testGlobals = [
 		[
 			'MiserMode' => false,
+			'AllowCategorizedRecentChanges' => false,
 		],
 		[
 			'MiserMode' => true,
+			'AllowCategorizedRecentChanges' => true,
 		],
 	];
 
@@ -37,11 +39,6 @@ class ApiStructureTest extends MediaWikiIntegrationTestCase {
 			self::$main->getContext()->setTitle(
 				Title::makeTitle( NS_SPECIAL, 'Badtitle/dummy title for ApiStructureTest' )
 			);
-
-			// Inject ApiDisabled and ApiQueryDisabled so they can be tested too
-			self::$main->getModuleManager()->addModule( 'disabled', 'action', ApiDisabled::class );
-			self::$main->getModuleFromPath( 'query' )
-				->getModuleManager()->addModule( 'query-disabled', 'meta', ApiQueryDisabled::class );
 		}
 		return self::$main;
 	}
@@ -53,7 +50,7 @@ class ApiStructureTest extends MediaWikiIntegrationTestCase {
 	 */
 	private function checkMessage( $msg, $what ) {
 		$msg = ApiBase::makeMessage( $msg, self::getMain()->getContext() );
-		$this->assertInstanceOf( Message::class, $msg, "$what message" );
+		$this->assertInstanceOf( 'Message', $msg, "$what message" );
 		$this->assertTrue( $msg->exists(), "$what message {$msg->getKey()} exists" );
 	}
 
@@ -86,6 +83,62 @@ class ApiStructureTest extends MediaWikiIntegrationTestCase {
 		$this->checkMessage( $module->getSummaryMessage(), 'Module summary' );
 		$this->checkMessage( $module->getExtendedDescription(), 'Module help top text' );
 
+		// Parameters. Lots of messages in here.
+		$params = $module->getFinalParams( ApiBase::GET_VALUES_FOR_HELP );
+		$tags = [];
+		foreach ( $params as $name => $settings ) {
+			if ( !is_array( $settings ) ) {
+				$settings = [];
+			}
+
+			// Basic description message
+			if ( isset( $settings[ApiBase::PARAM_HELP_MSG] ) ) {
+				$msg = $settings[ApiBase::PARAM_HELP_MSG];
+			} else {
+				$msg = "apihelp-{$path}-param-{$name}";
+			}
+			$this->checkMessage( $msg, "Parameter $name description" );
+
+			// If param-per-value is in use, each value's message
+			if ( isset( $settings[ApiBase::PARAM_HELP_MSG_PER_VALUE] ) ) {
+				$this->assertInternalType( 'array', $settings[ApiBase::PARAM_HELP_MSG_PER_VALUE],
+					"Parameter $name PARAM_HELP_MSG_PER_VALUE is array" );
+				$this->assertInternalType( 'array', $settings[ApiBase::PARAM_TYPE],
+					"Parameter $name PARAM_TYPE is array for msg-per-value mode" );
+				$valueMsgs = $settings[ApiBase::PARAM_HELP_MSG_PER_VALUE];
+				foreach ( $settings[ApiBase::PARAM_TYPE] as $value ) {
+					if ( isset( $valueMsgs[$value] ) ) {
+						$msg = $valueMsgs[$value];
+					} else {
+						$msg = "apihelp-{$path}-paramvalue-{$name}-{$value}";
+					}
+					$this->checkMessage( $msg, "Parameter $name value $value" );
+				}
+			}
+
+			// Appended messages (e.g. "disabled in miser mode")
+			if ( isset( $settings[ApiBase::PARAM_HELP_MSG_APPEND] ) ) {
+				$this->assertInternalType( 'array', $settings[ApiBase::PARAM_HELP_MSG_APPEND],
+					"Parameter $name PARAM_HELP_MSG_APPEND is array" );
+				foreach ( $settings[ApiBase::PARAM_HELP_MSG_APPEND] as $i => $msg ) {
+					$this->checkMessage( $msg, "Parameter $name HELP_MSG_APPEND #$i" );
+				}
+			}
+
+			// Info tags (e.g. "only usable in mode 1") are typically shared by
+			// several parameters, so accumulate them and test them later.
+			if ( !empty( $settings[ApiBase::PARAM_HELP_MSG_INFO] ) ) {
+				foreach ( $settings[ApiBase::PARAM_HELP_MSG_INFO] as $i ) {
+					$tags[array_shift( $i )] = 1;
+				}
+			}
+		}
+
+		// Info tags (e.g. "only usable in mode 1") accumulated above
+		foreach ( $tags as $tag => $dummy ) {
+			$this->checkMessage( "apihelp-{$path}-paraminfo-{$tag}", "HELP_MSG_INFO tag $tag" );
+		}
+
 		// Messages for examples.
 		foreach ( $module->getExamplesMessages() as $qs => $msg ) {
 			$this->assertStringStartsNotWith( 'api.php?', $qs,
@@ -114,72 +167,55 @@ class ApiStructureTest extends MediaWikiIntegrationTestCase {
 	}
 
 	/**
-	 * @dataProvider provideParameters
+	 * @dataProvider provideParameterConsistency
 	 * @param string $path
-	 * @param array $params
-	 * @param string $name
 	 */
-	public function testParameters( string $path, array $params, string $name ) : void {
+	public function testParameterConsistency( $path ) {
 		$main = self::getMain();
+		$module = TestingAccessWrapper::newFromObject( $main->getModuleFromPath( $path ) );
 
-		$dataName = $this->dataName();
-		$this->assertNotSame( '', $name, "$dataName: Name cannot be empty" );
-		$this->assertArrayHasKey( $name, $params, "$dataName: Sanity check" );
+		$paramsPlain = $module->getFinalParams();
+		$paramsForHelp = $module->getFinalParams( ApiBase::GET_VALUES_FOR_HELP );
 
-		$ret = $main->getParamValidator()->checkSettings(
-			$main->getModuleFromPath( $path ), $params, $name, []
-		);
+		// avoid warnings about empty tests when no parameter needs to be checked
+		$this->assertTrue( true );
 
-		// Warn about unknown keys. Don't fail, they might be for forward- or back-compat.
-		if ( is_array( $params[$name] ) ) {
-			$keys = array_diff(
-				array_keys( $params[$name] ),
-				$ret['allowedKeys']
-			);
-			if ( $keys ) {
-				// Don't fail for this, for back-compat
-				$this->addWarning(
-					"$dataName: Unrecognized settings keys were used: " . implode( ', ', $keys )
-				);
-			}
-		}
-
-		if ( count( $ret['issues'] ) === 1 ) {
-			$this->fail( "$dataName: Validation failed: " . reset( $ret['issues'] ) );
-		} elseif ( $ret['issues'] ) {
-			$this->fail( "$dataName: Validation failed:\n* " . implode( "\n* ", $ret['issues'] ) );
-		}
-
-		// Check message existence
-		$done = [];
-		foreach ( $ret['messages'] as $msg ) {
-			// We don't really care about the parameters, so do it simply
-			$key = $msg->getKey();
-			if ( !isset( $done[$key] ) ) {
-				$done[$key] = true;
-				$this->checkMessage( $key, "$dataName: Parameter" );
+		foreach ( [ $paramsPlain, $paramsForHelp ] as $params ) {
+			foreach ( $params as $param => $config ) {
+				if (
+					isset( $config[ApiBase::PARAM_ISMULTI_LIMIT1] )
+					|| isset( $config[ApiBase::PARAM_ISMULTI_LIMIT2] )
+				) {
+					$this->assertTrue( !empty( $config[ApiBase::PARAM_ISMULTI] ), $param
+						. ': PARAM_ISMULTI_LIMIT* only makes sense when PARAM_ISMULTI is true' );
+					$this->assertTrue( isset( $config[ApiBase::PARAM_ISMULTI_LIMIT1] )
+						&& isset( $config[ApiBase::PARAM_ISMULTI_LIMIT2] ), $param
+						. ': PARAM_ISMULTI_LIMIT1 and PARAM_ISMULTI_LIMIT2 must be used together' );
+					$this->assertType( 'int', $config[ApiBase::PARAM_ISMULTI_LIMIT1], $param
+						. 'PARAM_ISMULTI_LIMIT1 must be an integer' );
+					$this->assertType( 'int', $config[ApiBase::PARAM_ISMULTI_LIMIT2], $param
+						. 'PARAM_ISMULTI_LIMIT2 must be an integer' );
+					$this->assertGreaterThanOrEqual( $config[ApiBase::PARAM_ISMULTI_LIMIT1],
+						$config[ApiBase::PARAM_ISMULTI_LIMIT2], $param
+						. 'PARAM_ISMULTI limit cannot be smaller for users with apihighlimits rights' );
+				}
 			}
 		}
 	}
 
-	public static function provideParameters() : Iterator {
+	/**
+	 * @return array List of API module paths to test
+	 */
+	public static function provideParameterConsistency() {
 		$main = self::getMain();
 		$paths = self::getSubModulePaths( $main->getModuleManager() );
 		array_unshift( $paths, $main->getModulePath() );
-		$argsets = [
-			'plain' => [],
-			'for help' => [ ApiBase::GET_VALUES_FOR_HELP ],
-		];
 
+		$ret = [];
 		foreach ( $paths as $path ) {
-			$module = $main->getModuleFromPath( $path );
-			foreach ( $argsets as $argset => $args ) {
-				$params = $module->getFinalParams( ...$args );
-				foreach ( $params as $param => $dummy ) {
-					yield "Module $path, $argset, parameter $param" => [ $path, $params, $param ];
-				}
-			}
+			$ret[] = [ $path ];
 		}
+		return $ret;
 	}
 
 	/**

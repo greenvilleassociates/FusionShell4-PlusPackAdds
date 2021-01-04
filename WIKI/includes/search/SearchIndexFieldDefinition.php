@@ -6,7 +6,6 @@
  * Specific engines should extend this class and at at least,
  * override the getMapping method, but can reuse other parts.
  *
- * @stable to extend
  * @since 1.28
  */
 abstract class SearchIndexFieldDefinition implements SearchIndexField {
@@ -21,7 +20,7 @@ abstract class SearchIndexFieldDefinition implements SearchIndexField {
 	/**
 	 * Type of the field, one of the constants above
 	 *
-	 * @var string
+	 * @var int
 	 */
 	protected $type;
 
@@ -45,7 +44,7 @@ abstract class SearchIndexFieldDefinition implements SearchIndexField {
 
 	/**
 	 * @param string $name Field name
-	 * @param string $type Index type
+	 * @param int $type Index type
 	 */
 	public function __construct( $name, $type ) {
 		$this->name = $name;
@@ -62,7 +61,7 @@ abstract class SearchIndexFieldDefinition implements SearchIndexField {
 
 	/**
 	 * Get index type
-	 * @return string
+	 * @return int
 	 */
 	public function getIndexType() {
 		return $this->type;
@@ -70,7 +69,6 @@ abstract class SearchIndexFieldDefinition implements SearchIndexField {
 
 	/**
 	 * Set global flag for this field.
-	 * @stable to override
 	 *
 	 * @param int $flag Bit flag to set/unset
 	 * @param bool $unset True if flag should be unset, false by default
@@ -87,8 +85,6 @@ abstract class SearchIndexFieldDefinition implements SearchIndexField {
 
 	/**
 	 * Check if flag is set.
-	 * @stable to override
-	 *
 	 * @param int $flag
 	 * @return int 0 if unset, !=0 if set
 	 */
@@ -98,7 +94,6 @@ abstract class SearchIndexFieldDefinition implements SearchIndexField {
 
 	/**
 	 * Merge two field definitions if possible.
-	 * @stable to override
 	 *
 	 * @param SearchIndexField $that
 	 * @return SearchIndexField|false New definition or false if not mergeable.

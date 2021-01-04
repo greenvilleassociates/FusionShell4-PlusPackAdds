@@ -51,10 +51,10 @@ class ForkController {
 	 * Pass this flag to __construct() to cause the class to automatically restart
 	 * workers that exit with non-zero exit status or a signal such as SIGSEGV.
 	 */
-	private const RESTART_ON_ERROR = 1;
+	const RESTART_ON_ERROR = 1;
 
 	public function __construct( $numProcs, $flags = 0 ) {
-		if ( !wfIsCLI() ) {
+		if ( PHP_SAPI != 'cli' ) {
 			throw new MWException( "ForkController cannot be used from the web." );
 		}
 		$this->procsToStart = $numProcs;
@@ -123,7 +123,6 @@ class ForkController {
 				pcntl_signal_dispatch();
 			} else {
 				declare( ticks = 1 ) {
-					// @phan-suppress-next-line PhanPluginDuplicateExpressionAssignment
 					$status = $status;
 				}
 			}
@@ -150,11 +149,15 @@ class ForkController {
 	}
 
 	protected function prepareEnvironment() {
+		global $wgMemc;
 		// Don't share DB, storage, or memcached connections
 		MediaWikiServices::resetChildProcessServices();
+		FileBackendGroup::destroySingleton();
+		LockManagerGroup::destroySingletons();
 		JobQueueGroup::destroySingletons();
 		ObjectCache::clear();
 		RedisConnectionPool::destroySingletons();
+		$wgMemc = null;
 	}
 
 	/**
@@ -189,6 +192,8 @@ class ForkController {
 	}
 
 	protected function initChild() {
+		global $wgMemc, $wgMainCacheType;
+		$wgMemc = wfGetCache( $wgMainCacheType );
 		$this->children = null;
 		pcntl_signal( SIGTERM, SIG_DFL );
 	}

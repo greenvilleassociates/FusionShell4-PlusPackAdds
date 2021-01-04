@@ -2,10 +2,10 @@
 	"@metadata": {
 		"authors": [
 			"Byrial",
-			"Christian List",
 			"HenrikKbh",
 			"Morten LJ",
-			"Peter Alberti"
+			"Peter Alberti",
+			"Christian List"
 		]
 	},
 	"pfunc_desc": "Udvider parser med logiske funktioner",

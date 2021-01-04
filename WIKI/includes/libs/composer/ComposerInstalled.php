@@ -7,10 +7,6 @@
  * @since 1.27
  */
 class ComposerInstalled {
-	/**
-	 * @var array[]
-	 */
-	private $contents;
 
 	/**
 	 * @param string $location
@@ -22,7 +18,7 @@ class ComposerInstalled {
 	/**
 	 * Dependencies currently installed according to installed.json
 	 *
-	 * @return array[]
+	 * @return array
 	 */
 	public function getInstalledDependencies() {
 		$deps = [];
@@ -30,9 +26,9 @@ class ComposerInstalled {
 			$deps[$installed['name']] = [
 				'version' => ComposerJson::normalizeVersion( $installed['version'] ),
 				'type' => $installed['type'],
-				'licenses' => $installed['license'] ?? [],
-				'authors' => $installed['authors'] ?? [],
-				'description' => $installed['description'] ?? '',
+				'licenses' => isset( $installed['license'] ) ? $installed['license'] : [],
+				'authors' => isset( $installed['authors'] ) ? $installed['authors'] : [],
+				'description' => isset( $installed['description'] ) ? $installed['description'] : '',
 			];
 		}
 

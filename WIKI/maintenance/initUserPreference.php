@@ -46,7 +46,7 @@ class InitUserPreference extends Maintenance {
 			$dbr,
 			'user_properties',
 			[ 'up_user', 'up_property' ],
-			$this->getBatchSize()
+			$this->mBatchSize
 		);
 		$iterator->setFetchColumns( [ 'up_user', 'up_value' ] );
 		$iterator->addConditions( [
@@ -58,17 +58,16 @@ class InitUserPreference extends Maintenance {
 		$processed = 0;
 		foreach ( $iterator as $batch ) {
 			foreach ( $batch as $row ) {
+				$values = [
+					'up_user' => $row->up_user,
+					'up_property' => $target,
+					'up_value' => $row->up_value,
+				];
 				$dbw->upsert(
 					'user_properties',
-					[
-						'up_user' => $row->up_user,
-						'up_property' => $target,
-						'up_value' => $row->up_value,
-					],
-					[ [ 'up_user', 'up_property' ] ],
-					[
-						'up_value' => $row->up_value,
-					],
+					$values,
+					[ 'up_user', 'up_property' ],
+					$values,
 					__METHOD__
 				);
 
@@ -81,5 +80,5 @@ class InitUserPreference extends Maintenance {
 	}
 }
 
-$maintClass = InitUserPreference::class;
+$maintClass = 'InitUserPreference'; // Tells it to run the class
 require_once RUN_MAINTENANCE_IF_MAIN;

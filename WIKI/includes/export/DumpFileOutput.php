@@ -27,15 +27,12 @@
  * @ingroup Dump
  */
 class DumpFileOutput extends DumpOutput {
-	/** @var resource|false */
-	protected $handle = false;
-	/** @var string */
-	protected $filename;
+	protected $handle = false, $filename;
 
 	/**
 	 * @param string $file
 	 */
-	public function __construct( $file ) {
+	function __construct( $file ) {
 		$this->handle = fopen( $file, "wt" );
 		$this->filename = $file;
 	}
@@ -43,7 +40,7 @@ class DumpFileOutput extends DumpOutput {
 	/**
 	 * @param string $string
 	 */
-	public function writeCloseStream( $string ) {
+	function writeCloseStream( $string ) {
 		parent::writeCloseStream( $string );
 		if ( $this->handle ) {
 			fclose( $this->handle );
@@ -54,14 +51,14 @@ class DumpFileOutput extends DumpOutput {
 	/**
 	 * @param string $string
 	 */
-	public function write( $string ) {
+	function write( $string ) {
 		fputs( $this->handle, $string );
 	}
 
 	/**
-	 * @inheritDoc
+	 * @param string $newname
 	 */
-	public function closeRenameAndReopen( $newname ) {
+	function closeRenameAndReopen( $newname ) {
 		$this->closeAndRename( $newname, true );
 	}
 
@@ -69,31 +66,33 @@ class DumpFileOutput extends DumpOutput {
 	 * @param string $newname
 	 * @throws MWException
 	 */
-	protected function renameOrException( $newname ) {
-		if ( !rename( $this->filename, $newname ) ) {
-			throw new MWException( __METHOD__ . ": rename of file {$this->filename} to $newname failed\n" );
-		}
+	function renameOrException( $newname ) {
+			if ( !rename( $this->filename, $newname ) ) {
+				throw new MWException( __METHOD__ . ": rename of file {$this->filename} to $newname failed\n" );
+			}
 	}
 
 	/**
-	 * @param string|string[] $newname
+	 * @param array $newname
 	 * @return string
 	 * @throws MWException
 	 */
-	protected function checkRenameArgCount( $newname ) {
+	function checkRenameArgCount( $newname ) {
 		if ( is_array( $newname ) ) {
 			if ( count( $newname ) > 1 ) {
 				throw new MWException( __METHOD__ . ": passed multiple arguments for rename of single file\n" );
+			} else {
+				$newname = $newname[0];
 			}
-			$newname = $newname[0];
 		}
 		return $newname;
 	}
 
 	/**
-	 * @inheritDoc
+	 * @param string $newname
+	 * @param bool $open
 	 */
-	public function closeAndRename( $newname, $open = false ) {
+	function closeAndRename( $newname, $open = false ) {
 		$newname = $this->checkRenameArgCount( $newname );
 		if ( $newname ) {
 			if ( $this->handle ) {
@@ -110,7 +109,7 @@ class DumpFileOutput extends DumpOutput {
 	/**
 	 * @return string|null
 	 */
-	public function getFilenames() {
+	function getFilenames() {
 		return $this->filename;
 	}
 }

@@ -1,7 +1,6 @@
 <?php
 
 namespace RemexHtml\TreeBuilder;
-
 use RemexHtml\Tokenizer\Attributes;
 
 /**
@@ -54,7 +53,7 @@ class InCell extends InsertionMode {
 					$sourceStart );
 				return;
 			}
-			$builder->generateImpliedEndTags( false, $sourceStart );
+			$builder->generateImpliedEndTags( null, $sourceStart );
 			if ( $stack->current->htmlName !== $name ) {
 				$builder->error( "</$name> encountered when there are tags open " .
 					"which can't be closed automatically", $sourceStart );

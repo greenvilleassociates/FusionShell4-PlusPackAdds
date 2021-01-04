@@ -23,8 +23,6 @@
  * @file
  */
 
-use MediaWiki\MediaWikiServices;
-
 /**
  * @ingroup Dump
  */
@@ -33,8 +31,7 @@ class DumpNotalkFilter extends DumpFilter {
 	 * @param object $page
 	 * @return bool
 	 */
-	protected function pass( $page ) {
-		return !MediaWikiServices::getInstance()->getNamespaceInfo()->
-			isTalk( $page->page_namespace );
+	function pass( $page ) {
+		return !MWNamespace::isTalk( $page->page_namespace );
 	}
 }

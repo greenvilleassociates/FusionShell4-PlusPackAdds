@@ -40,11 +40,6 @@ class SpecialPagesWithProp extends QueryPage {
 	private $existingPropNames = null;
 
 	/**
-	 * @var int|null
-	 */
-	private $ns;
-
-	/**
 	 * @var bool
 	 */
 	private $reverse = false;
@@ -54,28 +49,27 @@ class SpecialPagesWithProp extends QueryPage {
 	 */
 	private $sortByValue = false;
 
-	public function __construct( $name = 'PagesWithProp' ) {
+	function __construct( $name = 'PagesWithProp' ) {
 		parent::__construct( $name );
 	}
 
-	public function isCacheable() {
+	function isCacheable() {
 		return false;
 	}
 
 	public function execute( $par ) {
 		$this->setHeaders();
 		$this->outputHeader();
-		$this->getOutput()->addModuleStyles( 'mediawiki.special' );
+		$this->getOutput()->addModuleStyles( 'mediawiki.special.pagesWithProp' );
 
 		$request = $this->getRequest();
 		$propname = $request->getVal( 'propname', $par );
-		$this->ns = $request->getIntOrNull( 'namespace' );
 		$this->reverse = $request->getBool( 'reverse' );
 		$this->sortByValue = $request->getBool( 'sortbyvalue' );
 
 		$propnames = $this->getExistingPropNames();
 
-		$fields = [
+		$form = HTMLForm::factory( 'ooui', [
 			'propname' => [
 				'type' => 'combobox',
 				'name' => 'propname',
@@ -83,13 +77,6 @@ class SpecialPagesWithProp extends QueryPage {
 				'default' => $propname,
 				'label-message' => 'pageswithprop-prop',
 				'required' => true,
-			],
-			'namespace' => [
-				'type' => 'namespaceselect',
-				'name' => 'namespace',
-				'label-message' => 'namespace',
-				'all' => '',
-				'default' => $this->ns,
 			],
 			'reverse' => [
 				'type' => 'check',
@@ -105,12 +92,7 @@ class SpecialPagesWithProp extends QueryPage {
 				'label-message' => 'pageswithprop-sortbyvalue',
 				'required' => false,
 			]
-		];
-
-		$context = new DerivativeContext( $this->getContext() );
-		$context->setTitle( $this->getPageTitle() ); // Remove subpage
-		$form = HTMLForm::factory( 'ooui', $fields, $context );
-
+		], $this->getContext() );
 		$form->setMethod( 'get' );
 		$form->setSubmitCallback( [ $this, 'onSubmit' ] );
 		$form->setWrapperLegendMsg( 'pageswithprop-legend' );
@@ -147,12 +129,12 @@ class SpecialPagesWithProp extends QueryPage {
 	 * Disable RSS/Atom feeds
 	 * @return bool
 	 */
-	public function isSyndicated() {
+	function isSyndicated() {
 		return false;
 	}
 
 	public function getQueryInfo() {
-		$query = [
+		return [
 			'tables' => [ 'page_props', 'page' ],
 			'fields' => [
 				'page_id' => 'pp_page',
@@ -167,19 +149,13 @@ class SpecialPagesWithProp extends QueryPage {
 				'pp_propname' => $this->propName,
 			],
 			'join_conds' => [
-				'page' => [ 'JOIN', 'page_id = pp_page' ]
+				'page' => [ 'INNER JOIN', 'page_id = pp_page' ]
 			],
 			'options' => []
 		];
-
-		if ( $this->ns !== null ) {
-			$query['conds']['page_namespace'] = $this->ns;
-		}
-
-		return $query;
 	}
 
-	protected function getOrderFields() {
+	function getOrderFields() {
 		$sort = [ 'page_id' ];
 		if ( $this->sortByValue ) {
 			array_unshift( $sort, 'pp_sortkey' );
@@ -199,7 +175,7 @@ class SpecialPagesWithProp extends QueryPage {
 	 * @param object $result Result row
 	 * @return string
 	 */
-	public function formatResult( $skin, $result ) {
+	function formatResult( $skin, $result ) {
 		$title = Title::newFromRow( $result );
 		$ret = $this->getLinkRenderer()->makeKnownLink( $title );
 		if ( $result->pp_value !== '' ) {

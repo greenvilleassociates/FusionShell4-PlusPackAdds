@@ -58,8 +58,8 @@ If you really must mess around with the directory structure, note that the
 following files *must* all be web-accessible for MediaWiki to function
 correctly:
 
-  * api.php, img_auth.php, index.php, load.php, opensearch_desc.php, thumb.php.
-  These are the entry points for normal usage. This list may be
+  * api.php, img_auth.php, index.php, load.php, opensearch_desc.php, thumb.php,
+  profileinfo.php. These are the entry points for normal usage. This list may be
   incomplete and is subject to change.
   * mw-config/index.php: Used for web-based installation (sets up the database,
   prompts for the name of the wiki, etc.).
@@ -87,15 +87,10 @@ which the user can edit by hand thereafter. It's just a plain old PHP file,
 and can contain any PHP statements. It usually sets global variables that are
 used for configuration, and includes files used by any extensions.
 
-Distributors can easily change the default settings by creating
-includes/PlatformSettings.php with overrides/additions to the default settings.
-The installer will automatically include the platform defaults when generating
-the user's LocalSettings.php file.
-
-Furthermore, distributors can change the installer behavior, by placing their
-overrides into mw-config/overrides directory. Doing that is highly preferred
-to modifying MediaWiki code directly. See mw-config/overrides/README for more
-details and examples.
+Distributors can easily change the installer behavior, including LocalSettings
+generated, by placing their overrides into mw-config/overrides directory. Doing
+that is highly preferred to modifying MediaWiki code directly. See
+mw-config/overrides/README for more details and examples.
 
 There's a new maintenance/install.php script which could be used for performing
 an install through the command line.
@@ -113,16 +108,16 @@ intelligently:
 
 == Updates ==
 
-The correct way for updating a wiki is to update the files and then run from
+The correct way for updating a wiki is to update the files and then run from 
 command line the maintenance/update.php script (with appropriate parameters if
-files were moved). It will perform all the needed steps to update the database
+files were moved). It will perform all the needed steps to update the database 
 schema and contents to the version from whatever old one it has.
 Any package manager which replaces the files but doesn't update the db is leaving
-an inconsistent wiki that may produce blank pages (php errors) when new features
+an inconsistent wiki that may produce blank pages (php errors) when new features 
 using the changed schema would be used.
 
 Since MediaWiki 1.17 it is possible to upgrade using the web installer by providing
-an arbitrary secret value stored as $wgUpgradeKey in LocalSettings (older versions
+an arbitrary secret value stored as $wgUpgradeKey in LocalSettings (older versions 
 needed to rename LocalSettings.php in order to upgrade using the installer).
 
 == Documentation ==
@@ -167,13 +162,15 @@ There are several other pieces of software that MediaWiki can make good use of.
 Distributors might choose to install these automatically with MediaWiki and
 perhaps configure it to use them (see Configuration section of this document):
 
-  * APC (Alternative PHP Cache) or similar: Will greatly speed up the
+  * APC (Alternative PHP Cache), XCache, or similar: Will greatly speed up the
   execution of MediaWiki, and all other PHP applications, at some cost in
   memory usage. Will be used automatically for the most part.
   * clamav: Can be used for virus scanning of uploaded files. Enable with
   "$wgAntivirus = 'clamav';".
   * DjVuLibre: Allows processing of DjVu files. To enable this, set
   "$wgDjvuDump = 'djvudump'; $wgDjvuRenderer = 'ddjvu'; $wgDjvuTxt = 'djvutxt';".
+  * HTML Tidy: Fixes errors in HTML at runtime. Can be enabled with 
+	"$wgUseTidy = true;".
   * ImageMagick: For resizing images. "$wgUseImageMagick = true;" will enable
   it. PHP's GD can also be used, but ImageMagick is preferable.
   * HTTP cache such as Varnish or Squid: can provide a drastic speedup and a

@@ -1,6 +1,5 @@
 <?php
 namespace RemexHtml\Serializer;
-
 use RemexHtml\TreeBuilder\TreeHandler;
 
 interface AbstractSerializer extends TreeHandler {
@@ -9,5 +8,5 @@ interface AbstractSerializer extends TreeHandler {
 	 *
 	 * @return string
 	 */
-	public function getResult();
+	function getResult();
 }

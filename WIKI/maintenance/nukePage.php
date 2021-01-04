@@ -39,11 +39,15 @@ class NukePage extends Maintenance {
 	}
 
 	public function execute() {
-		$name = $this->getArg( 0 );
+		$name = $this->getArg();
 		$delete = $this->hasOption( 'delete' );
 
 		$dbw = $this->getDB( DB_MASTER );
 		$this->beginTransaction( $dbw, __METHOD__ );
+
+		$tbl_pag = $dbw->tableName( 'page' );
+		$tbl_rec = $dbw->tableName( 'recentchanges' );
+		$tbl_rev = $dbw->tableName( 'revision' );
 
 		# Get page ID
 		$this->output( "Searching for \"$name\"..." );
@@ -56,23 +60,21 @@ class NukePage extends Maintenance {
 
 			# Get corresponding revisions
 			$this->output( "Searching for revisions..." );
-
-			$revs = $dbw->selectFieldValues(
-				'revision',
-				'rev_id',
-				[ 'rev_page' => $id ],
-				__METHOD__
-			);
+			$res = $dbw->query( "SELECT rev_id FROM $tbl_rev WHERE rev_page = $id" );
+			$revs = [];
+			foreach ( $res as $row ) {
+				$revs[] = $row->rev_id;
+			}
 			$count = count( $revs );
 			$this->output( "found $count.\n" );
 
 			# Delete the page record and associated recent changes entries
 			if ( $delete ) {
 				$this->output( "Deleting page record..." );
-				$dbw->delete( 'page', [ 'page_id' => $id ], __METHOD__ );
+				$dbw->query( "DELETE FROM $tbl_pag WHERE page_id = $id" );
 				$this->output( "done.\n" );
 				$this->output( "Cleaning up recent changes..." );
-				$dbw->delete( 'recentchanges', [ 'rc_cur_id' => $id ], __METHOD__ );
+				$dbw->query( "DELETE FROM $tbl_rec WHERE rc_cur_id = $id" );
 				$this->output( "done.\n" );
 			}
 
@@ -89,13 +91,8 @@ class NukePage extends Maintenance {
 			# Update stats as appropriate
 			if ( $delete ) {
 				$this->output( "Updating site stats..." );
-				// if it was good, decrement that too
-				$ga = $isGoodArticle ? -1 : 0;
-				$stats = SiteStatsUpdate::factory( [
-					'edits' => -$count,
-					'articles' => $ga,
-					'pages' => -1
-				] );
+				$ga = $isGoodArticle ? -1 : 0; // if it was good, decrement that too
+				$stats = new SiteStatsUpdate( 0, -$count, $ga, -1 );
 				$stats->doUpdate();
 				$this->output( "done.\n" );
 			}
@@ -109,11 +106,14 @@ class NukePage extends Maintenance {
 		$dbw = $this->getDB( DB_MASTER );
 		$this->beginTransaction( $dbw, __METHOD__ );
 
-		$dbw->delete( 'revision', [ 'rev_id' => $ids ], __METHOD__ );
+		$tbl_rev = $dbw->tableName( 'revision' );
+
+		$set = implode( ', ', $ids );
+		$dbw->query( "DELETE FROM $tbl_rev WHERE rev_id IN ( $set )" );
 
 		$this->commitTransaction( $dbw, __METHOD__ );
 	}
 }
 
-$maintClass = NukePage::class;
+$maintClass = "NukePage";
 require_once RUN_MAINTENANCE_IF_MAIN;

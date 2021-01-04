@@ -1,10 +1,6 @@
 <?php
 
-use MediaWiki\Linker\LinkTarget;
 use MediaWiki\MediaWikiServices;
-use MediaWiki\Revision\RevisionLookup;
-use MediaWiki\Revision\SlotRecord;
-use Wikimedia\Rdbms\Database;
 
 /**
  * GadgetRepo implementation where each gadget has a page in
@@ -16,22 +12,15 @@ class GadgetDefinitionNamespaceRepo extends GadgetRepo {
 	 * How long in seconds the list of gadget ids and
 	 * individual gadgets should be cached for (1 day)
 	 */
-	private const CACHE_TTL = 86400;
+	const CACHE_TTL = 86400;
 
 	/**
 	 * @var WANObjectCache
 	 */
 	private $wanCache;
 
-	/**
-	 * @var RevisionLookup
-	 */
-	private $revLookup;
-
 	public function __construct() {
-		$services = MediaWikiServices::getInstance();
-		$this->wanCache = $services->getMainWANObjectCache();
-		$this->revLookup = $services->getRevisionLookup();
+		$this->wanCache = MediaWikiServices::getInstance()->getMainWANObjectCache();
 	}
 
 	/**
@@ -42,19 +31,18 @@ class GadgetDefinitionNamespaceRepo extends GadgetRepo {
 	public function getGadgetIds() {
 		$key = $this->getGadgetIdsKey();
 
-		$fname = __METHOD__;
 		return $this->wanCache->getWithSetCallback(
 			$key,
 			self::CACHE_TTL,
-			function ( $oldValue, &$ttl, array &$setOpts ) use ( $fname ) {
-				$dbr = wfGetDB( DB_REPLICA );
+			function ( $oldValue, &$ttl, array &$setOpts ) {
+				$dbr = wfGetDB( DB_SLAVE );
 				$setOpts += Database::getCacheSetOptions( $dbr );
 
 				return $dbr->selectFieldValues(
 					'page',
 					'page_title',
 					[ 'page_namespace' => NS_GADGET_DEFINITION ],
-					$fname
+					__METHOD__
 				);
 			},
 			[
@@ -63,34 +51,6 @@ class GadgetDefinitionNamespaceRepo extends GadgetRepo {
 				'lockTSE' => 30
 			]
 		);
-	}
-
-	/**
-	 * @inheritDoc
-	 */
-	public function handlePageUpdate( LinkTarget $target ) {
-		if ( $target->inNamespace( NS_GADGET_DEFINITION ) ) {
-			$this->purgeGadgetEntry( $target->getText() );
-		}
-	}
-
-	/**
-	 * @inheritDoc
-	 */
-	public function handlePageCreation( LinkTarget $target ) {
-		if ( $target->inNamespace( NS_GADGET_DEFINITION ) ) {
-			$this->purgeGadgetIdsList();
-		}
-	}
-
-	/**
-	 * @inheritDoc
-	 */
-	public function handlePageDeletion( LinkTarget $target ) {
-		if ( $target->inNamespace( NS_GADGET_DEFINITION ) ) {
-			$this->purgeGadgetIdsList();
-			$this->purgeGadgetEntry( $target->getText() );
-		}
 	}
 
 	/**
@@ -111,20 +71,20 @@ class GadgetDefinitionNamespaceRepo extends GadgetRepo {
 			$key,
 			self::CACHE_TTL,
 			function ( $old, &$ttl, array &$setOpts ) use ( $id ) {
-				$setOpts += Database::getCacheSetOptions( wfGetDB( DB_REPLICA ) );
+				$setOpts += Database::getCacheSetOptions( wfGetDB( DB_SLAVE ) );
 				$title = Title::makeTitleSafe( NS_GADGET_DEFINITION, $id );
 				if ( !$title ) {
 					$ttl = WANObjectCache::TTL_UNCACHEABLE;
 					return null;
 				}
 
-				$revRecord = $this->revLookup->getRevisionByTitle( $title );
-				if ( !$revRecord ) {
+				$rev = Revision::newFromTitle( $title );
+				if ( !$rev ) {
 					$ttl = WANObjectCache::TTL_UNCACHEABLE;
 					return null;
 				}
 
-				$content = $revRecord->getContent( SlotRecord::MAIN );
+				$content = $rev->getContent();
 				if ( !$content instanceof GadgetDefinitionContent ) {
 					// Uhm...
 					$ttl = WANObjectCache::TTL_UNCACHEABLE;
@@ -164,7 +124,7 @@ class GadgetDefinitionNamespaceRepo extends GadgetRepo {
 	}
 
 	/**
-	 * @param string $id
+	 * @param strng $id
 	 * @return string
 	 */
 	private function getGadgetCacheKey( $id ) {

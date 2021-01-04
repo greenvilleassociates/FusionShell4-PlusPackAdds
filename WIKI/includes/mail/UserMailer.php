@@ -34,8 +34,8 @@ class UserMailer {
 	 * Send mail using a PEAR mailer
 	 *
 	 * @param Mail_smtp $mailer
-	 * @param string[]|string $dest
-	 * @param array $headers
+	 * @param string $dest
+	 * @param string $headers
 	 * @param string $body
 	 *
 	 * @return Status
@@ -45,7 +45,7 @@ class UserMailer {
 
 		// Based on the result return an error string,
 		if ( PEAR::isError( $mailResult ) ) {
-			wfDebug( "PEAR::Mail failed: " . $mailResult->getMessage() );
+			wfDebug( "PEAR::Mail failed: " . $mailResult->getMessage() . "\n" );
 			return Status::newFatal( 'pear-mail-error', $mailResult->getMessage() );
 		} else {
 			return Status::newGood();
@@ -64,7 +64,7 @@ class UserMailer {
 	 *
 	 * @return string
 	 */
-	private static function arrayToHeaderString( $headers, $endl = PHP_EOL ) {
+	static function arrayToHeaderString( $headers, $endl = PHP_EOL ) {
 		$strings = [];
 		foreach ( $headers as $name => $value ) {
 			// Prevent header injection by stripping newlines from value
@@ -79,11 +79,10 @@ class UserMailer {
 	 *
 	 * @return string
 	 */
-	private static function makeMsgId() {
+	static function makeMsgId() {
 		global $wgSMTP, $wgServer;
 
-		$domainId = WikiMap::getCurrentWikiDbDomain()->getId();
-		$msgid = uniqid( $domainId . ".", true /** for cygwin */ );
+		$msgid = uniqid( wfWikiID() . ".", true ); /* true required for cygwin */
 		if ( is_array( $wgSMTP ) && isset( $wgSMTP['IDHost'] ) && $wgSMTP['IDHost'] ) {
 			$domain = $wgSMTP['IDHost'];
 		} else {
@@ -102,7 +101,7 @@ class UserMailer {
 	 * @param MailAddress|MailAddress[] $to Recipient's email (or an array of them)
 	 * @param MailAddress $from Sender's email
 	 * @param string $subject Email's subject.
-	 * @param string|string[] $body Email's text or Array of two strings to be the text and html bodies
+	 * @param string $body Email's text or Array of two strings to be the text and html bodies
 	 * @param array $options Keys:
 	 *     'replyTo' MailAddress
 	 *     'contentType' string default 'text/plain; charset=UTF-8'
@@ -151,7 +150,7 @@ class UserMailer {
 			$body = $body['text'];
 		}
 
-		wfDebug( __METHOD__ . ': sending mail to ' . implode( ', ', $to ) );
+		wfDebug( __METHOD__ . ': sending mail to ' . implode( ', ', $to ) . "\n" );
 
 		// Make sure we have at least one address
 		$has_address = false;
@@ -169,7 +168,7 @@ class UserMailer {
 		// target differently to split up the address list
 		if ( count( $to ) > 1 ) {
 			$oldTo = $to;
-			Hooks::runner()->onUserMailerSplitTo( $to );
+			Hooks::run( 'UserMailerSplitTo', [ &$to ] );
 			if ( $oldTo != $to ) {
 				$splitTo = array_diff( $oldTo, $to );
 				$to = array_diff( $oldTo, $splitTo ); // ignore new addresses added in the hook
@@ -191,41 +190,12 @@ class UserMailer {
 	}
 
 	/**
-	 * Whether the PEAR Mail_mime library is usable. This will
-	 * try and load it if it is not already.
-	 *
-	 * @return bool
-	 */
-	private static function isMailMimeUsable() {
-		static $usable = null;
-		if ( $usable === null ) {
-			$usable = class_exists( 'Mail_mime' );
-		}
-		return $usable;
-	}
-
-	/**
-	 * Whether the PEAR Mail library is usable. This will
-	 * try and load it if it is not already.
-	 *
-	 * @return bool
-	 */
-	private static function isMailUsable() {
-		static $usable = null;
-		if ( $usable === null ) {
-			$usable = class_exists( 'Mail' );
-		}
-
-		return $usable;
-	}
-
-	/**
 	 * Helper function fo UserMailer::send() which does the actual sending. It expects a $to
 	 * list which the UserMailerSplitTo hook would not split further.
 	 * @param MailAddress[] $to Array of recipients' email addresses
 	 * @param MailAddress $from Sender's email
 	 * @param string $subject Email's subject.
-	 * @param string|string[] $body Email's text or Array of two strings to be the text and html bodies
+	 * @param string $body Email's text or Array of two strings to be the text and html bodies
 	 * @param array $options Keys:
 	 *     'replyTo' MailAddress
 	 *     'contentType' string default 'text/plain; charset=UTF-8'
@@ -245,13 +215,14 @@ class UserMailer {
 		global $wgSMTP, $wgEnotifMaxRecips, $wgAdditionalMailParams;
 		$mime = null;
 
-		$replyto = $options['replyTo'] ?? null;
-		$contentType = $options['contentType'] ?? 'text/plain; charset=UTF-8';
-		$headers = $options['headers'] ?? [];
+		$replyto = isset( $options['replyTo'] ) ? $options['replyTo'] : null;
+		$contentType = isset( $options['contentType'] ) ?
+			$options['contentType'] : 'text/plain; charset=UTF-8';
+		$headers = isset( $options['headers'] ) ? $options['headers'] : [];
 
 		// Allow transformation of content, such as encrypting/signing
 		$error = false;
-		if ( !Hooks::runner()->onUserMailerTransformContent( $to, $from, $body, $error ) ) {
+		if ( !Hooks::run( 'UserMailerTransformContent', [ $to, $from, &$body, &$error ] ) ) {
 			if ( $error ) {
 				return Status::newFatal( 'php-mail-error', $error );
 			} else {
@@ -293,7 +264,7 @@ class UserMailer {
 		$extraParams = $wgAdditionalMailParams;
 
 		// Hook to generate custom VERP address for 'Return-Path'
-		Hooks::runner()->onUserMailerChangeReturnPath( $to, $returnPath );
+		Hooks::run( 'UserMailerChangeReturnPath', [ $to, &$returnPath ] );
 		// Add the envelope sender address using the -f command line option when PHP mail() is used.
 		// Will default to the $from->address when the UserMailerChangeReturnPath hook fails and the
 		// generated VERP address when the hook runs effectively.
@@ -324,13 +295,16 @@ class UserMailer {
 
 		if ( is_array( $body ) ) {
 			// we are sending a multipart message
-			wfDebug( "Assembling multipart mime email" );
-			if ( !self::isMailMimeUsable() ) {
-				wfDebug( "PEAR Mail_Mime package is not installed. Falling back to text email." );
+			wfDebug( "Assembling multipart mime email\n" );
+			if ( !stream_resolve_include_path( 'Mail/mime.php' ) ) {
+				wfDebug( "PEAR Mail_Mime package is not installed. Falling back to text email.\n" );
 				// remove the html body for text email fall back
 				$body = $body['text'];
 			} else {
-				// pear/mail_mime is already loaded by this point
+				// Check if pear/mail_mime is already loaded (via composer)
+				if ( !class_exists( 'Mail_mime' ) ) {
+					require_once 'Mail/mime.php';
+				}
 				if ( wfIsWindows() ) {
 					$body['text'] = str_replace( "\n", "\r\n", $body['text'] );
 					$body['html'] = str_replace( "\n", "\r\n", $body['html'] );
@@ -357,8 +331,8 @@ class UserMailer {
 		}
 
 		// allow transformation of MIME-encoded message
-		if ( !Hooks::runner()->onUserMailerTransformMessage(
-			$to, $from, $subject, $headers, $body, $error )
+		if ( !Hooks::run( 'UserMailerTransformMessage',
+			[ $to, $from, &$subject, &$headers, &$body, &$error ] )
 		) {
 			if ( $error ) {
 				return Status::newFatal( 'php-mail-error', $error );
@@ -367,7 +341,7 @@ class UserMailer {
 			}
 		}
 
-		$ret = Hooks::runner()->onAlternateUserMailer( $headers, $to, $from, $subject, $body );
+		$ret = Hooks::run( 'AlternateUserMailer', [ $headers, $to, $from, $subject, $body ] );
 		if ( $ret === false ) {
 			// the hook implementation will return false to skip regular mail sending
 			return Status::newGood();
@@ -378,44 +352,45 @@ class UserMailer {
 
 		if ( is_array( $wgSMTP ) ) {
 			// Check if pear/mail is already loaded (via composer)
-			if ( !self::isMailUsable() ) {
-				throw new MWException( 'PEAR mail package is not installed' );
+			if ( !class_exists( 'Mail' ) ) {
+				// PEAR MAILER
+				if ( !stream_resolve_include_path( 'Mail.php' ) ) {
+					throw new MWException( 'PEAR mail package is not installed' );
+				}
+				require_once 'Mail.php';
 			}
 
-			$recips = array_map( 'strval', $to );
-
-			Wikimedia\suppressWarnings();
+			MediaWiki\suppressWarnings();
 
 			// Create the mail object using the Mail::factory method
-			$mail_object = Mail::factory( 'smtp', $wgSMTP );
+			$mail_object =& Mail::factory( 'smtp', $wgSMTP );
 			if ( PEAR::isError( $mail_object ) ) {
-				wfDebug( "PEAR::Mail factory failed: " . $mail_object->getMessage() );
-				Wikimedia\restoreWarnings();
+				wfDebug( "PEAR::Mail factory failed: " . $mail_object->getMessage() . "\n" );
+				MediaWiki\restoreWarnings();
 				return Status::newFatal( 'pear-mail-error', $mail_object->getMessage() );
 			}
-			'@phan-var Mail_smtp $mail_object';
 
-			wfDebug( "Sending mail via PEAR::Mail" );
+			wfDebug( "Sending mail via PEAR::Mail\n" );
 
 			$headers['Subject'] = self::quotedPrintable( $subject );
 
 			// When sending only to one recipient, shows it its email using To:
-			if ( count( $recips ) == 1 ) {
-				$headers['To'] = $recips[0];
+			if ( count( $to ) == 1 ) {
+				$headers['To'] = $to[0]->toString();
 			}
 
 			// Split jobs since SMTP servers tends to limit the maximum
 			// number of possible recipients.
-			$chunks = array_chunk( $recips, $wgEnotifMaxRecips );
+			$chunks = array_chunk( $to, $wgEnotifMaxRecips );
 			foreach ( $chunks as $chunk ) {
 				$status = self::sendWithPear( $mail_object, $chunk, $headers, $body );
 				// FIXME : some chunks might be sent while others are not!
 				if ( !$status->isOK() ) {
-					Wikimedia\restoreWarnings();
+					MediaWiki\restoreWarnings();
 					return $status;
 				}
 			}
-			Wikimedia\restoreWarnings();
+			MediaWiki\restoreWarnings();
 			return Status::newGood();
 		} else {
 			// PHP mail()
@@ -424,7 +399,7 @@ class UserMailer {
 			}
 			$headers = self::arrayToHeaderString( $headers, $endl );
 
-			wfDebug( "Sending mail via internal mail() function" );
+			wfDebug( "Sending mail via internal mail() function\n" );
 
 			self::$mErrorString = '';
 			$html_errors = ini_get( 'html_errors' );
@@ -434,7 +409,7 @@ class UserMailer {
 			try {
 				foreach ( $to as $recip ) {
 					$sent = mail(
-						$recip->toString(),
+						$recip,
 						self::quotedPrintable( $subject ),
 						$body,
 						$headers,
@@ -450,11 +425,11 @@ class UserMailer {
 			ini_set( 'html_errors', $html_errors );
 
 			if ( self::$mErrorString ) {
-				wfDebug( "Error sending mail: " . self::$mErrorString );
+				wfDebug( "Error sending mail: " . self::$mErrorString . "\n" );
 				return Status::newFatal( 'php-mail-error', self::$mErrorString );
 			} elseif ( !$sent ) {
 				// mail function only tells if there's an error
-				wfDebug( "Unknown error sending mail" );
+				wfDebug( "Unknown error sending mail\n" );
 				return Status::newFatal( 'php-mail-error-unknown' );
 			} else {
 				return Status::newGood();
@@ -468,7 +443,7 @@ class UserMailer {
 	 * @param int $code Error number
 	 * @param string $string Error message
 	 */
-	private static function errorHandler( $code, $string ) {
+	static function errorHandler( $code, $string ) {
 		self::$mErrorString = preg_replace( '/^mail\(\)(\s*\[.*?\])?: /', '', $string );
 	}
 

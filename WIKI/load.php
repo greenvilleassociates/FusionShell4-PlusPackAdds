@@ -1,7 +1,6 @@
 <?php
 /**
- * The web entry point for ResourceLoader, which serves static CSS/JavaScript
- * via ResourceLoaderModule subclasses.
+ * This file is the entry point for ResourceLoader.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -19,39 +18,41 @@
  * http://www.gnu.org/copyleft/gpl.html
  *
  * @file
- * @ingroup entrypoint
- * @ingroup ResourceLoader
  * @author Roan Kattouw
  * @author Trevor Parscal
  */
 
+use MediaWiki\Logger\LoggerFactory;
 use MediaWiki\MediaWikiServices;
 
 // This endpoint is supposed to be independent of request cookies and other
 // details of the session. Enforce this constraint with respect to session use.
 define( 'MW_NO_SESSION', 1 );
 
-define( 'MW_ENTRY_POINT', 'load' );
-
 require __DIR__ . '/includes/WebStart.php';
 
-wfLoadMain();
-
-function wfLoadMain() {
-	global $wgRequest;
-
-	// Disable ChronologyProtector so that we don't wait for unrelated MediaWiki
-	// writes when getting database connections for ResourceLoader. (T192611)
-	MediaWikiServices::getInstance()->getDBLoadBalancerFactory()->disableChronologyProtection();
-
-	$resourceLoader = MediaWikiServices::getInstance()->getResourceLoader();
-	$context = new ResourceLoaderContext( $resourceLoader, $wgRequest );
-
-	// Respond to ResourceLoader request
-	$resourceLoader->respond( $context );
-
-	Profiler::instance()->setAllowOutput();
-
-	$mediawiki = new MediaWiki();
-	$mediawiki->doPostOutputShutdown();
+// URL safety checks
+if ( !$wgRequest->checkUrlExtension() ) {
+	return;
 }
+
+// Don't initialise ChronologyProtector from object cache, and
+// don't wait for unrelated MediaWiki writes when querying ResourceLoader.
+MediaWikiServices::getInstance()->getDBLoadBalancerFactory()->setRequestInfo( [
+	'ChronologyProtection' => 'false',
+] );
+
+// Set up ResourceLoader
+$resourceLoader = new ResourceLoader(
+	ConfigFactory::getDefaultInstance()->makeConfig( 'main' ),
+	LoggerFactory::getInstance( 'resourceloader' )
+);
+$context = new ResourceLoaderContext( $resourceLoader, $wgRequest );
+
+// Respond to ResourceLoader request
+$resourceLoader->respond( $context );
+
+Profiler::instance()->setTemplated( true );
+
+$mediawiki = new MediaWiki();
+$mediawiki->doPostOutputShutdown( 'fast' );

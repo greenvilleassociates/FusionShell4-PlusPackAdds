@@ -1,8 +1,8 @@
 /*!
  * VisualEditor ContentEditable MWReferenceNode class.
  *
- * @copyright 2011-2018 VisualEditor Team's Cite sub-team and others; see AUTHORS.txt
- * @license MIT
+ * @copyright 2011-2017 Cite VisualEditor Team and others; see AUTHORS.txt
+ * @license The MIT License (MIT); see LICENSE.txt
  */
 
 /**
@@ -37,11 +37,8 @@ ve.ce.MWReferenceNode = function VeCeMWReferenceNode() {
 	this.internalList = this.model.getDocument().internalList;
 
 	// Events
-	this.connect( this, {
-		setup: 'onSetup',
-		teardown: 'onTeardown'
-	} );
-	this.model.connect( this, { attributeChange: 'onAttributeChange' } );
+	this.connect( this, { setup: 'onSetup' } );
+	this.connect( this, { teardown: 'onTeardown' } );
 
 	// Initialization
 	this.update();
@@ -97,19 +94,6 @@ ve.ce.MWReferenceNode.prototype.onInternalListUpdate = function ( groupsChanged 
 };
 
 /**
- * Handle attribute change events
- *
- * @param {string} key Attribute key
- * @param {string} from Old value
- * @param {string} to New value
- */
-ve.ce.MWReferenceNode.prototype.onAttributeChange = function ( key ) {
-	if ( key === 'placeholder' ) {
-		this.update();
-	}
-};
-
-/**
  * @inheritdoc ve.ce.FocusableNode
  */
 ve.ce.MWReferenceNode.prototype.executeCommand = function () {
@@ -139,7 +123,6 @@ ve.ce.MWReferenceNode.prototype.update = function () {
 	} else {
 		this.$link.removeAttr( 'data-mw-group' );
 	}
-	this.$element.toggleClass( 've-ce-mwReferenceNode-placeholder', !!this.model.getAttribute( 'placeholder' ) );
 };
 
 /* Registration */

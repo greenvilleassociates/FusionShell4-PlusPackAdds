@@ -3,11 +3,10 @@
 		"authors": [
 			"Fryed-peach",
 			"Hamilton Abreu",
-			"Raymond",
 			"Shirayuki"
 		]
 	},
-	"questycaptcha-desc": "{{desc}}",
+	"questycaptcha-desc": "{{Optional}}\n{{desc}}",
 	"questycaptcha-addurl": "{{Related|ConfirmEdit-addurl}}",
 	"questycaptcha-badlogin": "{{Related|ConfirmEdit-badlogin}}",
 	"questycaptcha-createaccount": "{{Related|ConfirmEdit-createaccount}}",

@@ -1,14 +1,11 @@
 <?php
-
-use MediaWiki\MediaWikiServices;
-
 /**
  * @covers MediaWiki\Interwiki\ClassicInterwikiLookup
  *
  * @group MediaWiki
  * @group Database
  */
-class ClassicInterwikiLookupTest extends MediaWikiIntegrationTestCase {
+class ClassicInterwikiLookupTest extends MediaWikiTestCase {
 
 	private function populateDB( $iwrows ) {
 		$dbw = wfGetDB( DB_MASTER );
@@ -40,9 +37,8 @@ class ClassicInterwikiLookupTest extends MediaWikiIntegrationTestCase {
 
 		$this->populateDB( [ $dewiki, $zzwiki ] );
 		$lookup = new \MediaWiki\Interwiki\ClassicInterwikiLookup(
-			MediaWikiServices::getInstance()->getLanguageFactory()->getLanguage( 'en' ),
+			Language::factory( 'en' ),
 			WANObjectCache::newEmpty(),
-			MediaWikiServices::getInstance()->getHookContainer(),
 			60 * 60,
 			false,
 			3,
@@ -72,7 +68,7 @@ class ClassicInterwikiLookupTest extends MediaWikiIntegrationTestCase {
 		$this->assertFalse( $lookup->fetch( 'xyz' ), 'unknown prefix' );
 
 		$interwiki = $lookup->fetch( 'de' );
-		$this->assertInstanceOf( Interwiki::class, $interwiki );
+		$this->assertInstanceOf( 'Interwiki', $interwiki );
 		$this->assertSame( $interwiki, $lookup->fetch( 'de' ), 'in-process caching' );
 
 		$this->assertSame( 'http://de.wikipedia.org/wiki/', $interwiki->getURL(), 'getURL' );
@@ -120,7 +116,7 @@ class ClassicInterwikiLookupTest extends MediaWikiIntegrationTestCase {
 	}
 
 	private function populateCDB( $thisSite, $local, $global ) {
-		$cdbFile = $this->getNewTempFile();
+		$cdbFile = tempnam( wfTempDir(), 'MW-ClassicInterwikiLookupTest-' ) . '.cdb';
 		$cdb = \Cdb\Writer::open( $cdbFile );
 
 		$hash = $this->populateHash( $thisSite, $local, $global );
@@ -155,9 +151,8 @@ class ClassicInterwikiLookupTest extends MediaWikiIntegrationTestCase {
 			[ $zzwiki ]
 		);
 		$lookup = new \MediaWiki\Interwiki\ClassicInterwikiLookup(
-			MediaWikiServices::getInstance()->getLanguageFactory()->getLanguage( 'en' ),
+			Language::factory( 'en' ),
 			WANObjectCache::newEmpty(),
-			MediaWikiServices::getInstance()->getHookContainer(),
 			60 * 60,
 			$cdbFile,
 			3,
@@ -174,13 +169,13 @@ class ClassicInterwikiLookupTest extends MediaWikiIntegrationTestCase {
 		$this->assertTrue( $lookup->isValidInterwiki( 'zz' ), 'known prefix is valid' );
 
 		$interwiki = $lookup->fetch( 'de' );
-		$this->assertInstanceOf( Interwiki::class, $interwiki );
+		$this->assertInstanceOf( 'Interwiki', $interwiki );
 
 		$this->assertSame( 'http://de.wikipedia.org/wiki/', $interwiki->getURL(), 'getURL' );
 		$this->assertSame( true, $interwiki->isLocal(), 'isLocal' );
 
 		$interwiki = $lookup->fetch( 'zz' );
-		$this->assertInstanceOf( Interwiki::class, $interwiki );
+		$this->assertInstanceOf( 'Interwiki', $interwiki );
 
 		$this->assertSame( 'http://zzwiki.org/wiki/', $interwiki->getURL(), 'getURL' );
 		$this->assertSame( false, $interwiki->isLocal(), 'isLocal' );
@@ -207,9 +202,8 @@ class ClassicInterwikiLookupTest extends MediaWikiIntegrationTestCase {
 			[ $zzwiki ]
 		);
 		$lookup = new \MediaWiki\Interwiki\ClassicInterwikiLookup(
-			MediaWikiServices::getInstance()->getLanguageFactory()->getLanguage( 'en' ),
+			Language::factory( 'en' ),
 			WANObjectCache::newEmpty(),
-			MediaWikiServices::getInstance()->getHookContainer(),
 			60 * 60,
 			$hash,
 			3,
@@ -226,13 +220,13 @@ class ClassicInterwikiLookupTest extends MediaWikiIntegrationTestCase {
 		$this->assertTrue( $lookup->isValidInterwiki( 'zz' ), 'known prefix is valid' );
 
 		$interwiki = $lookup->fetch( 'de' );
-		$this->assertInstanceOf( Interwiki::class, $interwiki );
+		$this->assertInstanceOf( 'Interwiki', $interwiki );
 
 		$this->assertSame( 'http://de.wikipedia.org/wiki/', $interwiki->getURL(), 'getURL' );
 		$this->assertSame( true, $interwiki->isLocal(), 'isLocal' );
 
 		$interwiki = $lookup->fetch( 'zz' );
-		$this->assertInstanceOf( Interwiki::class, $interwiki );
+		$this->assertInstanceOf( 'Interwiki', $interwiki );
 
 		$this->assertSame( 'http://zzwiki.org/wiki/', $interwiki->getURL(), 'getURL' );
 		$this->assertSame( false, $interwiki->isLocal(), 'isLocal' );
@@ -261,9 +255,8 @@ class ClassicInterwikiLookupTest extends MediaWikiIntegrationTestCase {
 			[ $zz, $de, $azz ]
 		);
 		$lookup = new \MediaWiki\Interwiki\ClassicInterwikiLookup(
-			MediaWikiServices::getInstance()->getLanguageFactory()->getLanguage( 'en' ),
+			Language::factory( 'en' ),
 			WANObjectCache::newEmpty(),
-			MediaWikiServices::getInstance()->getHookContainer(),
 			60 * 60,
 			$hash,
 			3,

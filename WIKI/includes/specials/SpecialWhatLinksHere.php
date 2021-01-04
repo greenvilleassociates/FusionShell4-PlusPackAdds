@@ -21,7 +21,6 @@
  * @todo Use some variant of Pager or something; the pagination here is lousy.
  */
 
-use MediaWiki\MediaWikiServices;
 use Wikimedia\Rdbms\IDatabase;
 
 /**
@@ -44,7 +43,7 @@ class SpecialWhatLinksHere extends IncludableSpecialPage {
 		parent::__construct( 'Whatlinkshere' );
 	}
 
-	public function execute( $par ) {
+	function execute( $par ) {
 		$out = $this->getOutput();
 
 		$this->setHeaders();
@@ -106,7 +105,7 @@ class SpecialWhatLinksHere extends IncludableSpecialPage {
 	 * @param int $from Display from this article ID (default: 0)
 	 * @param int $back Display from this article ID at backwards scrolling (default: 0)
 	 */
-	private function showIndirectLinks( $level, $target, $limit, $from = 0, $back = 0 ) {
+	function showIndirectLinks( $level, $target, $limit, $from = 0, $back = 0 ) {
 		$out = $this->getOutput();
 		$dbr = wfGetDB( DB_REPLICA );
 
@@ -115,16 +114,9 @@ class SpecialWhatLinksHere extends IncludableSpecialPage {
 		$hidetrans = $this->opts->getValue( 'hidetrans' );
 		$hideimages = $target->getNamespace() != NS_FILE || $this->opts->getValue( 'hideimages' );
 
-		// For historical reasons `pagelinks` always contains an entry for the redirect target.
-		// So we only need to query `redirect` if `pagelinks` isn't being queried.
-		$fetchredirs = $hidelinks && !$hideredirs;
+		$fetchlinks = ( !$hidelinks || !$hideredirs );
 
-		// Build query conds in concert for all four tables...
-		$conds = [];
-		$conds['redirect'] = [
-			'rd_namespace' => $target->getNamespace(),
-			'rd_title' => $target->getDBkey(),
-		];
+		// Build query conds in concert for all three tables...
 		$conds['pagelinks'] = [
 			'pl_namespace' => $target->getNamespace(),
 			'pl_title' => $target->getDBkey(),
@@ -141,24 +133,21 @@ class SpecialWhatLinksHere extends IncludableSpecialPage {
 		$invert = $this->opts->getValue( 'invert' );
 		$nsComparison = ( $invert ? '!= ' : '= ' ) . $dbr->addQuotes( $namespace );
 		if ( is_int( $namespace ) ) {
-			$conds['redirect'][] = "page_namespace $nsComparison";
 			$conds['pagelinks'][] = "pl_from_namespace $nsComparison";
 			$conds['templatelinks'][] = "tl_from_namespace $nsComparison";
 			$conds['imagelinks'][] = "il_from_namespace $nsComparison";
 		}
 
 		if ( $from ) {
-			$conds['redirect'][] = "rd_from >= $from";
 			$conds['templatelinks'][] = "tl_from >= $from";
 			$conds['pagelinks'][] = "pl_from >= $from";
 			$conds['imagelinks'][] = "il_from >= $from";
 		}
 
 		if ( $hideredirs ) {
-			// For historical reasons `pagelinks` always contains an entry for the redirect target.
-			// So we hide that link when $hideredirs is set. There's unfortunately no way to tell when a
-			// redirect's content also links to the target.
 			$conds['pagelinks']['rd_from'] = null;
+		} elseif ( $hidelinks ) {
+			$conds['pagelinks'][] = 'rd_from is NOT NULL';
 		}
 
 		$queryFunc = function ( IDatabase $dbr, $table, $fromCol ) use (
@@ -173,38 +162,29 @@ class SpecialWhatLinksHere extends IncludableSpecialPage {
 			];
 			$on['rd_namespace'] = $target->getNamespace();
 			// Inner LIMIT is 2X in case of stale backlinks with wrong namespaces
-			$subQuery = $dbr->newSelectQueryBuilder()
-				->table( $table )
-				->fields( [ $fromCol, 'rd_from', 'rd_fragment' ] )
-				->conds( $conds[$table] )
-				->orderBy( $fromCol )
-				->limit( 2 * $queryLimit )
-				->leftJoin( 'redirect', 'redirect', $on )
-				->join( 'page', 'page', "$fromCol = page_id" );
-
-			return $dbr->newSelectQueryBuilder()
-				->table( $subQuery, 'temp_backlink_range' )
-				->join( 'page', 'page', "$fromCol = page_id" )
-				->fields( [ 'page_id', 'page_namespace', 'page_title',
-					'rd_from', 'rd_fragment', 'page_is_redirect' ] )
-				->orderBy( 'page_id' )
-				->limit( $queryLimit )
-				->caller( __CLASS__ . '::showIndirectLinks' )
-				->fetchResultSet();
+			$subQuery = $dbr->selectSQLText(
+				[ $table, 'redirect', 'page' ],
+				[ $fromCol, 'rd_from' ],
+				$conds[$table],
+				__CLASS__ . '::showIndirectLinks',
+				// Force JOIN order per T106682 to avoid large filesorts
+				[ 'ORDER BY' => $fromCol, 'LIMIT' => 2 * $queryLimit, 'STRAIGHT_JOIN' ],
+				[
+					'page' => [ 'INNER JOIN', "$fromCol = page_id" ],
+					'redirect' => [ 'LEFT JOIN', $on ]
+				]
+			);
+			return $dbr->select(
+				[ 'page', 'temp_backlink_range' => "($subQuery)" ],
+				[ 'page_id', 'page_namespace', 'page_title', 'rd_from', 'page_is_redirect' ],
+				[],
+				__CLASS__ . '::showIndirectLinks',
+				[ 'ORDER BY' => 'page_id', 'LIMIT' => $queryLimit ],
+				[ 'page' => [ 'INNER JOIN', "$fromCol = page_id" ] ]
+			);
 		};
 
-		if ( $fetchredirs ) {
-			$rdRes = $dbr->select(
-				[ 'redirect', 'page' ],
-				[ 'page_id', 'page_namespace', 'page_title', 'rd_from', 'rd_fragment', 'page_is_redirect' ],
-				$conds['redirect'],
-				__METHOD__,
-				[ 'ORDER BY' => 'rd_from', 'LIMIT' => $limit + 1 ],
-				[ 'page' => [ 'JOIN', 'rd_from = page_id' ] ]
-			);
-		}
-
-		if ( !$hidelinks ) {
+		if ( $fetchlinks ) {
 			$plRes = $queryFunc( $dbr, 'pagelinks', 'pl_from' );
 		}
 
@@ -216,49 +196,31 @@ class SpecialWhatLinksHere extends IncludableSpecialPage {
 			$ilRes = $queryFunc( $dbr, 'imagelinks', 'il_from' );
 		}
 
-		if ( ( !$fetchredirs || !$rdRes->numRows() )
-			&& ( $hidelinks || !$plRes->numRows() )
+		if ( ( !$fetchlinks || !$plRes->numRows() )
 			&& ( $hidetrans || !$tlRes->numRows() )
 			&& ( $hideimages || !$ilRes->numRows() )
 		) {
-			if ( $level == 0 && !$this->including() ) {
-				$out->addHTML( $this->whatlinkshereForm() );
+			if ( 0 == $level ) {
+				if ( !$this->including() ) {
+					$out->addHTML( $this->whatlinkshereForm() );
 
-				// Show filters only if there are links
-				if ( $hidelinks || $hidetrans || $hideredirs || $hideimages ) {
-					$out->addHTML( $this->getFilterPanel() );
+					// Show filters only if there are links
+					if ( $hidelinks || $hidetrans || $hideredirs || $hideimages ) {
+						$out->addHTML( $this->getFilterPanel() );
+					}
+					$errMsg = is_int( $namespace ) ? 'nolinkshere-ns' : 'nolinkshere';
+					$out->addWikiMsg( $errMsg, $this->target->getPrefixedText() );
+					$out->setStatusCode( 404 );
 				}
-				$msgKey = is_int( $namespace ) ? 'nolinkshere-ns' : 'nolinkshere';
-				$link = $this->getLinkRenderer()->makeLink(
-					$this->target,
-					null,
-					[],
-					$this->target->isRedirect() ? [ 'redirect' => 'no' ] : []
-				);
-
-				$errMsg = $this->msg( $msgKey )
-					->params( $this->target->getPrefixedText() )
-					->rawParams( $link )
-					->parseAsBlock();
-				$out->addHTML( $errMsg );
-				$out->setStatusCode( 404 );
 			}
 
 			return;
 		}
 
 		// Read the rows into an array and remove duplicates
-		// templatelinks comes third so that the templatelinks row overwrites the
-		// pagelinks/redirect row, so we get (inclusion) rather than nothing
-		$rows = [];
-		if ( $fetchredirs ) {
-			foreach ( $rdRes as $row ) {
-				$row->is_template = 0;
-				$row->is_image = 0;
-				$rows[$row->page_id] = $row;
-			}
-		}
-		if ( !$hidelinks ) {
+		// templatelinks comes second so that the templatelinks row overwrites the
+		// pagelinks row, so we get (inclusion) rather than nothing
+		if ( $fetchlinks ) {
 			foreach ( $plRes as $row ) {
 				$row->is_template = 0;
 				$row->is_image = 0;
@@ -307,27 +269,15 @@ class SpecialWhatLinksHere extends IncludableSpecialPage {
 		}
 		$lb->execute();
 
-		if ( $level == 0 && !$this->including() ) {
-			$out->addHTML( $this->whatlinkshereForm() );
-			$out->addHTML( $this->getFilterPanel() );
+		if ( $level == 0 ) {
+			if ( !$this->including() ) {
+				$out->addHTML( $this->whatlinkshereForm() );
+				$out->addHTML( $this->getFilterPanel() );
+				$out->addWikiMsg( 'linkshere', $this->target->getPrefixedText() );
 
-			$link = $this->getLinkRenderer()->makeLink(
-				$this->target,
-				null,
-				[],
-				$this->target->isRedirect() ? [ 'redirect' => 'no' ] : []
-			);
-
-			$msg = $this->msg( 'linkshere' )
-				->params( $this->target->getPrefixedText() )
-				->rawParams( $link )
-				->parseAsBlock();
-			$out->addHTML( $msg );
-
-			$out->addWikiMsg( 'whatlinkshere-count', Message::numParam( count( $rows ) ) );
-
-			$prevnext = $this->getPrevNext( $prevId, $nextId );
-			$out->addHTML( $prevnext );
+				$prevnext = $this->getPrevNext( $prevId, $nextId );
+				$out->addHTML( $prevnext );
+			}
 		}
 		$out->addHTML( $this->listStart( $level ) );
 		foreach ( $rows as $row ) {
@@ -348,8 +298,10 @@ class SpecialWhatLinksHere extends IncludableSpecialPage {
 
 		$out->addHTML( $this->listEnd() );
 
-		if ( $level == 0 && !$this->including() ) {
-			$out->addHTML( $prevnext );
+		if ( $level == 0 ) {
+			if ( !$this->including() ) {
+				$out->addHTML( $prevnext );
+			}
 		}
 	}
 
@@ -387,13 +339,7 @@ class SpecialWhatLinksHere extends IncludableSpecialPage {
 		// Display properties (redirect or template)
 		$propsText = '';
 		$props = [];
-		if ( (string)$row->rd_fragment !== '' ) {
-			$props[] = $this->msg( 'whatlinkshere-sectionredir' )
-				->rawParams( $this->getLinkRenderer()->makeLink(
-					$target->createFragmentTarget( $row->rd_fragment ),
-					$row->rd_fragment
-				) )->escaped();
-		} elseif ( $row->rd_from ) {
+		if ( $row->rd_from ) {
 			$props[] = $msgcache['isredirect'];
 		}
 		if ( $row->is_template ) {
@@ -403,7 +349,7 @@ class SpecialWhatLinksHere extends IncludableSpecialPage {
 			$props[] = $msgcache['isimage'];
 		}
 
-		$this->getHookRunner()->onWhatLinksHereProps( $row, $nt, $target, $props );
+		Hooks::run( 'WhatLinksHereProps', [ $row, $nt, $target, &$props ] );
 
 		if ( count( $props ) ) {
 			$propsText = $this->msg( 'parentheses' )
@@ -451,14 +397,9 @@ class SpecialWhatLinksHere extends IncludableSpecialPage {
 		// if the page is editable, add an edit link
 		if (
 			// check user permissions
-			MediaWikiServices::getInstance()
-				->getPermissionManager()
-				->userHasRight( $this->getUser(), 'edit' ) &&
+			$this->getUser()->isAllowed( 'edit' ) &&
 			// check, if the content model is editable through action=edit
-			MediaWikiServices::getInstance()
-				->getContentHandlerFactory()
-				->getContentHandler( $target->getContentModel() )
-				->supportsDirectEditing()
+			ContentHandler::getForTitle( $target )->supportsDirectEditing()
 		) {
 			if ( $editText !== null ) {
 				$editText = new HtmlArmor( $editText );
@@ -476,7 +417,7 @@ class SpecialWhatLinksHere extends IncludableSpecialPage {
 		return $this->getLanguage()->pipeList( $links );
 	}
 
-	private function makeSelfLink( $text, $query ) {
+	function makeSelfLink( $text, $query ) {
 		if ( $text !== null ) {
 			$text = new HtmlArmor( $text );
 		}
@@ -489,7 +430,7 @@ class SpecialWhatLinksHere extends IncludableSpecialPage {
 		);
 	}
 
-	private function getPrevNext( $prevId, $nextId ) {
+	function getPrevNext( $prevId, $nextId ) {
 		$currentLimit = $this->opts->getValue( 'limit' );
 		$prev = $this->msg( 'whatlinkshere-prev' )->numParams( $currentLimit )->escaped();
 		$next = $this->msg( 'whatlinkshere-next' )->numParams( $currentLimit )->escaped();
@@ -497,11 +438,11 @@ class SpecialWhatLinksHere extends IncludableSpecialPage {
 		$changed = $this->opts->getChangedValues();
 		unset( $changed['target'] ); // Already in the request title
 
-		if ( $prevId != 0 ) {
+		if ( 0 != $prevId ) {
 			$overrides = [ 'from' => $this->opts->getValue( 'back' ) ];
 			$prev = $this->makeSelfLink( $prev, array_merge( $changed, $overrides ) );
 		}
-		if ( $nextId != 0 ) {
+		if ( 0 != $nextId ) {
 			$overrides = [ 'from' => $nextId, 'back' => $prevId ];
 			$next = $this->makeSelfLink( $next, array_merge( $changed, $overrides ) );
 		}
@@ -519,7 +460,7 @@ class SpecialWhatLinksHere extends IncludableSpecialPage {
 		return $this->msg( 'viewprevnext' )->rawParams( $prev, $next, $nums )->escaped();
 	}
 
-	private function whatlinkshereForm() {
+	function whatlinkshereForm() {
 		// We get nicer value from the title object
 		$this->opts->consumeValue( 'target' );
 		// Reset these for new requests
@@ -551,8 +492,7 @@ class SpecialWhatLinksHere extends IncludableSpecialPage {
 			[
 				'selected' => $namespace,
 				'all' => '',
-				'label' => $this->msg( 'namespace' )->text(),
-				'in-user-lang' => true,
+				'label' => $this->msg( 'namespace' )->text()
 			], [
 				'name' => 'namespace',
 				'id' => 'namespace',
@@ -560,7 +500,7 @@ class SpecialWhatLinksHere extends IncludableSpecialPage {
 			]
 		);
 
-		$f .= "\u{00A0}" .
+		$f .= '&#160;' .
 			Xml::checkLabel(
 				$this->msg( 'invert' )->text(),
 				'invert',
@@ -585,7 +525,7 @@ class SpecialWhatLinksHere extends IncludableSpecialPage {
 	 *
 	 * @return string HTML fieldset and filter panel with the show/hide links
 	 */
-	private function getFilterPanel() {
+	function getFilterPanel() {
 		$show = $this->msg( 'show' )->escaped();
 		$hide = $this->msg( 'hide' )->escaped();
 

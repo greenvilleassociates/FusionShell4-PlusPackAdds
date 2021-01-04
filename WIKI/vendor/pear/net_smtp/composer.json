@@ -3,7 +3,7 @@
         {
             "email": "jon@php.net",
             "name": "Jon Parise",
-            "homepage": "https://www.indelible.org",
+            "homepage": "http://www.indelible.org",
             "role": "Lead"
         },
         {
@@ -26,9 +26,9 @@
     "include-path": [
         "./"
     ],
-    "license": "BSD-2-Clause",
+    "license": "PHP-3.01",
     "name": "pear/net_smtp",
-    "homepage": "https://pear.github.io/Net_SMTP/",
+    "homepage": "http://pear.github.io/Net_SMTP/",
     "support": {
         "issues": "https://github.com/pear/Net_SMTP/issues",
         "source": "https://github.com/pear/Net_SMTP"
@@ -36,8 +36,8 @@
     "type": "library",
     "require": {
         "php": ">=5.4.0",
-        "pear/pear-core-minimal": "@stable",
-        "pear/net_socket": "@stable"
+        "pear/pear-core-minimal": "*",
+        "pear/net_socket": "*"
     },
     "require-dev": {
         "phpunit/phpunit": "*"

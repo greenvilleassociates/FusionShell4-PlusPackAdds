@@ -1,5 +1,9 @@
 <?php
 /**
+ *
+ *
+ * Created on Jan 4, 2008
+ *
  * Copyright © 2008 Yuri Astrakhan "<Firstname><Lastname>@gmail.com",
  *
  * This program is free software; you can redistribute it and/or modify
@@ -20,9 +24,6 @@
  * @file
  */
 
-use Wikimedia\ParamValidator\ParamValidator;
-use Wikimedia\ParamValidator\TypeDef\ExpiryDef;
-
 /**
  * API module to allow users to watch a page
  *
@@ -30,19 +31,6 @@ use Wikimedia\ParamValidator\TypeDef\ExpiryDef;
  */
 class ApiWatch extends ApiBase {
 	private $mPageSet = null;
-
-	/** @var bool Whether watchlist expiries are enabled. */
-	private $expiryEnabled;
-
-	/** @var string Relative maximum expiry. */
-	private $maxDuration;
-
-	public function __construct( ApiMain $mainModule, $moduleName, $modulePrefix = '' ) {
-		parent::__construct( $mainModule, $moduleName, $modulePrefix );
-
-		$this->expiryEnabled = $this->getConfig()->get( 'WatchlistExpiry' );
-		$this->maxDuration = $this->getConfig()->get( 'WatchlistExpiryMaxDuration' );
-	}
 
 	public function execute() {
 		$user = $this->getUser();
@@ -113,26 +101,17 @@ class ApiWatch extends ApiBase {
 	private function watchTitle( Title $title, User $user, array $params,
 		$compatibilityMode = false
 	) {
-		$res = [ 'title' => $title->getPrefixedText(), 'ns' => $title->getNamespace() ];
-
 		if ( !$title->isWatchable() ) {
-			$res['watchable'] = 0;
-			return $res;
+			return [ 'title' => $title->getPrefixedText(), 'watchable' => 0 ];
 		}
+
+		$res = [ 'title' => $title->getPrefixedText() ];
 
 		if ( $params['unwatch'] ) {
 			$status = UnwatchAction::doUnwatch( $title, $user );
 			$res['unwatched'] = $status->isOK();
 		} else {
-			$expiry = null;
-
-			// NOTE: If an expiry parameter isn't given, any existing expiries remain unchanged.
-			if ( $this->expiryEnabled && isset( $params['expiry'] ) ) {
-				$expiry = $params['expiry'];
-				$res['expiry'] = ApiResult::formatExpiry( $expiry );
-			}
-
-			$status = WatchAction::doWatch( $title, $user, User::CHECK_USER_RIGHTS, $expiry );
+			$status = WatchAction::doWatch( $title, $user );
 			$res['watched'] = $status->isOK();
 		}
 
@@ -177,25 +156,14 @@ class ApiWatch extends ApiBase {
 	public function getAllowedParams( $flags = 0 ) {
 		$result = [
 			'title' => [
-				ParamValidator::PARAM_TYPE => 'string',
-				ParamValidator::PARAM_DEPRECATED => true,
-			],
-			'expiry' => [
-				ParamValidator::PARAM_TYPE => 'expiry',
-				ExpiryDef::PARAM_MAX => $this->maxDuration,
-				ExpiryDef::PARAM_USE_MAX => true,
+				ApiBase::PARAM_TYPE => 'string',
+				ApiBase::PARAM_DEPRECATED => true
 			],
 			'unwatch' => false,
 			'continue' => [
 				ApiBase::PARAM_HELP_MSG => 'api-help-param-continue',
 			],
 		];
-
-		// If expiry is not enabled, don't accept the parameter.
-		if ( !$this->expiryEnabled ) {
-			unset( $result['expiry'] );
-		}
-
 		if ( $flags ) {
 			$result += $this->getPageSet()->getFinalParams( $flags );
 		}
@@ -204,22 +172,14 @@ class ApiWatch extends ApiBase {
 	}
 
 	protected function getExamplesMessages() {
-		// Logically expiry example should go before unwatch examples.
-		$examples = [
+		return [
 			'action=watch&titles=Main_Page&token=123ABC'
 				=> 'apihelp-watch-example-watch',
-		];
-		if ( $this->expiryEnabled ) {
-			$examples['action=watch&titles=Main_Page|Foo|Bar&expiry=1%20month&token=123ABC']
-				= 'apihelp-watch-example-watch-expiry';
-		}
-
-		return array_merge( $examples, [
 			'action=watch&titles=Main_Page&unwatch=&token=123ABC'
 				=> 'apihelp-watch-example-unwatch',
 			'action=watch&generator=allpages&gapnamespace=0&token=123ABC'
 				=> 'apihelp-watch-example-generator',
-		] );
+		];
 	}
 
 	public function getHelpUrls() {

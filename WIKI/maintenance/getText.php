@@ -23,10 +23,6 @@
  * @ingroup Maintenance
  */
 
-use MediaWiki\MediaWikiServices;
-use MediaWiki\Revision\RevisionRecord;
-use MediaWiki\Revision\SlotRecord;
-
 require_once __DIR__ . '/Maintenance.php';
 
 /**
@@ -46,29 +42,25 @@ class GetTextMaint extends Maintenance {
 		$titleText = $this->getArg( 0 );
 		$title = Title::newFromText( $titleText );
 		if ( !$title ) {
-			$this->fatalError( "$titleText is not a valid title.\n" );
+			$this->error( "$titleText is not a valid title.\n", true );
 		}
 
-		$rev = MediaWikiServices::getInstance()
-			->getRevisionLookup()
-			->getRevisionByTitle( $title );
+		$rev = Revision::newFromTitle( $title );
 		if ( !$rev ) {
 			$titleText = $title->getPrefixedText();
-			$this->fatalError( "Page $titleText does not exist.\n" );
+			$this->error( "Page $titleText does not exist.\n", true );
 		}
-
-		$audience = $this->hasOption( 'show-private' ) ?
-			RevisionRecord::RAW :
-			RevisionRecord::FOR_PUBLIC;
-		$content = $rev->getContent( SlotRecord::MAIN, $audience );
+		$content = $rev->getContent( $this->hasOption( 'show-private' )
+			? Revision::RAW
+			: Revision::FOR_PUBLIC );
 
 		if ( $content === false ) {
 			$titleText = $title->getPrefixedText();
-			$this->fatalError( "Couldn't extract the text from $titleText.\n" );
+			$this->error( "Couldn't extract the text from $titleText.\n", true );
 		}
 		$this->output( $content->serialize() );
 	}
 }
 
-$maintClass = GetTextMaint::class;
+$maintClass = "GetTextMaint";
 require_once RUN_MAINTENANCE_IF_MAIN;

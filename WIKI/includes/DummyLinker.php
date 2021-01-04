@@ -1,11 +1,17 @@
 <?php
 
-use MediaWiki\MediaWikiServices;
-
 /**
  * @since 1.18
  */
 class DummyLinker {
+
+	/**
+	 * @deprecated since 1.28, use LinkRenderer::getLinkClasses() instead
+	 */
+	public function getLinkColour( $t, $threshold ) {
+		wfDeprecated( __METHOD__, '1.28' );
+		return Linker::getLinkColour( $t, $threshold );
+	}
 
 	public function link(
 		$target,
@@ -68,8 +74,7 @@ class DummyLinker {
 	}
 
 	public function normaliseSpecialPage( Title $title ) {
-		$linkRenderer = MediaWikiServices::getInstance()->getLinkRenderer();
-		return $linkRenderer->normalizeTarget( $title );
+		return Linker::normaliseSpecialPage( $title );
 	}
 
 	public function makeExternalImage( $url, $alt = '' ) {
@@ -102,7 +107,7 @@ class DummyLinker {
 		Title $title,
 		$file,
 		$label = '',
-		$alt = '',
+		$alt,
 		$align = 'right',
 		$params = [],
 		$framed = false,
@@ -318,7 +323,7 @@ class DummyLinker {
 		);
 	}
 
-	public function revComment( $rev, $local = false, $isPublic = false ) {
+	public function revComment( Revision $rev, $local = false, $isPublic = false ) {
 		return Linker::revComment( $rev, $local, $isPublic );
 	}
 
@@ -348,11 +353,11 @@ class DummyLinker {
 		return Linker::tocLineEnd();
 	}
 
-	public function tocList( $toc, Language $lang = null ) {
+	public function tocList( $toc, $lang = false ) {
 		return Linker::tocList( $toc, $lang );
 	}
 
-	public function generateTOC( $tree, Language $lang = null ) {
+	public function generateTOC( $tree, $lang = false ) {
 		return Linker::generateTOC( $tree, $lang );
 	}
 
@@ -406,8 +411,36 @@ class DummyLinker {
 		);
 	}
 
+	/**
+	 * @deprecated since 1.28, use TemplatesOnThisPageFormatter directly
+	 */
+	public function formatTemplates(
+		$templates,
+		$preview = false,
+		$section = false,
+		$more = null
+	) {
+		wfDeprecated( __METHOD__, '1.28' );
+
+		return Linker::formatTemplates(
+			$templates,
+			$preview,
+			$section,
+			$more
+		);
+	}
+
 	public function formatHiddenCategories( $hiddencats ) {
 		return Linker::formatHiddenCategories( $hiddencats );
+	}
+
+	/**
+	 * @deprecated since 1.28, use Language::formatSize() directly
+	 */
+	public function formatSize( $size ) {
+		wfDeprecated( __METHOD__, '1.28' );
+
+		return Linker::formatSize( $size );
 	}
 
 	public function titleAttrib( $name, $options = null, array $msgParams = [] ) {
@@ -422,7 +455,7 @@ class DummyLinker {
 		return Linker::accesskey( $name );
 	}
 
-	public function getRevDeleteLink( User $user, $rev, Title $title ) {
+	public function getRevDeleteLink( User $user, Revision $rev, Title $title ) {
 		return Linker::getRevDeleteLink(
 			$user,
 			$rev,

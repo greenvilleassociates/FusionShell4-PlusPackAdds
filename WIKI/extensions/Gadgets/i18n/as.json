@@ -2,8 +2,8 @@
 	"@metadata": {
 		"authors": [
 			"Bishnu Saikia",
-			"Dibya Dutta",
-			"Gitartha.bordoloi"
+			"Gitartha.bordoloi",
+			"Dibya Dutta"
 		]
 	},
 	"gadgets-desc": "সদস্যসকলক তেওঁলোকৰ [[Special:Preferences#mw-prefsection-gadgets|পছন্দসমূহত]] কাষ্ট'ম [[Special:Gadgets|CSS আৰু JavaScript গেজেট]] বাছনি কৰাৰ সুযোগ দিয়ে",
@@ -14,8 +14,6 @@
 	"gadgetusage-gadget": "গেজেট",
 	"gadgetusage-usercount": "সদস্যৰ সংখ্যা",
 	"gadgetusage-noresults": "কোনো গেজেট বিচাৰি পোৱা নহ'ল।",
-	"gadgetusage-activeusers": "সক্ৰিয় ব্যৱহাৰকাৰী",
-	"gadgetusage-default": "পুনঃনিৰ্ধাৰিত",
 	"gadgets-title": "গেজেটসমূহ",
 	"gadgets-pagetext": "সদস্যসকলে তেওঁলোকৰ [[Special:Preferences#mw-prefsection-gadgets|পছন্দ পৃষ্ঠাত]] সক্ৰিয় কৰিব পৰা আৰু [[MediaWiki:Gadgets-definition|সংজ্ঞা থকা]] বিশেষ গেজেটসমূহৰ তালিকা তলত দিয়া হৈছে।\nএই সাৰাংশই প্ৰতিটো গেজেটৰ বিৱৰণ আৰু সংকেত থকা প্ৰণালী বাৰ্তাসমূহলৈ প্ৰৱেশাধিকাৰ দিয়ে।",
 	"gadgets-uses": "ব্যৱহাৰ",

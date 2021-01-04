@@ -2,17 +2,12 @@
 /**
  * @file
  * @author Niklas Laxström
- * @license GPL-2.0-or-later
+ * @license GPL-2.0+
  */
 
 namespace LocalisationUpdate;
 
-use LocalisationUpdate\Reader\JSONReader;
-
-/**
- * @covers \LocalisationUpdate\Reader\JSONReader
- */
-class JSONReaderTest extends \PHPUnit\Framework\TestCase {
+class JSONReaderTest extends \PHPUnit_Framework_TestCase {
 	/**
 	 * @dataProvider parseProvider
 	 */

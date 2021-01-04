@@ -34,9 +34,9 @@ class ApiQueryContinueTest extends ApiQueryContinueTestBase {
 	/**
 	 * Create a set of pages. These must not change, otherwise the tests might give wrong results.
 	 *
-	 * @see MediaWikiIntegrationTestCase::addDBDataOnce()
+*@see MediaWikiTestCase::addDBDataOnce()
 	 */
-	public function addDBDataOnce() {
+	function addDBDataOnce() {
 		try {
 			$this->editPage( 'Template:AQCT-T1', '**Template:AQCT-T1**' );
 			$this->editPage( 'Template:AQCT-T2', '**Template:AQCT-T2**' );
@@ -56,7 +56,7 @@ class ApiQueryContinueTest extends ApiQueryContinueTestBase {
 
 	/**
 	 * Test smart continue - list=allpages
-	 * @group medium
+	 * @medium
 	 */
 	public function test1List() {
 		$this->mVerbose = false;
@@ -80,7 +80,7 @@ class ApiQueryContinueTest extends ApiQueryContinueTestBase {
 
 	/**
 	 * Test smart continue - list=allpages|alltransclusions
-	 * @group medium
+	 * @medium
 	 */
 	public function test2Lists() {
 		$this->mVerbose = false;
@@ -106,7 +106,7 @@ class ApiQueryContinueTest extends ApiQueryContinueTestBase {
 
 	/**
 	 * Test smart continue - generator=allpages, prop=links
-	 * @group medium
+	 * @medium
 	 */
 	public function testGen1Prop() {
 		$this->mVerbose = false;
@@ -131,7 +131,7 @@ class ApiQueryContinueTest extends ApiQueryContinueTestBase {
 
 	/**
 	 * Test smart continue - generator=allpages, prop=links|templates
-	 * @group medium
+	 * @medium
 	 */
 	public function testGen2Prop() {
 		$this->mVerbose = false;
@@ -162,7 +162,7 @@ class ApiQueryContinueTest extends ApiQueryContinueTestBase {
 
 	/**
 	 * Test smart continue - generator=allpages, prop=links, list=alltransclusions
-	 * @group medium
+	 * @medium
 	 */
 	public function testGen1Prop1List() {
 		$this->mVerbose = false;
@@ -194,7 +194,7 @@ class ApiQueryContinueTest extends ApiQueryContinueTestBase {
 	/**
 	 * Test smart continue - generator=allpages, prop=links|templates,
 	 *                       list=alllinks|alltransclusions, meta=siteinfo
-	 * @group medium
+	 * @medium
 	 */
 	public function testGen2Prop2List1Meta() {
 		$this->mVerbose = false;
@@ -233,7 +233,7 @@ class ApiQueryContinueTest extends ApiQueryContinueTestBase {
 
 	/**
 	 * Test smart continue - generator=templates, prop=templates
-	 * @group medium
+	 * @medium
 	 */
 	public function testSameGenAndProp() {
 		$this->mVerbose = false;
@@ -279,7 +279,7 @@ class ApiQueryContinueTest extends ApiQueryContinueTestBase {
 
 	/**
 	 * Test smart continue - generator=allpages, list=allpages
-	 * @group medium
+	 * @medium
 	 */
 	public function testSameGenList() {
 		$this->mVerbose = false;

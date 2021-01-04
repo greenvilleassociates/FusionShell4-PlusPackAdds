@@ -1,6 +1,8 @@
 <?php
 
 /**
+ * Tests for the SiteImporter class.
+ *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
  * the Free Software Foundation; either version 2 of the License, or
@@ -27,10 +29,10 @@
  *
  * @author Daniel Kinzler
  */
-class SiteImporterTest extends MediaWikiIntegrationTestCase {
+class SiteImporterTest extends PHPUnit_Framework_TestCase {
 
 	private function newSiteImporter( array $expectedSites, $errorCount ) {
-		$store = $this->getMockBuilder( SiteStore::class )->getMock();
+		$store = $this->getMockBuilder( 'SiteStore' )->getMock();
 
 		$store->expects( $this->once() )
 			->method( 'saveSites' )
@@ -42,7 +44,7 @@ class SiteImporterTest extends MediaWikiIntegrationTestCase {
 			->method( 'getSites' )
 			->will( $this->returnValue( new SiteList() ) );
 
-		$errorHandler = $this->getMockBuilder( Psr\Log\LoggerInterface::class )->getMock();
+		$errorHandler = $this->getMockBuilder( 'Psr\Log\LoggerInterface' )->getMock();
 		$errorHandler->expects( $this->exactly( $errorCount ) )
 			->method( 'error' );
 
@@ -144,9 +146,9 @@ class SiteImporterTest extends MediaWikiIntegrationTestCase {
 	}
 
 	public function testImportFromXML_malformed() {
-		$this->expectException( Exception::class );
+		$this->setExpectedException( 'Exception' );
 
-		$store = $this->getMockBuilder( SiteStore::class )->getMock();
+		$store = $this->getMockBuilder( 'SiteStore' )->getMock();
 		$importer = new SiteImporter( $store );
 		$importer->importFromXML( 'THIS IS NOT XML' );
 	}

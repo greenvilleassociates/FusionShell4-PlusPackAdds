@@ -46,17 +46,17 @@ class PurgePage extends Maintenance {
 		}
 	}
 
-	private function purge( $titleText ) {
-		$title = Title::newFromText( $titleText );
+	private function purge( $title ) {
+		$title = Title::newFromText( $title );
 
-		if ( $title === null ) {
+		if ( is_null( $title ) ) {
 			$this->error( 'Invalid page title' );
 			return;
 		}
 
 		$page = WikiPage::factory( $title );
 
-		if ( $page === null ) {
+		if ( is_null( $page ) ) {
 			$this->error( "Could not instantiate page object" );
 			return;
 		}
@@ -67,12 +67,12 @@ class PurgePage extends Maintenance {
 		}
 
 		if ( $page->doPurge() ) {
-			$this->output( "Purged {$titleText}\n" );
+			$this->output( "Purged\n" );
 		} else {
-			$this->error( "Purge failed for {$titleText}" );
+			$this->error( "Purge failed" );
 		}
 	}
 }
 
-$maintClass = PurgePage::class;
+$maintClass = "PurgePage";
 require_once RUN_MAINTENANCE_IF_MAIN;

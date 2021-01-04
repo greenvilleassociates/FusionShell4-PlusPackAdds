@@ -21,10 +21,10 @@
  * @ingroup Cache
  */
 
-use MediaWiki\Linker\LinkTarget;
-use MediaWiki\MediaWikiServices;
 use Wikimedia\Rdbms\Database;
 use Wikimedia\Rdbms\IDatabase;
+use MediaWiki\Linker\LinkTarget;
+use MediaWiki\MediaWikiServices;
 
 /**
  * Cache for article titles (prefixed DB keys) and ids linked from one source
@@ -32,10 +32,10 @@ use Wikimedia\Rdbms\IDatabase;
  * @ingroup Cache
  */
 class LinkCache {
-	/** @var MapCacheLRU */
-	private $goodLinks;
-	/** @var MapCacheLRU */
-	private $badLinks;
+	/** @var HashBagOStuff */
+	private $mGoodLinks;
+	/** @var HashBagOStuff */
+	private $mBadLinks;
 	/** @var WANObjectCache */
 	private $wanCache;
 
@@ -45,29 +45,17 @@ class LinkCache {
 	/** @var TitleFormatter */
 	private $titleFormatter;
 
-	/** @var NamespaceInfo */
-	private $nsInfo;
-
 	/**
 	 * How many Titles to store. There are two caches, so the amount actually
 	 * stored in memory can be up to twice this.
 	 */
-	private const MAX_SIZE = 10000;
+	const MAX_SIZE = 10000;
 
-	public function __construct(
-		TitleFormatter $titleFormatter,
-		WANObjectCache $cache,
-		NamespaceInfo $nsInfo = null
-	) {
-		if ( !$nsInfo ) {
-			wfDeprecated( __METHOD__ . ' with no NamespaceInfo argument', '1.34' );
-			$nsInfo = MediaWikiServices::getInstance()->getNamespaceInfo();
-		}
-		$this->goodLinks = new MapCacheLRU( self::MAX_SIZE );
-		$this->badLinks = new MapCacheLRU( self::MAX_SIZE );
+	public function __construct( TitleFormatter $titleFormatter, WANObjectCache $cache ) {
+		$this->mGoodLinks = new HashBagOStuff( [ 'maxKeys' => self::MAX_SIZE ] );
+		$this->mBadLinks = new HashBagOStuff( [ 'maxKeys' => self::MAX_SIZE ] );
 		$this->wanCache = $cache;
 		$this->titleFormatter = $titleFormatter;
-		$this->nsInfo = $nsInfo;
 	}
 
 	/**
@@ -87,9 +75,8 @@ class LinkCache {
 	 * in order to avoid link table inconsistency), which was later removed
 	 * for performance on wikis with a high edit rate.
 	 *
-	 * @param bool|null $update
+	 * @param bool $update
 	 * @return bool
-	 * @deprecated Since 1.34
 	 */
 	public function forUpdate( $update = null ) {
 		return wfSetVar( $this->mForUpdate, $update );
@@ -100,7 +87,7 @@ class LinkCache {
 	 * @return int Page ID or zero
 	 */
 	public function getGoodLinkID( $title ) {
-		$info = $this->goodLinks->get( $title );
+		$info = $this->mGoodLinks->get( $title );
 		if ( !$info ) {
 			return 0;
 		}
@@ -116,7 +103,7 @@ class LinkCache {
 	 */
 	public function getGoodLinkFieldObj( LinkTarget $target, $field ) {
 		$dbkey = $this->titleFormatter->getPrefixedDBkey( $target );
-		$info = $this->goodLinks->get( $dbkey );
+		$info = $this->mGoodLinks->get( $dbkey );
 		if ( !$info ) {
 			return null;
 		}
@@ -129,7 +116,7 @@ class LinkCache {
 	 */
 	public function isBadLink( $title ) {
 		// Use get() to ensure it records as used for LRU.
-		return $this->badLinks->has( $title );
+		return $this->mBadLinks->get( $title ) !== false;
 	}
 
 	/**
@@ -138,7 +125,7 @@ class LinkCache {
 	 * @param int $id Page's ID
 	 * @param LinkTarget $target
 	 * @param int $len Text's length
-	 * @param int|null $redir Whether the page is a redirect
+	 * @param int $redir Whether the page is a redirect
 	 * @param int $revision Latest revision's ID
 	 * @param string|null $model Latest revision's content model ID
 	 * @param string|null $lang Language code of the page, if not the content language
@@ -147,14 +134,13 @@ class LinkCache {
 		$revision = 0, $model = null, $lang = null
 	) {
 		$dbkey = $this->titleFormatter->getPrefixedDBkey( $target );
-		$this->goodLinks->set( $dbkey, [
+		$this->mGoodLinks->set( $dbkey, [
 			'id' => (int)$id,
 			'length' => (int)$len,
 			'redirect' => (int)$redir,
 			'revision' => (int)$revision,
 			'model' => $model ? (string)$model : null,
 			'lang' => $lang ? (string)$lang : null,
-			'restrictions' => null
 		] );
 	}
 
@@ -167,20 +153,13 @@ class LinkCache {
 	 */
 	public function addGoodLinkObjFromRow( LinkTarget $target, $row ) {
 		$dbkey = $this->titleFormatter->getPrefixedDBkey( $target );
-		$this->goodLinks->set( $dbkey, [
+		$this->mGoodLinks->set( $dbkey, [
 			'id' => intval( $row->page_id ),
 			'length' => intval( $row->page_len ),
 			'redirect' => intval( $row->page_is_redirect ),
 			'revision' => intval( $row->page_latest ),
-			'model' => !empty( $row->page_content_model )
-				? strval( $row->page_content_model )
-				: null,
-			'lang' => !empty( $row->page_lang )
-				? strval( $row->page_lang )
-				: null,
-			'restrictions' => !empty( $row->page_restrictions )
-				? strval( $row->page_restrictions )
-				: null
+			'model' => !empty( $row->page_content_model ) ? strval( $row->page_content_model ) : null,
+			'lang' => !empty( $row->page_lang ) ? strval( $row->page_lang ) : null,
 		] );
 	}
 
@@ -190,7 +169,7 @@ class LinkCache {
 	public function addBadLinkObj( LinkTarget $target ) {
 		$dbkey = $this->titleFormatter->getPrefixedDBkey( $target );
 		if ( !$this->isBadLink( $dbkey ) ) {
-			$this->badLinks->set( $dbkey, 1 );
+			$this->mBadLinks->set( $dbkey, 1 );
 		}
 	}
 
@@ -198,7 +177,7 @@ class LinkCache {
 	 * @param string $title Prefixed DB key
 	 */
 	public function clearBadLink( $title ) {
-		$this->badLinks->clear( $title );
+		$this->mBadLinks->delete( $title );
 	}
 
 	/**
@@ -206,8 +185,23 @@ class LinkCache {
 	 */
 	public function clearLink( LinkTarget $target ) {
 		$dbkey = $this->titleFormatter->getPrefixedDBkey( $target );
-		$this->badLinks->clear( $dbkey );
-		$this->goodLinks->clear( $dbkey );
+		$this->mBadLinks->delete( $dbkey );
+		$this->mGoodLinks->delete( $dbkey );
+	}
+
+	/**
+	 * Add a title to the link cache, return the page_id or zero if non-existent
+	 *
+	 * @deprecated since 1.27, unused
+	 * @param string $title Prefixed DB key
+	 * @return int Page ID or zero
+	 */
+	public function addLink( $title ) {
+		$nt = Title::newFromDBkey( $title );
+		if ( !$nt ) {
+			return 0;
+		}
+		return $this->addLinkObj( $nt );
 	}
 
 	/**
@@ -217,17 +211,12 @@ class LinkCache {
 	 * @return array
 	 */
 	public static function getSelectFields() {
-		global $wgPageLanguageUseDB;
+		global $wgContentHandlerUseDB, $wgPageLanguageUseDB;
 
-		$fields = [
-			'page_id',
-			'page_len',
-			'page_is_redirect',
-			'page_latest',
-			'page_restrictions',
-			'page_content_model',
-		];
-
+		$fields = [ 'page_id', 'page_len', 'page_is_redirect', 'page_latest' ];
+		if ( $wgContentHandlerUseDB ) {
+			$fields[] = 'page_content_model';
+		}
 		if ( $wgPageLanguageUseDB ) {
 			$fields[] = 'page_lang';
 		}
@@ -243,7 +232,9 @@ class LinkCache {
 	 */
 	public function addLinkObj( LinkTarget $nt ) {
 		$key = $this->titleFormatter->getPrefixedDBkey( $nt );
-		if ( $this->isBadLink( $key ) || $nt->isExternal() || $nt->getNamespace() < 0 ) {
+		if ( $this->isBadLink( $key ) || $nt->isExternal()
+			|| $nt->inNamespace( NS_SPECIAL )
+		) {
 			return 0;
 		}
 		$id = $this->getGoodLinkID( $key );
@@ -292,11 +283,11 @@ class LinkCache {
 
 	/**
 	 * @param WANObjectCache $cache
-	 * @param LinkTarget $t
+	 * @param TitleValue $t
 	 * @return string[]
 	 * @since 1.28
 	 */
-	public function getMutableCacheKeys( WANObjectCache $cache, LinkTarget $t ) {
+	public function getMutableCacheKeys( WANObjectCache $cache, TitleValue $t ) {
 		if ( $this->isCacheable( $t ) ) {
 			return [ $cache->makeKey( 'page', $t->getNamespace(), sha1( $t->getDBkey() ) ) ];
 		}
@@ -305,16 +296,7 @@ class LinkCache {
 	}
 
 	private function isCacheable( LinkTarget $title ) {
-		$ns = $title->getNamespace();
-		if ( in_array( $ns, [ NS_TEMPLATE, NS_FILE, NS_CATEGORY, NS_MEDIAWIKI ] ) ) {
-			return true;
-		}
-		// Focus on transcluded pages more than the main content
-		if ( $this->nsInfo->isContent( $ns ) ) {
-			return false;
-		}
-		// Non-talk extension namespaces (e.g. NS_MODULE)
-		return ( $ns >= 100 && $this->nsInfo->isSubject( $ns ) );
+		return ( $title->inNamespace( NS_TEMPLATE ) || $title->inNamespace( NS_FILE ) );
 	}
 
 	private function fetchPageRow( IDatabase $db, LinkTarget $nt ) {
@@ -339,7 +321,7 @@ class LinkCache {
 	 */
 	public function invalidateTitle( LinkTarget $title ) {
 		if ( $this->isCacheable( $title ) ) {
-			$cache = $this->wanCache;
+			$cache = ObjectCache::getMainWANInstance();
 			$cache->delete(
 				$cache->makeKey( 'page', $title->getNamespace(), sha1( $title->getDBkey() ) )
 			);
@@ -350,7 +332,7 @@ class LinkCache {
 	 * Clears cache
 	 */
 	public function clear() {
-		$this->goodLinks->clear();
-		$this->badLinks->clear();
+		$this->mGoodLinks->clear();
+		$this->mBadLinks->clear();
 	}
 }

@@ -1,11 +1,11 @@
 {
 	"@metadata": {
 		"authors": [
-			"Derslek",
 			"Don Alessandro",
 			"Rinatus",
 			"Ильнар",
-			"Рашат Якупов"
+			"Рашат Якупов",
+			"Derslek"
 		]
 	},
 	"skinname-vector": "Сызымлы",
@@ -21,7 +21,5 @@
 	"vector-view-history": "Тарихын карау",
 	"vector-view-view": "Уку",
 	"vector-view-viewsource": "Чыганагын карау",
-	"vector-jumptonavigation": "Навигациягә күчү",
-	"vector-jumptosearch": "Эзләүгә күчү",
 	"vector-more-actions": "Тагын"
 }

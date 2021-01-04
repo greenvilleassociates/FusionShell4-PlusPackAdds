@@ -1,5 +1,9 @@
 <?php
 /**
+ *
+ *
+ * Created on Sep 25, 2008
+ *
  * Copyright © 2008 Roan Kattouw "<Firstname>.<Lastname>@gmail.com"
  *
  * This program is free software; you can redistribute it and/or modify
@@ -40,14 +44,15 @@ class ApiDisabled extends ApiBase {
 		return false;
 	}
 
+	protected function getDescriptionMessage() {
+		return 'apihelp-disabled-summary';
+	}
+
 	protected function getSummaryMessage() {
 		return 'apihelp-disabled-summary';
 	}
 
 	protected function getExtendedDescription() {
-		return [ [
-			'apihelp-disabled-extended-description',
-			'api-help-no-extended-description',
-		] ];
+		return 'apihelp-disabled-extended-description';
 	}
 }

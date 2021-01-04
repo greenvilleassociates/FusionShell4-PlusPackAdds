@@ -20,16 +20,18 @@
 
 /**
  * Convenience class for working with XHProf
- * <https://github.com/phacility/xhprof>. XHProf can be installed via PECL.
+ * <https://github.com/phacility/xhprof>. XHProf can be installed as a PECL
+ * package for use with PHP5 (Zend PHP) and is built-in to HHVM 3.3.0.
  *
  * This also supports using the Tideways profiler
- * <https://github.com/tideways/php-xhprof-extension>.
+ * <https://github.com/tideways/php-profiler-extension>, which additionally
+ * has support for PHP7.
  *
  * @since 1.28
  */
 class Xhprof {
 	/**
-	 * @var bool Whether XHProf is currently running.
+	 * @var bool $enabled Whether XHProf is currently running.
 	 */
 	protected static $enabled;
 
@@ -51,21 +53,14 @@ class Xhprof {
 		if ( self::isEnabled() ) {
 			throw new Exception( 'Profiling is already enabled.' );
 		}
-
-		$args = [ $flags ];
-		if ( $options ) {
-			$args[] = $options;
-		}
-
-		self::callAny(
-			[
-				'xhprof_enable',
-				'tideways_enable',
-				'tideways_xhprof_enable'
-			],
-			$args
-		);
 		self::$enabled = true;
+		if ( function_exists( 'xhprof_enable' ) ) {
+			xhprof_enable( $flags, $options );
+		} elseif ( function_exists( 'tideways_enable' ) ) {
+			tideways_enable( $flags, $options );
+		} else {
+			throw new Exception( "Neither xhprof nor tideways are installed" );
+		}
 	}
 
 	/**
@@ -76,30 +71,12 @@ class Xhprof {
 	public static function disable() {
 		if ( self::isEnabled() ) {
 			self::$enabled = false;
-			return self::callAny( [
-				'xhprof_disable',
-				'tideways_disable',
-				'tideways_xhprof_disable'
-			] );
-		} else {
-			return null;
-		}
-	}
-
-	/**
-	 * Call the first available function from $functions.
-	 * @param array $functions
-	 * @param array $args
-	 * @return mixed
-	 * @throws Exception
-	 */
-	protected static function callAny( array $functions, array $args = [] ) {
-		foreach ( $functions as $func ) {
-			if ( function_exists( $func ) ) {
-				return $func( ...$args );
+			if ( function_exists( 'xhprof_disable' ) ) {
+				return xhprof_disable();
+			} else {
+				// tideways
+				return tideways_disable();
 			}
 		}
-
-		throw new Exception( "Neither xhprof nor tideways are installed" );
 	}
 }

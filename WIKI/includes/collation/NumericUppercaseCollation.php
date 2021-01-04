@@ -25,7 +25,7 @@
  * or pretty-formatted numbers may be unexpected.
  *
  * Digits will be based on the wiki's content language settings. If
- * you change the content language of a wiki you will need to run
+ * you change the content langauge of a wiki you will need to run
  * updateCollation.php --force. Only English (ASCII 0-9) and the
  * localized version will be counted. Localized digits from other languages
  * or weird unicode digit equivalents (e.g. ４, 𝟜, ⓸ , ⁴, etc) will not count.
@@ -35,7 +35,7 @@
 class NumericUppercaseCollation extends UppercaseCollation {
 
 	/**
-	 * @var Language How to convert digits (usually the content language)
+	 * @var $digitTransformLang Language How to convert digits (usually $wgContLang)
 	 */
 	private $digitTransformLang;
 
@@ -43,7 +43,7 @@ class NumericUppercaseCollation extends UppercaseCollation {
 	 * @param Language $lang How to convert digits.
 	 *  For example, if given language "my" than ၇ is treated like 7.
 	 *
-	 * It is expected that usually this is given the content language.
+	 * It is expected that usually this is given $wgContLang.
 	 */
 	public function __construct( Language $lang ) {
 		$this->digitTransformLang = $lang;

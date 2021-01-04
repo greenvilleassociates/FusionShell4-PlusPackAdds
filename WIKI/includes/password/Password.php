@@ -20,8 +20,6 @@
  * @file
  */
 
-declare( strict_types = 1 );
-
 /**
  * Represents a password hash for use in authentication
  *
@@ -33,6 +31,14 @@ declare( strict_types = 1 );
  * to be fulfilled:
  *  * If Password::toString() is called on an object, and the result is passed back in
  *    to PasswordFactory::newFromCiphertext(), the result will be identical to the original.
+ *  * The string representations of two Password objects are equal only if
+ *    the original plaintext passwords match. In other words, if the toString() result of
+ *    two objects match, the passwords are the same, and the user will be logged in.
+ *    Since the string representation of a hash includes its type name (@see Password::toString),
+ *    this property is preserved across all classes that inherit Password.
+ *    If a hashing scheme does not fulfill this expectation, it must make sure to override the
+ *    Password::equals() function and use custom comparison logic. However, this is not
+ *    recommended unless absolutely required by the hashing mechanism.
  * With these two points in mind, when creating a new Password sub-class, there are some functions
  * you have to override (because they are abstract) and others that you may want to override.
  *
@@ -48,9 +54,8 @@ declare( strict_types = 1 );
  *  * Password::toString(), which can be useful if the hash was changed in the constructor and
  *    needs to be re-assembled before being returned as a string. This function is expected to add
  *    the type back on to the hash, so make sure to do that if you override the function.
- *  * Password::verify() - This function checks if $this->hash was generated with the given
- *    password. The default is to just hash the password and do a timing-safe string comparison with
- *    $this->hash.
+ *  * Password::equals() - This function compares two Password objects to see if they are equal.
+ *    The default is to just do a timing-safe string comparison on the $this->hash values.
  *
  * After creating a new password hash type, it can be registered using the static
  * Password::register() method. The default type is set using the Password::setDefaultType() type.
@@ -66,7 +71,7 @@ abstract class Password {
 
 	/**
 	 * String representation of the hash without the type
-	 * @var string|null
+	 * @var string
 	 */
 	protected $hash;
 
@@ -79,7 +84,7 @@ abstract class Password {
 	/**
 	 * Hash must fit in user_password, which is a tinyblob
 	 */
-	private const MAX_HASH_SIZE = 255;
+	const MAX_HASH_SIZE = 255;
 
 	/**
 	 * Construct the Password object using a string hash
@@ -93,12 +98,9 @@ abstract class Password {
 	 * @param array $config Array of engine configuration options for hashing
 	 * @param string|null $hash The raw hash, including the type
 	 */
-	final public function __construct( PasswordFactory $factory, array $config, string $hash = null ) {
-		if ( !$this->isSupported() ) {
-			throw new Exception( 'PHP support not found for ' . get_class( $this ) );
-		}
+	final public function __construct( PasswordFactory $factory, array $config, $hash = null ) {
 		if ( !isset( $config['type'] ) ) {
-			throw new Exception( 'Password configuration must contain a type name.' );
+			throw new MWException( 'Password configuration must contain a type name.' );
 		}
 		$this->config = $config;
 		$this->factory = $factory;
@@ -117,27 +119,18 @@ abstract class Password {
 	 *
 	 * @return string Password type
 	 */
-	final public function getType() : string {
+	final public function getType() {
 		return $this->config['type'];
-	}
-
-	/**
-	 * Whether current password type is supported on this system.
-	 *
-	 * @return bool
-	 */
-	protected function isSupported() : bool {
-		return true;
 	}
 
 	/**
 	 * Perform any parsing necessary on the hash to see if the hash is valid
 	 * and/or to perform logic for seeing if the hash needs updating.
 	 *
-	 * @param string|null $hash The hash, with the :<TYPE>: prefix stripped
+	 * @param string $hash The hash, with the :<TYPE>: prefix stripped
 	 * @throws PasswordError If there is an error in parsing the hash
 	 */
-	protected function parseHash( ?string $hash ) : void {
+	protected function parseHash( $hash ) {
 	}
 
 	/**
@@ -145,21 +138,28 @@ abstract class Password {
 	 *
 	 * @return bool True if needs update, false otherwise
 	 */
-	abstract public function needsUpdate() : bool;
+	abstract public function needsUpdate();
 
 	/**
-	 * Checks whether the given password matches the hash stored in this object.
+	 * Compare one Password object to this object
 	 *
-	 * @param string $password Password to check
-	 * @return bool
+	 * By default, do a timing-safe string comparison on the result of
+	 * Password::toString() for each object. This can be overridden to do
+	 * custom comparison, but it is not recommended unless necessary.
+	 *
+	 * @param Password|string $other The other password
+	 * @return bool True if equal, false otherwise
 	 */
-	public function verify( string $password ) : bool {
-		// No need to use the factory because we're definitely making
-		// an object of the same type.
-		$obj = clone $this;
-		$obj->crypt( $password );
+	public function equals( $other ) {
+		if ( !$other instanceof self ) {
+			// No need to use the factory because we're definitely making
+			// an object of the same type.
+			$obj = clone $this;
+			$obj->crypt( $other );
+			$other = $obj;
+		}
 
-		return hash_equals( $this->toString(), $obj->toString() );
+		return hash_equals( $this->toString(), $other->toString() );
 	}
 
 	/**
@@ -174,7 +174,7 @@ abstract class Password {
 	 * @return string
 	 * @throws PasswordError if password cannot be serialized to fit a tinyblob.
 	 */
-	public function toString() : string {
+	public function toString() {
 		$result = ':' . $this->config['type'] . ':' . $this->hash;
 		$this->assertIsSafeSize( $result );
 		return $result;
@@ -190,7 +190,7 @@ abstract class Password {
 	 * @param string $hash The hash in question.
 	 * @throws PasswordError If hash does not fit in DB.
 	 */
-	final protected function assertIsSafeSize( string $hash ) : void {
+	final protected function assertIsSafeSize( $hash ) {
 		if ( strlen( $hash ) > self::MAX_HASH_SIZE ) {
 			throw new PasswordError( "Password hash is too big" );
 		}
@@ -205,5 +205,5 @@ abstract class Password {
 	 * @param string $password Password to hash
 	 * @throws PasswordError If an internal error occurs in hashing
 	 */
-	abstract public function crypt( string $password ) : void;
+	abstract public function crypt( $password );
 }

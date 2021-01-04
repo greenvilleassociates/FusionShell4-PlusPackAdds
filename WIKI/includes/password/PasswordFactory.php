@@ -20,8 +20,6 @@
  * @file
  */
 
-declare( strict_types = 1 );
-
 /**
  * Factory class for creating and checking Password objects
  *
@@ -38,42 +36,21 @@ final class PasswordFactory {
 
 	/**
 	 * Mapping of password types to classes
-	 *
 	 * @var array
 	 * @see PasswordFactory::register
 	 * @see Setup.php
 	 */
 	private $types = [
-		'' => [ 'type' => '', 'class' => InvalidPassword::class ],
+		'' => [ 'type' => '', 'class' => 'InvalidPassword' ],
 	];
-
-	/**
-	 * Most of the time you'll want to use MediaWikiServices::getInstance()->getPasswordFactory
-	 * instead.
-	 * @param array $config Mapping of password type => config
-	 * @param string $default Default password type
-	 * @see PasswordFactory::register
-	 * @see PasswordFactory::setDefaultType
-	 */
-	public function __construct( array $config = [], string $default = '' ) {
-		foreach ( $config as $type => $options ) {
-			$this->register( $type, $options );
-		}
-
-		if ( $default !== '' ) {
-			$this->setDefaultType( $default );
-		}
-	}
 
 	/**
 	 * Register a new type of password hash
 	 *
-	 * @param string $type Unique type name for the hash. Will be prefixed to the password hashes
-	 *   to identify what hashing method was used.
-	 * @param array $config Array of configuration options. 'class' is required (the Password
-	 *   subclass name), everything else is passed to the constructor of that class.
+	 * @param string $type Unique type name for the hash
+	 * @param array $config Array of configuration options
 	 */
-	public function register( string $type, array $config ) : void {
+	public function register( $type, array $config ) {
 		$config['type'] = $type;
 		$this->types[$type] = $config;
 	}
@@ -81,13 +58,10 @@ final class PasswordFactory {
 	/**
 	 * Set the default password type
 	 *
-	 * This type will be used for creating new passwords when the type is not specified.
-	 * Passwords of a different type will be considered outdated and in need of update.
-	 *
-	 * @param string $type Password hash type
 	 * @throws InvalidArgumentException If the type is not registered
+	 * @param string $type Password hash type
 	 */
-	public function setDefaultType( string $type ) : void {
+	public function setDefaultType( $type ) {
 		if ( !isset( $this->types[$type] ) ) {
 			throw new InvalidArgumentException( "Invalid password type $type." );
 		}
@@ -99,18 +73,16 @@ final class PasswordFactory {
 	 *
 	 * @return string
 	 */
-	public function getDefaultType() : string {
+	public function getDefaultType() {
 		return $this->default;
 	}
 
 	/**
-	 * @deprecated since 1.32 Initialize settings using the constructor
-	 *
 	 * Initialize the internal static variables using the global variables
 	 *
 	 * @param Config $config Configuration object to load data from
 	 */
-	public function init( Config $config ) : void {
+	public function init( Config $config ) {
 		foreach ( $config->get( 'PasswordConfig' ) as $type => $options ) {
 			$this->register( $type, $options );
 		}
@@ -123,7 +95,7 @@ final class PasswordFactory {
 	 *
 	 * @return array
 	 */
-	public function getTypes() : array {
+	public function getTypes() {
 		return $this->types;
 	}
 
@@ -138,8 +110,8 @@ final class PasswordFactory {
 	 * @return Password
 	 * @throws PasswordError If hash is invalid or type is not recognized
 	 */
-	public function newFromCiphertext( ?string $hash ) : Password {
-		if ( $hash === null || $hash === '' ) {
+	public function newFromCiphertext( $hash ) {
+		if ( $hash === null || $hash === false || $hash === '' ) {
 			return new InvalidPassword( $this, [ 'type' => '' ], null );
 		} elseif ( $hash[0] !== ':' ) {
 			throw new PasswordError( 'Invalid hash given' );
@@ -162,7 +134,7 @@ final class PasswordFactory {
 	 * @return Password
 	 * @throws PasswordError If hash is invalid or type is not recognized
 	 */
-	public function newFromType( string $type ) : Password {
+	public function newFromType( $type ) {
 		if ( !isset( $this->types[$type] ) ) {
 			throw new PasswordError( "Unrecognized password hash type $type." );
 		}
@@ -182,7 +154,7 @@ final class PasswordFactory {
 	 * @param Password|null $existing Optional existing hash to get options from
 	 * @return Password
 	 */
-	public function newFromPlaintext( ?string $password, Password $existing = null ) : Password {
+	public function newFromPlaintext( $password, Password $existing = null ) {
 		if ( $password === null ) {
 			return new InvalidPassword( $this, [ 'type' => '' ], null );
 		}
@@ -209,7 +181,7 @@ final class PasswordFactory {
 	 *
 	 * @return bool True if needs update, false otherwise
 	 */
-	public function needsUpdate( Password $password ) : bool {
+	public function needsUpdate( Password $password ) {
 		if ( $password->getType() !== $this->default ) {
 			return true;
 		} else {
@@ -223,7 +195,7 @@ final class PasswordFactory {
 	 * @param int $minLength Minimum length of password to generate
 	 * @return string
 	 */
-	public static function generateRandomPasswordString( int $minLength = 10 ) : string {
+	public static function generateRandomPasswordString( $minLength = 10 ) {
 		// Decide the final password length based on our min password length,
 		// stopping at a minimum of 10 chars.
 		$length = max( 10, $minLength );
@@ -239,7 +211,7 @@ final class PasswordFactory {
 	 *
 	 * @return InvalidPassword
 	 */
-	public static function newInvalidPassword() : InvalidPassword {
+	public static function newInvalidPassword() {
 		static $password = null;
 
 		if ( $password === null ) {

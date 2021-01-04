@@ -3,16 +3,11 @@
 namespace Wikimedia\Purtle;
 
 /**
- * @license GPL-2.0-or-later
+ * @license GPL-2.0+
  * @author Daniel Kinzler
  */
 class NTriplesRdfWriter extends N3RdfWriterBase {
 
-	/**
-	 * @param string $role
-	 * @param BNodeLabeler|null $labeler
-	 * @param N3Quoter|null $quoter
-	 */
 	public function __construct(
 		$role = parent::DOCUMENT_ROLE,
 		BNodeLabeler $labeler = null,
@@ -20,10 +15,10 @@ class NTriplesRdfWriter extends N3RdfWriterBase {
 	) {
 		parent::__construct( $role, $labeler, $quoter );
 
-		// NOTE: The RDF 1.1 spec of N-Triples allows full UTF-8, so escaping would not be required.
-		// However, as of 2015, many consumers of N-Triples still expect non-ASCII characters
-		// to be escaped.
-		// NOTE: if this is changed, getMimeType must be changed accordingly.
+		//NOTE: The RDF 1.1 spec of N-Triples allows full UTF-8, so escaping would not be required.
+		//      However, as of 2015, many consumers of N-Triples still expect non-ASCII characters
+		//      to be escaped.
+		//NOTE: if this is changed, getMimeType must be changed accordingly.
 		$this->quoter->setEscapeUnicode( true );
 
 		$this->transitionTable[self::STATE_OBJECT] = [
@@ -44,7 +39,7 @@ class NTriplesRdfWriter extends N3RdfWriterBase {
 
 	protected function expandPredicate( &$base, &$local ) {
 		$this->expandShorthand( $base, $local ); // e.g. ( 'a', null ) => ( 'rdf', 'type' )
-		$this->expandQName( $base, $local ); // e.g. ( 'acme', 'foo' ) => ( 'http://acme.test/foo', null )
+		$this->expandQName( $base, $local ); // e.g. ( 'acme', 'foo' ) => ( 'http://amce.test/foo', null )
 	}
 
 	protected function writePredicate( $base, $local = null ) {
@@ -78,12 +73,7 @@ class NTriplesRdfWriter extends N3RdfWriterBase {
 		parent::writeText( $text, $language );
 	}
 
-	/**
-	 * @param string $value
-	 * @param string|null $typeBase
-	 * @param string|null $typeLocal
-	 */
-	protected function writeValue( $value, $typeBase, $typeLocal = null ) {
+	protected function writeValue( $value, $typeBase = null, $typeLocal = null ) {
 		$this->writeSubjectAndObject();
 		$this->write( ' ' );
 
@@ -106,8 +96,8 @@ class NTriplesRdfWriter extends N3RdfWriterBase {
 	 * @return string a MIME type
 	 */
 	public function getMimeType() {
-		// NOTE: Add charset=UTF-8 if and when the constructor configures $this->quoter
-		// to write utf-8.
+		//NOTE: Add charset=UTF-8 if and when the constructor configures $this->quoter
+		//      to write utf-8.
 		return 'application/n-triples';
 	}
 

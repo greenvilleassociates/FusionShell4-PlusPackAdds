@@ -4,12 +4,11 @@
  * @copyright 2011-2015 MediaWiki Widgets Team and others; see AUTHORS.txt
  * @license The MIT License (MIT); see LICENSE.txt
  */
-( function () {
-	var hasOwn = Object.prototype.hasOwnProperty,
-		NS_CATEGORY = mw.config.get( 'wgNamespaceIds' ).category;
+( function ( $, mw ) {
+	var NS_CATEGORY = mw.config.get( 'wgNamespaceIds' ).category;
 
 	/**
-	 * Category selector widget. Displays an OO.ui.MenuTagMultiselectWidget
+	 * Category selector widget. Displays an OO.ui.CapsuleMultiselectWidget
 	 * and autocompletes with available categories.
 	 *
 	 *     mw.loader.using( 'mediawiki.widgets.CategoryMultiselectWidget', function () {
@@ -20,14 +19,14 @@
 	 *         ]
 	 *       } );
 	 *
-	 *       $( document.body ).append( selector.$element );
+	 *       $( 'body' ).append( selector.$element );
 	 *
 	 *       selector.setSearchTypes( [ mw.widgets.CategoryMultiselectWidget.SearchType.SubCategories ] );
 	 *     } );
 	 *
 	 * @class mw.widgets.CategoryMultiselectWidget
 	 * @uses mw.Api
-	 * @extends OO.ui.MenuTagMultiselectWidget
+	 * @extends OO.ui.CapsuleMultiselectWidget
 	 * @mixins OO.ui.mixin.PendingElement
 	 *
 	 * @constructor
@@ -62,7 +61,7 @@
 		OO.ui.mixin.PendingElement.call( this, $.extend( {}, config, { $pending: this.$handle } ) );
 
 		// Event handler to call the autocomplete methods
-		this.input.$input.on( 'change input cut paste', OO.ui.debounce( this.updateMenuItems.bind( this ), 100 ) );
+		this.$input.on( 'change input cut paste', OO.ui.debounce( this.updateMenuItems.bind( this ), 100 ) );
 
 		// Initialize
 		this.api = config.api || new mw.Api();
@@ -71,7 +70,7 @@
 
 	/* Setup */
 
-	OO.inheritClass( mw.widgets.CategoryMultiselectWidget, OO.ui.MenuTagMultiselectWidget );
+	OO.inheritClass( mw.widgets.CategoryMultiselectWidget, OO.ui.CapsuleMultiselectWidget );
 	OO.mixinClass( mw.widgets.CategoryMultiselectWidget, OO.ui.mixin.PendingElement );
 
 	/* Methods */
@@ -86,12 +85,12 @@
 	 */
 	mw.widgets.CategoryMultiselectWidget.prototype.updateMenuItems = function () {
 		this.getMenu().clearItems();
-		this.getNewMenuItems( this.input.$input.val() ).then( function ( items ) {
+		this.getNewMenuItems( this.$input.val() ).then( function ( items ) {
 			var existingItems, filteredItems,
 				menu = this.getMenu();
 
 			// Never show the menu if the input lost focus in the meantime
-			if ( !this.input.$input.is( ':focus' ) ) {
+			if ( !this.$input.is( ':focus' ) ) {
 				return;
 			}
 
@@ -139,7 +138,7 @@
 			promises = [],
 			deferred = $.Deferred();
 
-		if ( input.trim() === '' ) {
+		if ( $.trim( input ) === '' ) {
 			deferred.resolve( [] );
 			return deferred.promise();
 		}
@@ -188,10 +187,12 @@
 	/**
 	 * @inheritdoc
 	 */
-	mw.widgets.CategoryMultiselectWidget.prototype.createTagItemWidget = function ( data ) {
+	mw.widgets.CategoryMultiselectWidget.prototype.createItemWidget = function ( data ) {
 		var title = mw.Title.makeTitle( NS_CATEGORY, data );
-
-		return new mw.widgets.CategoryTagItemWidget( {
+		if ( !title ) {
+			return null;
+		}
+		return new mw.widgets.CategoryCapsuleItemWidget( {
 			apiUrl: this.api.apiUrl || undefined,
 			title: title
 		} );
@@ -200,14 +201,14 @@
 	/**
 	 * @inheritdoc
 	 */
-	mw.widgets.CategoryMultiselectWidget.prototype.findItemFromData = function ( data ) {
+	mw.widgets.CategoryMultiselectWidget.prototype.getItemFromData = function ( data ) {
 		// This is a bit of a hack... We have to canonicalize the data in the same way that
-		// #createItemWidget and CategoryTagItemWidget will do, otherwise we won't find duplicates.
+		// #createItemWidget and CategoryCapsuleItemWidget will do, otherwise we won't find duplicates.
 		var title = mw.Title.makeTitle( NS_CATEGORY, data );
 		if ( !title ) {
 			return null;
 		}
-		return OO.ui.mixin.GroupElement.prototype.findItemFromData.call( this, title.getMainText() );
+		return OO.ui.mixin.GroupElement.prototype.getItemFromData.call( this, title.getMainText() );
 	};
 
 	/**
@@ -272,7 +273,7 @@
 			cacheKey = input + searchType.toString();
 
 		// Check cache
-		if ( hasOwn.call( this.searchCache, cacheKey ) ) {
+		if ( this.searchCache[ cacheKey ] !== undefined ) {
 			return this.searchCache[ cacheKey ];
 		}
 
@@ -321,7 +322,7 @@
 				} ).done( function ( res ) {
 					var categories = [];
 
-					res.query.pages.forEach( function ( page ) {
+					$.each( res.query.pages, function ( index, page ) {
 						if ( !page.missing ) {
 							categories.push( page.title );
 						}
@@ -367,7 +368,7 @@
 				} ).done( function ( res ) {
 					var categories = [];
 
-					res.query.pages.forEach( function ( page ) {
+					$.each( res.query.pages, function ( index, page ) {
 						if ( !page.missing && Array.isArray( page.categories ) ) {
 							categories.push.apply( categories, page.categories.map( function ( category ) {
 								return category.title;
@@ -403,10 +404,13 @@
 		/** Search for existing categories with the exact title */
 		Exists: 2,
 
-		/** Search only subcategories */
+		/** Search only subcategories  */
 		SubCategories: 3,
 
 		/** Search only parent categories */
 		ParentCategories: 4
 	};
-}() );
+
+	// For backwards compatibility. See T161285.
+	mw.widgets.CategorySelector = mw.widgets.CategoryMultiselectWidget;
+}( jQuery, mediaWiki ) );

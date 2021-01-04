@@ -37,52 +37,51 @@ class SearchUpdate implements DeferrableUpdate {
 	/** @var Title Title we're updating */
 	private $title;
 
-	/** @var Content|null Content of the page (not text) */
+	/** @var Content|bool Content of the page (not text) */
 	private $content;
 
-	/** @var WikiPage */
+	/** @var WikiPage **/
 	private $page;
 
 	/**
 	 * @param int $id Page id to update
-	 * @param Title $title Title of page to update
-	 * @param Content|null $c Content of the page to update.
+	 * @param Title|string $title Title of page to update
+	 * @param Content|string|bool $c Content of the page to update. Default: false.
+	 *  If a Content object, text will be gotten from it. String is for back-compat.
+	 *  Passing false tells the backend to just update the title, not the content
 	 */
-	public function __construct( $id, $title, $c = null ) {
+	public function __construct( $id, $title, $c = false ) {
 		if ( is_string( $title ) ) {
-			wfDeprecated( __METHOD__ . " with a string for the title", '1.34' );
-			$this->title = Title::newFromText( $title );
-			if ( $this->title === null ) {
-				throw new InvalidArgumentException( "Cannot construct the title: $title" );
-			}
+			$nt = Title::newFromText( $title );
 		} else {
-			$this->title = $title;
+			$nt = $title;
 		}
 
-		$this->id = $id;
-		// is_string() check is back-compat for ApprovedRevs
-		if ( is_string( $c ) ) {
-			wfDeprecated( __METHOD__ . " with a string for the content", '1.34' );
-			$c = new TextContent( $c );
-		} elseif ( is_bool( $c ) ) {
-			wfDeprecated( __METHOD__ . " with a boolean for the content", '1.34' );
-			$c = null;
+		if ( $nt ) {
+			$this->id = $id;
+			// is_string() check is back-compat for ApprovedRevs
+			if ( is_string( $c ) ) {
+				$this->content = new TextContent( $c );
+			} else {
+				$this->content = $c ?: false;
+			}
+			$this->title = $nt;
+		} else {
+			wfDebug( "SearchUpdate object created with invalid title '$title'\n" );
 		}
-		$this->content = $c;
 	}
 
 	/**
 	 * Perform actual update for the entry
 	 */
 	public function doUpdate() {
-		$services = MediaWikiServices::getInstance();
-		$config = $services->getSearchEngineConfig();
+		$config = MediaWikiServices::getInstance()->getSearchEngineConfig();
 
 		if ( $config->getConfig()->get( 'DisableSearchUpdate' ) || !$this->id ) {
 			return;
 		}
 
-		$seFactory = $services->getSearchEngineFactory();
+		$seFactory = MediaWikiServices::getInstance()->getSearchEngineFactory();
 		foreach ( $config->getSearchTypes() as $type ) {
 			$search = $seFactory->create( $type );
 			if ( !$search->supports( 'search-update' ) ) {
@@ -94,13 +93,15 @@ class SearchUpdate implements DeferrableUpdate {
 			if ( $this->getLatestPage() === null ) {
 				$search->delete( $this->id, $normalTitle );
 				continue;
-			} elseif ( $this->content === null ) {
+			} elseif ( $this->content === false ) {
 				$search->updateTitle( $this->id, $normalTitle );
 				continue;
 			}
 
-			$text = $this->content !== null ? $this->content->getTextForSearchIndex() : '';
-			$text = $this->updateText( $text, $search );
+			$text = $search->getTextFromContent( $this->title, $this->content );
+			if ( !$search->textAlreadyUpdatedForIndex() ) {
+				$text = $this->updateText( $text, $search );
+			}
 
 			# Perform the actual update
 			$search->update( $this->id, $normalTitle, $search->normalizeText( $text ) );
@@ -112,20 +113,19 @@ class SearchUpdate implements DeferrableUpdate {
 	 * If you're using a real search engine, you'll probably want to override
 	 * this behavior and do something nicer with the original wikitext.
 	 * @param string $text
-	 * @param SearchEngine|null $se Search engine
+	 * @param SearchEngine $se Search engine
 	 * @return string
 	 */
 	public function updateText( $text, SearchEngine $se = null ) {
-		$services = MediaWikiServices::getInstance();
-		$contLang = $services->getContentLanguage();
+		global $wgContLang;
+
 		# Language-specific strip/conversion
-		$text = $contLang->normalizeForSearch( $text );
-		$se = $se ?: $services->newSearchEngine();
+		$text = $wgContLang->normalizeForSearch( $text );
+		$se = $se ?: MediaWikiServices::getInstance()->newSearchEngine();
 		$lc = $se->legalSearchChars() . '&#;';
 
-		# Strip HTML markup
 		$text = preg_replace( "/<\\/?\\s*[A-Za-z][^>]*?>/",
-			' ', $contLang->lc( " " . $text . " " ) );
+			' ', $wgContLang->lc( " " . $text . " " ) ); # Strip HTML markup
 		$text = preg_replace( "/(^|\\n)==\\s*([^\\n]+)\\s*==(\\s)/sD",
 			"\\1\\2 \\2 \\2\\3", $text ); # Emphasize headings
 
@@ -200,14 +200,15 @@ class SearchUpdate implements DeferrableUpdate {
 	 * @return string A stripped-down title string ready for the search index
 	 */
 	private function getNormalizedTitle( SearchEngine $search ) {
-		$contLang = MediaWikiServices::getInstance()->getContentLanguage();
+		global $wgContLang;
+
 		$ns = $this->title->getNamespace();
 		$title = $this->title->getText();
 
 		$lc = $search->legalSearchChars() . '&#;';
-		$t = $contLang->normalizeForSearch( $title );
+		$t = $wgContLang->normalizeForSearch( $title );
 		$t = preg_replace( "/[^{$lc}]+/", ' ', $t );
-		$t = $contLang->lc( $t );
+		$t = $wgContLang->lc( $t );
 
 		# Handle 's, s'
 		$t = preg_replace( "/([{$lc}]+)'s( |$)/", "\\1 \\1's ", $t );

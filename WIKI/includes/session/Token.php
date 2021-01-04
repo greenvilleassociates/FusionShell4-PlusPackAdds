@@ -31,17 +31,11 @@ namespace MediaWiki\Session;
  */
 class Token {
 	/** CSRF token suffix. Plus and terminal backslash are included to stop
-	 * editing from certain broken proxies.
-	 */
-	public const SUFFIX = '+\\';
+	 * editing from certain broken proxies. */
+	const SUFFIX = '+\\';
 
-	/** @var string */
 	private $secret = '';
-
-	/** @var string */
 	private $salt = '';
-
-	/** @var bool */
 	private $new = false;
 
 	/**

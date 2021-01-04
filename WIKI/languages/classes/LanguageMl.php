@@ -41,10 +41,12 @@ class LanguageMl extends Language {
 	 *
 	 * @return string
 	 */
-	public function normalize( $s ) {
-		global $IP;
+	function normalize( $s ) {
+		global $wgFixMalayalamUnicode;
 		$s = parent::normalize( $s );
-		$s = $this->transformUsingPairFile( 'normalize-ml.php', $s, $IP );
+		if ( $wgFixMalayalamUnicode ) {
+			$s = $this->transformUsingPairFile( 'normalize-ml.ser', $s );
+		}
 		return $s;
 	}
 }

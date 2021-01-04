@@ -9,7 +9,7 @@ require_once $basePath . '/maintenance/Maintenance.php';
  *
  * @since 1.25
  *
- * @license GPL-2.0-or-later
+ * @license GNU GPL v2+
  * @author Daniel Kinzler
  */
 class ImportSites extends Maintenance {
@@ -17,7 +17,7 @@ class ImportSites extends Maintenance {
 	public function __construct() {
 		$this->addDescription( 'Imports site definitions from XML into the sites table.' );
 
-		$this->addArg( 'file', 'An XML file containing site definitions (see docs/sitelist.md). ' .
+		$this->addArg( 'file', 'An XML file containing site definitions (see docs/sitelist.txt). ' .
 			'Use "php://stdin" to read from stdin.', true
 		);
 
@@ -50,5 +50,5 @@ class ImportSites extends Maintenance {
 	}
 }
 
-$maintClass = ImportSites::class;
+$maintClass = 'ImportSites';
 require_once RUN_MAINTENANCE_IF_MAIN;

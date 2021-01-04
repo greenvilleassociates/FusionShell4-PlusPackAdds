@@ -1,6 +1,8 @@
 <?php
 
 /**
+ * Tests for the SiteExporter class.
+ *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
  * the Free Software Foundation; either version 2 of the License, or
@@ -27,10 +29,10 @@
  *
  * @author Daniel Kinzler
  */
-class SiteExporterTest extends MediaWikiIntegrationTestCase {
+class SiteExporterTest extends PHPUnit_Framework_TestCase {
 
 	public function testConstructor_InvalidArgument() {
-		$this->expectException( InvalidArgumentException::class );
+		$this->setExpectedException( 'InvalidArgumentException' );
 
 		new SiteExporter( 'Foo' );
 	}
@@ -53,16 +55,17 @@ class SiteExporterTest extends MediaWikiIntegrationTestCase {
 		fseek( $tmp, 0 );
 		$xml = fread( $tmp, 16 * 1024 );
 
-		$this->assertStringContainsString( '<sites ', $xml );
-		$this->assertStringContainsString( '<site>', $xml );
-		$this->assertStringContainsString( '<globalid>Foo</globalid>', $xml );
-		$this->assertStringContainsString( '</site>', $xml );
-		$this->assertStringContainsString( '<globalid>acme.com</globalid>', $xml );
-		$this->assertStringContainsString( '<group>Test</group>', $xml );
-		$this->assertStringContainsString( '<localid type="interwiki">acme</localid>', $xml );
-		$this->assertStringContainsString( '<path type="link">http://acme.com/</path>', $xml );
-		$this->assertStringContainsString( '</sites>', $xml );
+		$this->assertContains( '<sites ', $xml );
+		$this->assertContains( '<site>', $xml );
+		$this->assertContains( '<globalid>Foo</globalid>', $xml );
+		$this->assertContains( '</site>', $xml );
+		$this->assertContains( '<globalid>acme.com</globalid>', $xml );
+		$this->assertContains( '<group>Test</group>', $xml );
+		$this->assertContains( '<localid type="interwiki">acme</localid>', $xml );
+		$this->assertContains( '<path type="link">http://acme.com/</path>', $xml );
+		$this->assertContains( '</sites>', $xml );
 
+		// NOTE: HHVM (at least on wmf Jenkins) doesn't like file URLs.
 		$xsdFile = __DIR__ . '/../../../../docs/sitelist-1.0.xsd';
 		$xsdData = file_get_contents( $xsdFile );
 
@@ -72,7 +75,7 @@ class SiteExporterTest extends MediaWikiIntegrationTestCase {
 	}
 
 	private function newSiteStore( SiteList $sites ) {
-		$store = $this->getMockBuilder( SiteStore::class )->getMock();
+		$store = $this->getMockBuilder( 'SiteStore' )->getMock();
 
 		$store->expects( $this->once() )
 			->method( 'saveSites' )

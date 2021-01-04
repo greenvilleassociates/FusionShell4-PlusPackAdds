@@ -2,15 +2,8 @@
 
 /**
  * A checkbox field
- *
- * @stable to extend
  */
 class HTMLCheckField extends HTMLFormField {
-
-	/**
-	 * @inheritDoc
-	 * @stable to override
-	 */
 	public function getInputHTML( $value ) {
 		global $wgUseMediaWikiUIEverywhere;
 
@@ -34,7 +27,7 @@ class HTMLCheckField extends HTMLFormField {
 		}
 
 		$chkLabel = Xml::check( $this->mName, $value, $attr ) .
-			"\u{00A0}" .
+			'&#160;' .
 			Html::rawElement( 'label', $attrLabel, $this->mLabel );
 
 		if ( $wgUseMediaWikiUIEverywhere || $this->mParent instanceof VFormHTMLForm ) {
@@ -50,7 +43,6 @@ class HTMLCheckField extends HTMLFormField {
 
 	/**
 	 * Get the OOUI version of this field.
-	 * @stable to override
 	 * @since 1.26
 	 * @param string $value
 	 * @return OOUI\CheckboxInputWidget The checkbox widget.
@@ -85,7 +77,6 @@ class HTMLCheckField extends HTMLFormField {
 	 * ...unless OOUI is being used, in which case we actually return
 	 * the label here.
 	 *
-	 * @stable to override
 	 * @return string
 	 */
 	public function getLabel() {
@@ -97,13 +88,12 @@ class HTMLCheckField extends HTMLFormField {
 		) {
 			return '';
 		} else {
-			return "\u{00A0}";
+			return '&#160;';
 		}
 	}
 
 	/**
 	 * Get label alignment when generating field for OOUI.
-	 * @stable to override
 	 * @return string 'left', 'right', 'top' or 'inline'
 	 */
 	protected function getLabelAlignOOUI() {
@@ -112,7 +102,6 @@ class HTMLCheckField extends HTMLFormField {
 
 	/**
 	 * checkboxes don't need a label.
-	 * @stable to override
 	 * @return bool
 	 */
 	protected function needsLabel() {
@@ -120,7 +109,6 @@ class HTMLCheckField extends HTMLFormField {
 	}
 
 	/**
-	 * @stable to override
 	 * @param WebRequest $request
 	 *
 	 * @return bool
@@ -128,10 +116,11 @@ class HTMLCheckField extends HTMLFormField {
 	public function loadDataFromRequest( $request ) {
 		$invert = isset( $this->mParams['invert'] ) && $this->mParams['invert'];
 
+		// GetCheck won't work like we want for checks.
 		// Fetch the value in either one of the two following case:
-		// - we have a valid submit attempt (form was just submitted)
-		// - we have a value (an URL manually built by the user, or GET form with no wpFormIdentifier)
-		if ( $this->isSubmitAttempt( $request ) || $request->getCheck( $this->mName ) ) {
+		// - we have a valid submit attempt (form was just submitted, or a GET URL forged by the user)
+		// - checkbox name has a value (false or true), ie is not null
+		if ( $this->isSubmitAttempt( $request ) || $request->getVal( $this->mName ) !== null ) {
 			return $invert
 				? !$request->getBool( $this->mName )
 				: $request->getBool( $this->mName );

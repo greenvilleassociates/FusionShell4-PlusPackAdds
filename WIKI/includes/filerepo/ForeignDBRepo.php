@@ -22,7 +22,6 @@
  */
 
 use Wikimedia\Rdbms\Database;
-use Wikimedia\Rdbms\DatabaseDomain;
 use Wikimedia\Rdbms\IDatabase;
 
 /**
@@ -59,19 +58,15 @@ class ForeignDBRepo extends LocalRepo {
 	protected $dbConn;
 
 	/** @var callable */
-	protected $fileFactory = [ ForeignDBFile::class, 'newFromTitle' ];
+	protected $fileFactory = [ 'ForeignDBFile', 'newFromTitle' ];
 	/** @var callable */
-	protected $fileFromRowFactory = [ ForeignDBFile::class, 'newFromRow' ];
-
-	/** @var string */
-	private $dbDomain;
+	protected $fileFromRowFactory = [ 'ForeignDBFile', 'newFromRow' ];
 
 	/**
 	 * @param array|null $info
 	 */
-	public function __construct( $info ) {
+	function __construct( $info ) {
 		parent::__construct( $info );
-		'@phan-var array $info';
 		$this->dbType = $info['dbType'];
 		$this->dbServer = $info['dbServer'];
 		$this->dbUser = $info['dbUser'];
@@ -80,12 +75,12 @@ class ForeignDBRepo extends LocalRepo {
 		$this->dbFlags = $info['dbFlags'];
 		$this->tablePrefix = $info['tablePrefix'];
 		$this->hasSharedCache = $info['hasSharedCache'];
-
-		$dbDomain = new DatabaseDomain( $this->dbName, null, $this->tablePrefix );
-		$this->dbDomain = $dbDomain->getId();
 	}
 
-	public function getMasterDB() {
+	/**
+	 * @return IDatabase
+	 */
+	function getMasterDB() {
 		if ( !isset( $this->dbConn ) ) {
 			$func = $this->getDBFactory();
 			$this->dbConn = $func( DB_MASTER );
@@ -94,7 +89,10 @@ class ForeignDBRepo extends LocalRepo {
 		return $this->dbConn;
 	}
 
-	public function getReplicaDB() {
+	/**
+	 * @return IDatabase
+	 */
+	function getReplicaDB() {
 		return $this->getMasterDB();
 	}
 
@@ -109,7 +107,8 @@ class ForeignDBRepo extends LocalRepo {
 			'password' => $this->dbPassword,
 			'dbname' => $this->dbName,
 			'flags' => $this->dbFlags,
-			'tablePrefix' => $this->tablePrefix
+			'tablePrefix' => $this->tablePrefix,
+			'foreign' => true,
 		];
 
 		return function ( $index ) use ( $type, $params ) {
@@ -120,13 +119,22 @@ class ForeignDBRepo extends LocalRepo {
 	/**
 	 * @return bool
 	 */
-	private function hasSharedCache() {
+	function hasSharedCache() {
 		return $this->hasSharedCache;
 	}
 
-	public function getSharedCacheKey( ...$args ) {
+	/**
+	 * Get a key on the primary cache for this repository.
+	 * Returns false if the repository's cache is not accessible at this site.
+	 * The parameters are the parts of the key, as for wfMemcKey().
+	 * @return bool|mixed
+	 */
+	function getSharedCacheKey( /*...*/ ) {
 		if ( $this->hasSharedCache() ) {
-			return $this->wanCache->makeGlobalKey( $this->dbDomain, ...$args );
+			$args = func_get_args();
+			array_unshift( $args, $this->dbName, $this->tablePrefix );
+
+			return call_user_func_array( 'wfForeignMemcKey', $args );
 		} else {
 			return false;
 		}
@@ -142,7 +150,7 @@ class ForeignDBRepo extends LocalRepo {
 	 * @return array
 	 * @since 1.22
 	 */
-	public function getInfo() {
+	function getInfo() {
 		return FileRepo::getInfo();
 	}
 }

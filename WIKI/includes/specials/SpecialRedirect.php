@@ -21,8 +21,6 @@
  * @ingroup SpecialPage
  */
 
-use MediaWiki\MediaWikiServices;
-
 /**
  * A special page that redirects to: the user for a numeric user id,
  * the file for a given filename, or the page for a given revision id.
@@ -37,7 +35,7 @@ class SpecialRedirect extends FormSpecialPage {
 	 *
 	 * Example value: `'user'`
 	 *
-	 * @var string
+	 * @var string $mType
 	 */
 	protected $mType;
 
@@ -46,11 +44,11 @@ class SpecialRedirect extends FormSpecialPage {
 	 *
 	 * Example value: `'42'`
 	 *
-	 * @var string
+	 * @var string $mValue
 	 */
 	protected $mValue;
 
-	public function __construct() {
+	function __construct() {
 		parent::__construct( 'Redirect' );
 		$this->mType = null;
 		$this->mValue = null;
@@ -60,61 +58,47 @@ class SpecialRedirect extends FormSpecialPage {
 	 * Set $mType and $mValue based on parsed value of $subpage.
 	 * @param string $subpage
 	 */
-	public function setParameter( $subpage ) {
+	function setParameter( $subpage ) {
 		// parse $subpage to pull out the parts
 		$parts = explode( '/', $subpage, 2 );
-		$this->mType = $parts[0];
-		$this->mValue = $parts[1] ?? null;
+		$this->mType = count( $parts ) > 0 ? $parts[0] : null;
+		$this->mValue = count( $parts ) > 1 ? $parts[1] : null;
 	}
 
 	/**
 	 * Handle Special:Redirect/user/xxxx (by redirecting to User:YYYY)
 	 *
-	 * @return Status A good status contains the url to redirect to
+	 * @return string|null Url to redirect to, or null if $mValue is invalid.
 	 */
-	public function dispatchUser() {
+	function dispatchUser() {
 		if ( !ctype_digit( $this->mValue ) ) {
-			// Message: redirect-not-numeric
-			return Status::newFatal( $this->getMessagePrefix() . '-not-numeric' );
+			return null;
 		}
 		$user = User::newFromId( (int)$this->mValue );
 		$username = $user->getName(); // load User as side-effect
 		if ( $user->isAnon() ) {
-			// Message: redirect-not-exists
-			return Status::newFatal( $this->getMessagePrefix() . '-not-exists' );
-		}
-		if ( $user->isHidden() && !MediaWikiServices::getInstance()->getPermissionManager()
-			->userHasRight( $this->getUser(), 'hideuser' )
-		) {
-			throw new PermissionsError( null, [ 'badaccess-group0' ] );
+			return null;
 		}
 		$userpage = Title::makeTitle( NS_USER, $username );
 
-		return Status::newGood( [
-			$userpage->getFullURL( '', false, PROTO_CURRENT ), 302
-		] );
+		return $userpage->getFullURL( '', false, PROTO_CURRENT );
 	}
 
 	/**
 	 * Handle Special:Redirect/file/xxxx
 	 *
-	 * @return Status A good status contains the url to redirect to
+	 * @return string|null Url to redirect to, or null if $mValue is not found.
 	 */
-	public function dispatchFile() {
-		try {
-			$title = Title::newFromTextThrow( $this->mValue, NS_FILE );
-			if ( $title && !$title->inNamespace( NS_FILE ) ) {
-				// If the given value contains a namespace enforce file namespace
-				$title = Title::newFromTextThrow( Title::makeName( NS_FILE, $this->mValue ) );
-			}
-		} catch ( MalformedTitleException $e ) {
-			return Status::newFatal( $e->getMessageObject() );
+	function dispatchFile() {
+		$title = Title::makeTitleSafe( NS_FILE, $this->mValue );
+
+		if ( !$title instanceof Title ) {
+			return null;
 		}
-		$file = MediaWikiServices::getInstance()->getRepoGroup()->findFile( $title );
+		$file = wfFindFile( $title );
 
 		if ( !$file || !$file->exists() ) {
-			// Message: redirect-not-exists
-			return Status::newFatal( $this->getMessagePrefix() . '-not-exists' );
+			return null;
 		}
 		// Default behavior: Use the direct link to the file.
 		$url = $file->getUrl();
@@ -128,80 +112,139 @@ class SpecialRedirect extends FormSpecialPage {
 			// ... and we can
 			if ( $mto && !$mto->isError() ) {
 				// ... change the URL to point to a thumbnail.
-				// Note: This url is more temporary as can change
-				// if file is reuploaded and has different aspect ratio.
-				$url = [ $mto->getUrl(), $height === -1 ? 301 : 302 ];
+				$url = $mto->getUrl();
 			}
 		}
 
-		return Status::newGood( $url );
+		return $url;
 	}
 
 	/**
 	 * Handle Special:Redirect/revision/xxx
 	 * (by redirecting to index.php?oldid=xxx)
 	 *
-	 * @return Status A good status contains the url to redirect to
+	 * @return string|null Url to redirect to, or null if $mValue is invalid.
 	 */
-	public function dispatchRevision() {
+	function dispatchRevision() {
 		$oldid = $this->mValue;
 		if ( !ctype_digit( $oldid ) ) {
-			// Message: redirect-not-numeric
-			return Status::newFatal( $this->getMessagePrefix() . '-not-numeric' );
+			return null;
 		}
 		$oldid = (int)$oldid;
 		if ( $oldid === 0 ) {
-			// Message: redirect-not-exists
-			return Status::newFatal( $this->getMessagePrefix() . '-not-exists' );
+			return null;
 		}
 
-		return Status::newGood( wfAppendQuery( wfScript( 'index' ), [
+		return wfAppendQuery( wfScript( 'index' ), [
 			'oldid' => $oldid
-		] ) );
+		] );
 	}
 
 	/**
 	 * Handle Special:Redirect/page/xxx (by redirecting to index.php?curid=xxx)
 	 *
-	 * @return Status A good status contains the url to redirect to
+	 * @return string|null Url to redirect to, or null if $mValue is invalid.
 	 */
-	public function dispatchPage() {
+	function dispatchPage() {
 		$curid = $this->mValue;
 		if ( !ctype_digit( $curid ) ) {
-			// Message: redirect-not-numeric
-			return Status::newFatal( $this->getMessagePrefix() . '-not-numeric' );
+			return null;
 		}
 		$curid = (int)$curid;
 		if ( $curid === 0 ) {
-			// Message: redirect-not-exists
-			return Status::newFatal( $this->getMessagePrefix() . '-not-exists' );
+			return null;
 		}
 
-		return Status::newGood( wfAppendQuery( wfScript( 'index' ), [
+		return wfAppendQuery( wfScript( 'index' ), [
 			'curid' => $curid
-		] ) );
+		] );
 	}
 
 	/**
 	 * Handle Special:Redirect/logid/xxx
-	 * (by redirecting to index.php?title=Special:Log&logid=xxx)
+	 * (by redirecting to index.php?title=Special:Log)
 	 *
 	 * @since 1.27
-	 * @return Status A good status contains the url to redirect to
+	 * @return string|null Url to redirect to, or null if $mValue is invalid.
 	 */
-	public function dispatchLog() {
+	function dispatchLog() {
 		$logid = $this->mValue;
 		if ( !ctype_digit( $logid ) ) {
-			// Message: redirect-not-numeric
-			return Status::newFatal( $this->getMessagePrefix() . '-not-numeric' );
+			return null;
 		}
 		$logid = (int)$logid;
 		if ( $logid === 0 ) {
-			// Message: redirect-not-exists
-			return Status::newFatal( $this->getMessagePrefix() . '-not-exists' );
+			return null;
 		}
-		$query = [ 'title' => 'Special:Log', 'logid' => $logid ];
-		return Status::newGood( wfAppendQuery( wfScript( 'index' ), $query ) );
+
+		$logparams = [
+			'log_id',
+			'log_timestamp',
+			'log_type',
+			'log_user_text',
+		];
+
+		$dbr = wfGetDB( DB_REPLICA );
+
+		// Gets the nested SQL statement which
+		// returns timestamp of the log with the given log ID
+		$inner = $dbr->selectSQLText(
+			'logging',
+			[ 'log_timestamp' ],
+			[ 'log_id' => $logid ]
+		);
+
+		// Returns all fields mentioned in $logparams of the logs
+		// with the same timestamp as the one returned by the statement above
+		$logsSameTimestamps = $dbr->select(
+			'logging',
+			$logparams,
+			[ "log_timestamp = ($inner)" ]
+		);
+		if ( $logsSameTimestamps->numRows() === 0 ) {
+			return null;
+		}
+
+		// Stores the row with the same log ID as the one given
+		$rowMain = [];
+		foreach ( $logsSameTimestamps as $row ) {
+			if ( (int)$row->log_id === $logid ) {
+				$rowMain = $row;
+			}
+		}
+
+		array_shift( $logparams );
+
+		// Stores all the rows with the same values in each column
+		// as $rowMain
+		foreach ( $logparams as $cond ) {
+			$matchedRows = [];
+			foreach ( $logsSameTimestamps as $row ) {
+				if ( $row->$cond === $rowMain->$cond ) {
+					$matchedRows[] = $row;
+				}
+			}
+			if ( count( $matchedRows ) === 1 ) {
+				break;
+			}
+			$logsSameTimestamps = $matchedRows;
+		}
+		$query = [ 'title' => 'Special:Log', 'limit' => count( $matchedRows ) ];
+
+		// A map of database field names from table 'logging' to the values of $logparams
+		$keys = [
+			'log_timestamp' => 'offset',
+			'log_type' => 'type',
+			'log_user_text' => 'user'
+		];
+
+		foreach ( $logparams as $logKey ) {
+			$query[$keys[$logKey]] = $matchedRows[0]->$logKey;
+		}
+		$query['offset'] = $query['offset'] + 1;
+		$url = $query;
+
+		return wfAppendQuery( wfScript( 'index' ), $url );
 	}
 
 	/**
@@ -210,53 +253,41 @@ class SpecialRedirect extends FormSpecialPage {
 	 * or do nothing (if $mValue wasn't set) allowing the form to be
 	 * displayed.
 	 *
-	 * @return Status|bool True if a redirect was successfully handled.
+	 * @return bool True if a redirect was successfully handled.
 	 */
-	private function dispatch() {
+	function dispatch() {
 		// the various namespaces supported by Special:Redirect
 		switch ( $this->mType ) {
 			case 'user':
-				$status = $this->dispatchUser();
+				$url = $this->dispatchUser();
 				break;
 			case 'file':
-				$status = $this->dispatchFile();
+				$url = $this->dispatchFile();
 				break;
 			case 'revision':
-				$status = $this->dispatchRevision();
+				$url = $this->dispatchRevision();
 				break;
 			case 'page':
-				$status = $this->dispatchPage();
+				$url = $this->dispatchPage();
 				break;
 			case 'logid':
-				$status = $this->dispatchLog();
+				$url = $this->dispatchLog();
 				break;
 			default:
-				$status = null;
+				$url = null;
 				break;
 		}
-		if ( $status && $status->isGood() ) {
-			// These urls can sometimes be linked from prominent places,
-			// so varnish cache.
-			$value = $status->getValue();
-			if ( is_array( $value ) ) {
-				list( $url, $code ) = $value;
-			} else {
-				$url = $value;
-				$code = 301;
-			}
-			if ( $code === 301 ) {
-				$this->getOutput()->setCdnMaxage( 60 * 60 );
-			} else {
-				$this->getOutput()->setCdnMaxage( 10 );
-			}
-			$this->getOutput()->redirect( $url, $code );
+		if ( $url ) {
+			$this->getOutput()->redirect( $url );
 
 			return true;
 		}
-		if ( $this->mValue !== null ) {
+		if ( !is_null( $this->mValue ) ) {
 			$this->getOutput()->setStatusCode( 404 );
+			// Message: redirect-not-exists
+			$msg = $this->getMessagePrefix() . '-not-exists';
 
-			return $status;
+			return Status::newFatal( $msg );
 		}
 
 		return false;

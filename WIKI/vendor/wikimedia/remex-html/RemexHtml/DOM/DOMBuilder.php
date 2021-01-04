@@ -1,8 +1,6 @@
 <?php
 
 namespace RemexHtml\DOM;
-
-use RemexHtml\HTMLData;
 use RemexHtml\Tokenizer\Attributes;
 use RemexHtml\TreeBuilder\Element;
 use RemexHtml\TreeBuilder\TreeBuilder;
@@ -12,61 +10,21 @@ use RemexHtml\TreeBuilder\TreeHandler;
  * A TreeHandler which constructs a DOMDocument
  */
 class DOMBuilder implements TreeHandler {
-	/** @var string|null The name of the input document type */
 	public $doctypeName;
-
-	/** @var string|null The public ID */
 	public $public;
-
-	/** @var string|null The system ID */
 	public $system;
-
-	/**
-	 * @var int $quirks The quirks mode. May be either TreeBuilder::NO_QUIRKS,
-	 *   TreeBuilder::LIMITED_QUIRKS or TreeBuilder::QUIRKS to indicate
-	 *   no-quirks mode, limited-quirks mode or quirks mode respectively.
-	 */
 	public $quirks;
 
-	/** @var \DOMDocument */
 	private $doc;
-
-	/** @var callable|null */
 	private $errorCallback;
-
-	/** @var bool */
-	private $suppressHtmlNamespace;
-
-	/** @var bool */
-	private $suppressIdAttribute;
-
-	/** @var bool */
 	private $isFragment;
-
-	/** @var bool */
 	private $coerced;
 
 	/**
-	 * @param array $options An associative array of options:
-	 *   - errorCallback : A function which is called on parse errors
-	 *   - suppressHtmlNamespace : omit the namespace when creating HTML
-	 *     elements. False by default.
-	 *   - suppressIdAttribute : don't call the nonstandard
-	 *     DOMElement::setIdAttribute() method while constructing elements.
-	 *     False by default (this method is needed for efficient
-	 *     DOMDocument::getElementById() calls).  Set to true if you are
-	 *     using a W3C spec-compliant DOMImplementation and wish to avoid
-	 *     nonstandard calls.
+	 * @param callable|null $errorCallback A function which is called on parse errors
 	 */
-	public function __construct( $options = [] ) {
-		$options = $options + [
-			'suppressHtmlNamespace' => false,
-			'suppressIdAttribute' => false,
-			'errorCallback' => null,
-		];
-		$this->errorCallback = $options['errorCallback'];
-		$this->suppressHtmlNamespace = $options['suppressHtmlNamespace'];
-		$this->suppressIdAttribute = $options['suppressIdAttribute'];
+	public function __construct( $errorCallback = null ) {
+		$this->errorCallback = $errorCallback;
 	}
 
 	/**
@@ -78,7 +36,7 @@ class DOMBuilder implements TreeHandler {
 	 * DOMDocumentFragment, libxml would invent new prefixes for the orphaned
 	 * namespaces.
 	 *
-	 * @return \DOMNode
+	 * @return DOMNode
 	 */
 	public function getFragment() {
 		if ( $this->isFragment ) {
@@ -99,23 +57,12 @@ class DOMBuilder implements TreeHandler {
 	}
 
 	public function startDocument( $fragmentNamespace, $fragmentName ) {
+		$impl = new \DOMImplementation;
 		$this->isFragment = $fragmentNamespace !== null;
 		$this->doc = $this->createDocument();
 	}
 
-	/**
-	 * @param string|null $doctypeName
-	 * @param string|null $public
-	 * @param string|null $system
-	 * @return \DOMDocument
-	 * @suppress PhanTypeMismatchArgumentInternalProbablyReal
-	 *   Null args to DOMImplementation::createDocument
-	 */
-	protected function createDocument(
-		string $doctypeName = null,
-		string $public = null,
-		string $system = null
-	) {
+	private function createDocument( $doctypeName = null, $public = null, $system = null ) {
 		$impl = new \DOMImplementation;
 		if ( $doctypeName === '' ) {
 			$this->coerced = true;
@@ -162,26 +109,15 @@ class DOMBuilder implements TreeHandler {
 	}
 
 	private function createNode( Element $element ) {
-		$noNS = $this->suppressHtmlNamespace && $element->namespace === HTMLData::NS_HTML;
 		try {
-			if ( $noNS ) {
-				$node = $this->doc->createElement( $element->name );
-			} else {
-				$node = $this->doc->createElementNS(
-					$element->namespace,
-					$element->name );
-			}
+			$node = $this->doc->createElementNS(
+				$element->namespace,
+				$element->name );
 		} catch ( \DOMException $e ) {
 			// Attempt to escape the name so that it is more acceptable
-			if ( $noNS ) {
-				$node = $this->doc->createElement(
-					$this->coerceName( $element->name )
-				);
-			} else {
-				$node = $this->doc->createElementNS(
-					$element->namespace,
-					$this->coerceName( $element->name ) );
-			}
+			$node = $this->doc->createElementNS(
+				$element->namespace,
+				$this->coerceName( $element->name ) );
 		}
 
 		foreach ( $element->attrs->getObjects() as $attr ) {
@@ -217,11 +153,6 @@ class DOMBuilder implements TreeHandler {
 				}
 			}
 		}
-		if ( ( !$this->suppressIdAttribute ) && $node->hasAttribute( 'id' ) ) {
-			// This is a call to a non-standard DOM method required by PHP in
-			// order to implement DOMDocument::getElementById() efficiently.
-			$node->setIdAttribute( 'id', true );
-		}
 		$element->userData = $node;
 		return $node;
 	}
@@ -229,39 +160,8 @@ class DOMBuilder implements TreeHandler {
 	public function characters( $preposition, $refElement, $text, $start, $length,
 		$sourceStart, $sourceLength
 	) {
-		// Parse $preposition and $refElement as in self::insertNode()
-		if ( $preposition === TreeBuilder::ROOT ) {
-			$parent = $this->doc;
-			$refNode = null;
-		} elseif ( $preposition === TreeBuilder::BEFORE ) {
-			$parent = $refElement->userData->parentNode;
-			$refNode = $refElement->userData;
-		} else {
-			$parent = $refElement->userData;
-			$refNode = null;
-		}
-		// https://html.spec.whatwg.org/#insert-a-character
-		// If the adjusted insertion location is in a Document node, then
-		// return.
-		if ( $parent === $this->doc ) {
-			return;
-		}
-		$data = substr( $text, $start, $length );
-		// If there is a Text node immediately before the adjusted insertion
-		// location, then append data to that Text node's data.
-		if ( $refNode === null ) {
-			$prev = $parent->lastChild;
-		} else {
-			/** @var \DOMNode $refNode */
-			$prev = $refNode->previousSibling;
-		}
-		if ( $prev !== null && $prev->nodeType === XML_TEXT_NODE ) {
-			'@phan-var \DOMCharacterData $prev'; /** @var \DOMCharacterData $prev */
-			$prev->appendData( $data );
-		} else {
-			$node = $this->doc->createTextNode( $data );
-			$parent->insertBefore( $node, $refNode );
-		}
+		$node = $this->doc->createTextNode( substr( $text, $start, $length ) );
+		$this->insertNode( $preposition, $refElement, $node );
 	}
 
 	public function insertElement( $preposition, $refElement, Element $element, $void,
@@ -280,6 +180,7 @@ class DOMBuilder implements TreeHandler {
 
 	public function doctype( $name, $public, $system, $quirks, $sourceStart, $sourceLength ) {
 		if ( !$this->doc->firstChild ) {
+			$impl = $this->doc->implementation;
 			$this->doc = $this->createDocument( $name, $public, $system );
 		}
 		$this->doctypeName = $name;
@@ -301,7 +202,6 @@ class DOMBuilder implements TreeHandler {
 
 	public function mergeAttributes( Element $element, Attributes $attrs, $sourceStart ) {
 		$node = $element->userData;
-		'@phan-var \DOMElement $node'; /** @var \DOMElement $node */
 		foreach ( $attrs->getObjects() as $name => $attr ) {
 			if ( $attr->namespaceURI === null
 				&& strpos( $attr->localName, ':' ) !== false
@@ -358,7 +258,6 @@ class DOMBuilder implements TreeHandler {
 	public function reparentChildren( Element $element, Element $newParent, $sourceStart ) {
 		$this->insertElement( TreeBuilder::UNDER, $element, $newParent, false, $sourceStart, 0 );
 		$node = $element->userData;
-		/** @var \DOMElement $newParentNode */
 		$newParentNode = $newParent->userData;
 		while ( $node->firstChild !== $newParentNode ) {
 			$newParentNode->appendChild( $node->firstChild );

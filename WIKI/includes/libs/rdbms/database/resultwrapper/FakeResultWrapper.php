@@ -8,79 +8,58 @@ use stdClass;
  * Overloads the relevant methods of the real ResultsWrapper so it
  * doesn't go anywhere near an actual database.
  */
-class FakeResultWrapper implements IResultWrapper {
-	/** @var stdClass[]|array[] */
-	protected $result;
-
-	/** @var int */
-	protected $pos = 0;
+class FakeResultWrapper extends ResultWrapper {
+	/** @var stdClass[] $result */
 
 	/**
-	 * @param stdClass[]|array[]|FakeResultWrapper $result
+	 * @param stdClass[] $rows
 	 */
-	public function __construct( $result ) {
-		if ( $result instanceof self ) {
-			$this->result = $result->result;
-		} else {
-			$this->result = $result;
-		}
+	function __construct( array $rows ) {
+		parent::__construct( null, $rows );
 	}
 
-	public function numRows() {
+	function numRows() {
 		return count( $this->result );
 	}
 
-	public function fetchObject() {
-		$current = $this->current();
-
-		$this->next();
-
-		return $current;
-	}
-
-	public function fetchRow() {
-		$row = $this->valid() ? $this->result[$this->pos] : false;
-
-		$this->next();
-
-		return is_object( $row ) ? get_object_vars( $row ) : $row;
-	}
-
-	public function seek( $pos ) {
-		$this->pos = $pos;
-	}
-
-	public function free() {
-		$this->result = null;
-	}
-
-	public function rewind() {
-		$this->pos = 0;
-	}
-
-	public function current() {
-		// @phan-suppress-next-line PhanTypeArraySuspiciousNullable
-		$row = $this->valid() ? $this->result[$this->pos] : false;
-
-		return is_array( $row ) ? (object)$row : $row;
-	}
-
-	public function key() {
-		return $this->pos;
-	}
-
-	public function next() {
+	function fetchRow() {
+		if ( $this->pos < count( $this->result ) ) {
+			$this->currentRow = $this->result[$this->pos];
+		} else {
+			$this->currentRow = false;
+		}
 		$this->pos++;
-
-		return $this->current();
+		if ( is_object( $this->currentRow ) ) {
+			return get_object_vars( $this->currentRow );
+		} else {
+			return $this->currentRow;
+		}
 	}
 
-	public function valid() {
-		return array_key_exists( $this->pos, $this->result );
+	function seek( $row ) {
+		$this->pos = $row;
+	}
+
+	function free() {
+	}
+
+	function fetchObject() {
+		$this->fetchRow();
+		if ( $this->currentRow ) {
+			return (object)$this->currentRow;
+		} else {
+			return false;
+		}
+	}
+
+	function rewind() {
+		$this->pos = 0;
+		$this->currentRow = null;
+	}
+
+	function next() {
+		return $this->fetchObject();
 	}
 }
 
-/**
- * @deprecated since 1.29
- */
 class_alias( FakeResultWrapper::class, 'FakeResultWrapper' );

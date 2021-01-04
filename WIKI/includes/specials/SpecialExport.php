@@ -23,8 +23,7 @@
  * @ingroup SpecialPage
  */
 
-use MediaWiki\Logger\LoggerFactory;
-use MediaWiki\MediaWikiServices;
+use Mediawiki\MediaWikiServices;
 
 /**
  * A special page that allows users to export pages in a XML file
@@ -32,7 +31,7 @@ use MediaWiki\MediaWikiServices;
  * @ingroup SpecialPage
  */
 class SpecialExport extends SpecialPage {
-	protected $curonly, $doExport, $pageLinkDepth, $templates;
+	private $curonly, $doExport, $pageLinkDepth, $templates;
 
 	public function __construct() {
 		parent::__construct( 'Export' );
@@ -99,15 +98,6 @@ class SpecialExport extends SpecialPage {
 			$page = '';
 			$history = '';
 		} elseif ( $request->wasPosted() && $par == '' ) {
-			// Log to see if certain parameters are actually used.
-			// If not, we could deprecate them and do some cleanup, here and in WikiExporter.
-			LoggerFactory::getInstance( 'export' )->debug(
-				'Special:Export POST, dir: [{dir}], offset: [{offset}], limit: [{limit}]', [
-				'dir' => $request->getRawVal( 'dir' ),
-				'offset' => $request->getRawVal( 'offset' ),
-				'limit' => $request->getRawVal( 'limit' ),
-			] );
-
 			$page = $request->getText( 'pages' );
 			$this->curonly = $request->getCheck( 'curonly' );
 			$rawOffset = $request->getVal( 'offset' );
@@ -135,7 +125,7 @@ class SpecialExport extends SpecialPage {
 					$history['limit'] = $limit;
 				}
 
-				if ( $offset !== null ) {
+				if ( !is_null( $offset ) ) {
 					$history['offset'] = $offset;
 				}
 
@@ -179,8 +169,8 @@ class SpecialExport extends SpecialPage {
 			// Cancel output buffering and gzipping if set
 			// This should provide safer streaming for pages with history
 			wfResetOutputBuffers();
-			$request->response()->header( 'Content-type: application/xml; charset=utf-8' );
-			$request->response()->header( 'X-Robots-Tag: noindex,nofollow' );
+			$request->response()->header( "Content-type: application/xml; charset=utf-8" );
+			$request->response()->header( "X-Robots-Tag: noindex,nofollow" );
 
 			if ( $request->getCheck( 'wpDownload' ) ) {
 				// Provide a sane filename suggestion
@@ -248,7 +238,7 @@ class SpecialExport extends SpecialPage {
 
 		$formDescriptor += [
 			'textarea' => [
-				'class' => HTMLTextAreaField::class,
+				'class' => 'HTMLTextAreaField',
 				'name' => 'pages',
 				'label-message' => 'export-manual',
 				'nodata' => true,
@@ -326,10 +316,8 @@ class SpecialExport extends SpecialPage {
 	/**
 	 * @return bool
 	 */
-	protected function userCanOverrideExportDepth() {
-		return MediaWikiServices::getInstance()
-			->getPermissionManager()
-			->userHasRight( $this->getUser(), 'override-export-depth' );
+	private function userCanOverrideExportDepth() {
+		return $this->getUser()->isAllowed( 'override-export-depth' );
 	}
 
 	/**
@@ -341,7 +329,7 @@ class SpecialExport extends SpecialPage {
 	 *   not returning full history)
 	 * @param bool $exportall Whether to export everything
 	 */
-	protected function doExport( $page, $history, $list_authors, $exportall ) {
+	private function doExport( $page, $history, $list_authors, $exportall ) {
 		// If we are grabbing everything, enable full history and ignore the rest
 		if ( $exportall ) {
 			$history = WikiExporter::FULL;
@@ -374,33 +362,45 @@ class SpecialExport extends SpecialPage {
 
 			// Normalize titles to the same format and remove dupes, see T19374
 			foreach ( $pages as $k => $v ) {
-				$pages[$k] = str_replace( ' ', '_', $v );
+				$pages[$k] = str_replace( " ", "_", $v );
 			}
 
 			$pages = array_unique( $pages );
 		}
 
 		/* Ok, let's get to it... */
-		$db = wfGetDB( DB_REPLICA );
+		if ( $history == WikiExporter::CURRENT ) {
+			$lb = false;
+			$db = wfGetDB( DB_REPLICA );
+			$buffer = WikiExporter::BUFFER;
+		} else {
+			// Use an unbuffered query; histories may be very long!
+			$lb = MediaWikiServices::getInstance()->getDBLoadBalancerFactory()->newMainLB();
+			$db = $lb->getConnection( DB_REPLICA );
+			$buffer = WikiExporter::STREAM;
 
-		$exporter = new WikiExporter( $db, $history );
+			// This might take a while... :D
+			MediaWiki\suppressWarnings();
+			set_time_limit( 0 );
+			MediaWiki\restoreWarnings();
+		}
+
+		$exporter = new WikiExporter( $db, $history, $buffer );
 		$exporter->list_authors = $list_authors;
 		$exporter->openStream();
 
 		if ( $exportall ) {
 			$exporter->allPages();
 		} else {
-			$permissionManager = MediaWikiServices::getInstance()->getPermissionManager();
-
 			foreach ( $pages as $page ) {
 				# T10824: Only export pages the user can read
 				$title = Title::newFromText( $page );
-				if ( $title === null ) {
+				if ( is_null( $title ) ) {
 					// @todo Perhaps output an <error> tag or something.
 					continue;
 				}
 
-				if ( !$permissionManager->userCan( 'read', $this->getUser(), $title ) ) {
+				if ( !$title->userCan( 'read', $this->getUser() ) ) {
 					// @todo Perhaps output an <error> tag or something.
 					continue;
 				}
@@ -410,13 +410,19 @@ class SpecialExport extends SpecialPage {
 		}
 
 		$exporter->closeStream();
+
+		if ( $lb ) {
+			$lb->closeAll();
+		}
 	}
 
 	/**
 	 * @param Title $title
-	 * @return string[]
+	 * @return array
 	 */
-	protected function getPagesFromCategory( $title ) {
+	private function getPagesFromCategory( $title ) {
+		global $wgContLang;
+
 		$maxPages = $this->getConfig()->get( 'ExportPagelistLimit' );
 
 		$name = $title->getDBkey();
@@ -433,7 +439,13 @@ class SpecialExport extends SpecialPage {
 		$pages = [];
 
 		foreach ( $res as $row ) {
-			$pages[] = Title::makeName( $row->page_namespace, $row->page_title );
+			$n = $row->page_title;
+			if ( $row->page_namespace ) {
+				$ns = $wgContLang->getNsText( $row->page_namespace );
+				$n = $ns . ':' . $n;
+			}
+
+			$pages[] = $n;
 		}
 
 		return $pages;
@@ -441,9 +453,11 @@ class SpecialExport extends SpecialPage {
 
 	/**
 	 * @param int $nsindex
-	 * @return string[]
+	 * @return array
 	 */
-	protected function getPagesFromNamespace( $nsindex ) {
+	private function getPagesFromNamespace( $nsindex ) {
+		global $wgContLang;
+
 		$maxPages = $this->getConfig()->get( 'ExportPagelistLimit' );
 
 		$dbr = wfGetDB( DB_REPLICA );
@@ -458,7 +472,14 @@ class SpecialExport extends SpecialPage {
 		$pages = [];
 
 		foreach ( $res as $row ) {
-			$pages[] = Title::makeName( $row->page_namespace, $row->page_title );
+			$n = $row->page_title;
+
+			if ( $row->page_namespace ) {
+				$ns = $wgContLang->getNsText( $row->page_namespace );
+				$n = $ns . ':' . $n;
+			}
+
+			$pages[] = $n;
 		}
 
 		return $pages;
@@ -470,7 +491,7 @@ class SpecialExport extends SpecialPage {
 	 * @param array $pageSet Associative array indexed by titles for output
 	 * @return array Associative array index by titles
 	 */
-	protected function getTemplates( $inputPages, $pageSet ) {
+	private function getTemplates( $inputPages, $pageSet ) {
 		return $this->getLinks( $inputPages, $pageSet,
 			'templatelinks',
 			[ 'namespace' => 'tl_namespace', 'title' => 'tl_title' ],
@@ -483,7 +504,7 @@ class SpecialExport extends SpecialPage {
 	 * @param int $depth
 	 * @return int
 	 */
-	protected function validateLinkDepth( $depth ) {
+	private function validateLinkDepth( $depth ) {
 		if ( $depth < 0 ) {
 			return 0;
 		}
@@ -511,8 +532,10 @@ class SpecialExport extends SpecialPage {
 	 * @param int $depth
 	 * @return array
 	 */
-	protected function getPageLinks( $inputPages, $pageSet, $depth ) {
+	private function getPageLinks( $inputPages, $pageSet, $depth ) {
+		// @codingStandardsIgnoreStart Squiz.WhiteSpace.SemicolonSpacing.Incorrect
 		for ( ; $depth > 0; --$depth ) {
+			// @codingStandardsIgnoreEnd
 			$pageSet = $this->getLinks(
 				$inputPages, $pageSet, 'pagelinks',
 				[ 'namespace' => 'pl_namespace', 'title' => 'pl_title' ],
@@ -533,7 +556,7 @@ class SpecialExport extends SpecialPage {
 	 * @param array $join
 	 * @return array
 	 */
-	protected function getLinks( $inputPages, $pageSet, $table, $fields, $join ) {
+	private function getLinks( $inputPages, $pageSet, $table, $fields, $join ) {
 		$dbr = wfGetDB( DB_REPLICA );
 
 		foreach ( $inputPages as $page ) {

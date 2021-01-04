@@ -34,8 +34,8 @@
  * @author Gergő Tisza <tgr.huwiki@gmail.com>
  */
 
-use MediaWiki\Logger\ConsoleSpi;
 use MediaWiki\Logger\LoggerFactory;
+use MediaWiki\Logger\ConsoleSpi;
 use MediaWiki\MediaWikiServices;
 
 require_once __DIR__ . '/Maintenance.php';
@@ -58,7 +58,7 @@ class MediaWikiShell extends Maintenance {
 
 	public function execute() {
 		if ( !class_exists( \Psy\Shell::class ) ) {
-			$this->fatalError( 'PsySH not found. Please run composer with the --dev option.' );
+			$this->error( 'PsySH not found. Please run composer with the --dev option.', 1 );
 		}
 
 		$traverser = new \PhpParser\NodeTraverser();
@@ -67,12 +67,8 @@ class MediaWikiShell extends Maintenance {
 		// add this after initializing the code cleaner so all the default passes get added first
 		$traverser->addVisitor( new CodeCleanerGlobalsPass() );
 
-		$config = new \Psy\Configuration();
-		$config->setCodeCleaner( $codeCleaner );
+		$config = new \Psy\Configuration( [ 'codeCleaner' => $codeCleaner ] );
 		$config->setUpdateCheck( \Psy\VersionUpdater\Checker::NEVER );
-		// prevent https://github.com/bobthecow/psysh/issues/443 when using sudo -E
-		$config->setRuntimeDir( wfTempDir() );
-
 		$shell = new \Psy\Shell( $config );
 		if ( $this->hasOption( 'd' ) ) {
 			$this->setupLegacy();
@@ -93,12 +89,12 @@ class MediaWikiShell extends Maintenance {
 		}
 		if ( $d > 1 ) {
 			# Set DBO_DEBUG (equivalent of $wgDebugDumpSql)
-			$this->getDB( DB_MASTER )->setFlag( DBO_DEBUG );
-			$this->getDB( DB_REPLICA )->setFlag( DBO_DEBUG );
+			wfGetDB( DB_MASTER )->setFlag( DBO_DEBUG );
+			wfGetDB( DB_REPLICA )->setFlag( DBO_DEBUG );
 		}
 	}
 
 }
 
-$maintClass = MediaWikiShell::class;
+$maintClass = 'MediaWikiShell';
 require_once RUN_MAINTENANCE_IF_MAIN;

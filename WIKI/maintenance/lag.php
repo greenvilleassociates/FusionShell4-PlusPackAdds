@@ -23,8 +23,6 @@
 
 require_once __DIR__ . '/Maintenance.php';
 
-use MediaWiki\MediaWikiServices;
-
 /**
  * Maintenance script to show database lag.
  *
@@ -38,29 +36,29 @@ class DatabaseLag extends Maintenance {
 	}
 
 	public function execute() {
-		$lb = MediaWikiServices::getInstance()->getDBLoadBalancer();
 		if ( $this->hasOption( 'r' ) ) {
-			$this->output( 'time     ' );
+			$lb = wfGetLB();
+			echo 'time     ';
 
 			$serverCount = $lb->getServerCount();
 			for ( $i = 1; $i < $serverCount; $i++ ) {
 				$hostname = $lb->getServerName( $i );
-				$this->output( sprintf( "%-12s ", $hostname ) );
+				printf( "%-12s ", $hostname );
 			}
-			$this->output( "\n" );
+			echo "\n";
 
-			// @phan-suppress-next-line PhanInfiniteLoop
 			while ( 1 ) {
 				$lags = $lb->getLagTimes();
 				unset( $lags[0] );
-				$this->output( gmdate( 'H:i:s' ) . ' ' );
+				echo gmdate( 'H:i:s' ) . ' ';
 				foreach ( $lags as $lag ) {
-					$this->output( sprintf( "%-12s ", $lag === false ? 'false' : $lag ) );
+					printf( "%-12s ", $lag === false ? 'false' : $lag );
 				}
-				$this->output( "\n" );
+				echo "\n";
 				sleep( 5 );
 			}
 		} else {
+			$lb = wfGetLB();
 			$lags = $lb->getLagTimes();
 			foreach ( $lags as $i => $lag ) {
 				$name = $lb->getServerName( $i );
@@ -70,5 +68,5 @@ class DatabaseLag extends Maintenance {
 	}
 }
 
-$maintClass = DatabaseLag::class;
+$maintClass = "DatabaseLag";
 require_once RUN_MAINTENANCE_IF_MAIN;

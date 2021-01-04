@@ -14,3 +14,4 @@ CREATE TABLE /*$wgDBprefix*/category (
 
   KEY (cat_pages)
 ) /*$wgDBTableOptions*/;
+

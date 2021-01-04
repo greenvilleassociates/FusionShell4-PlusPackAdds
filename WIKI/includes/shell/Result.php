@@ -18,8 +18,6 @@
  * @file
  */
 
-declare( strict_types = 1 );
-
 namespace MediaWiki\Shell;
 
 /**
@@ -34,18 +32,13 @@ class Result {
 	/** @var string */
 	private $stdout;
 
-	/** @var string|null */
-	private $stderr;
-
 	/**
 	 * @param int $exitCode
 	 * @param string $stdout
-	 * @param string|null $stderr
 	 */
-	public function __construct( int $exitCode, string $stdout, ?string $stderr ) {
+	public function __construct( $exitCode, $stdout ) {
 		$this->exitCode = $exitCode;
 		$this->stdout = $stdout;
-		$this->stderr = $stderr;
 	}
 
 	/**
@@ -53,7 +46,7 @@ class Result {
 	 *
 	 * @return int
 	 */
-	public function getExitCode() : int {
+	public function getExitCode() {
 		return $this->exitCode;
 	}
 
@@ -62,17 +55,7 @@ class Result {
 	 *
 	 * @return string
 	 */
-	public function getStdout() : string {
+	public function getStdout() {
 		return $this->stdout;
-	}
-
-	/**
-	 * Returns stderr of the process or null if the Command was configured to add stderr to stdout
-	 * with includeStderr( true )
-	 *
-	 * @return string|null
-	 */
-	public function getStderr() : ?string {
-		return $this->stderr;
 	}
 }

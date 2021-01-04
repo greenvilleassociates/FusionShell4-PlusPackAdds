@@ -18,6 +18,7 @@
  * http://www.gnu.org/copyleft/gpl.html
  *
  * @file
+ * @license GPL 2+
  * @author Matthew Flaschen
  */
 
@@ -30,7 +31,7 @@ abstract class ChangesListFilter {
 	/**
 	 * Filter name
 	 *
-	 * @var string
+	 * @var string $name
 	 */
 	protected $name;
 
@@ -40,35 +41,35 @@ abstract class ChangesListFilter {
 	 * In this example, if bot actions are included in the result set, this CSS class
 	 * will then be included in all bot-flagged actions.
 	 *
-	 * @var string|null
+	 * @var string|null $cssClassSuffix
 	 */
 	protected $cssClassSuffix;
 
 	/**
 	 * Callable that returns true if and only if a row is attributed to this filter
 	 *
-	 * @var callable
+	 * @var callable $isRowApplicableCallable
 	 */
 	protected $isRowApplicableCallable;
 
 	/**
 	 * Group.  ChangesListFilterGroup this belongs to
 	 *
-	 * @var ChangesListFilterGroup
+	 * @var ChangesListFilterGroup $group
 	 */
 	protected $group;
 
 	/**
 	 * i18n key of label for structured UI
 	 *
-	 * @var string
+	 * @var string $label
 	 */
 	protected $label;
 
 	/**
 	 * i18n key of description for structured UI
 	 *
-	 * @var string
+	 * @var string $description
 	 */
 	protected $description;
 
@@ -76,7 +77,7 @@ abstract class ChangesListFilter {
 	 * Array of associative arrays with conflict information.  See
 	 * setUnidirectionalConflict
 	 *
-	 * @var array
+	 * @var array $conflictingGroups
 	 */
 	protected $conflictingGroups = [];
 
@@ -84,30 +85,25 @@ abstract class ChangesListFilter {
 	 * Array of associative arrays with conflict information.  See
 	 * setUnidirectionalConflict
 	 *
-	 * @var array
+	 * @var array $conflictingFilters
 	 */
 	protected $conflictingFilters = [];
 
 	/**
 	 * Array of associative arrays with subset information
 	 *
-	 * @var array
+	 * @var array $subsetFilters
 	 */
 	protected $subsetFilters = [];
 
 	/**
 	 * Priority integer.  Higher value means higher up in the group's filter list.
 	 *
-	 * @var int
+	 * @var string $priority
 	 */
 	protected $priority;
 
-	/**
-	 * @var string
-	 */
-	protected $defaultHighlightColor;
-
-	private const RESERVED_NAME_CHAR = '_';
+	const RESERVED_NAME_CHAR = '_';
 
 	/**
 	 * Creates a new filter with the specified configuration, and registers it to the
@@ -137,9 +133,6 @@ abstract class ChangesListFilter {
 	 *     UI.
 	 * * $filterDefinition['priority'] int Priority integer.  Higher value means higher
 	 *     up in the group's filter list.
-	 * @codingStandardsIgnoreStart
-	 * @phan-param array{name:string,cssClassSuffix?:string,isRowApplicableCallable?:callable,group:ChangesListFilterGroup,label:string,description:string,priority:int} $filterDefinition
-	 * @codingStandardsIgnoreEnd
 	 */
 	public function __construct( array $filterDefinition ) {
 		if ( isset( $filterDefinition['group'] ) ) {
@@ -185,7 +178,8 @@ abstract class ChangesListFilter {
 	 * (not filtered out), even for the hide-based filters.  So e.g. conflicting with
 	 * 'hideanons' means there is a conflict if only anonymous users are *shown*.
 	 *
-	 * @param ChangesListFilterGroup|ChangesListFilter $other
+	 * @param ChangesListFilterGroup|ChangesListFilter $other Other
+	 *  ChangesListFilterGroup or ChangesListFilter
 	 * @param string $globalKey i18n key for top-level conflict message
 	 * @param string $forwardKey i18n key for conflict message in this
 	 *  direction (when in UI context of $this object)
@@ -216,7 +210,8 @@ abstract class ChangesListFilter {
 	 *
 	 * Internal use ONLY.
 	 *
-	 * @param ChangesListFilterGroup|ChangesListFilter $other
+	 * @param ChangesListFilterGroup|ChangesListFilter $other Other
+	 *  ChangesListFilterGroup or ChangesListFilter
 	 * @param string $globalDescription i18n key for top-level conflict message
 	 * @param string $contextDescription i18n key for conflict message in this
 	 *  direction (when in UI context of $this object)
@@ -373,7 +368,6 @@ abstract class ChangesListFilter {
 			'priority' => $this->priority,
 			'subset' => $this->subsetFilters,
 			'conflicts' => [],
-			'defaultHighlightColor' => $this->defaultHighlightColor
 		];
 
 		$output['messageKeys'] = [
@@ -467,7 +461,7 @@ abstract class ChangesListFilter {
 	 * @param FormOptions $opts
 	 * @return bool
 	 */
-	public function activelyInConflictWithFilter( ChangesListFilter $filter, FormOptions $opts ) {
+	public function activelyInConflictWithFilter( ChangeslistFilter $filter, FormOptions $opts ) {
 		if ( $this->isSelected( $opts ) && $filter->isSelected( $opts ) ) {
 			/** @var ChangesListFilter $siblingFilter */
 			foreach ( $this->getSiblings() as $siblingFilter ) {
@@ -483,7 +477,7 @@ abstract class ChangesListFilter {
 		return false;
 	}
 
-	private function hasConflictWithFilter( ChangesListFilter $filter ) {
+	private function hasConflictWithFilter( ChangeslistFilter $filter ) {
 		return in_array( $filter, $this->getConflictingFilters() );
 	}
 
@@ -499,12 +493,5 @@ abstract class ChangesListFilter {
 				return $filter !== $this;
 			}
 		);
-	}
-
-	/**
-	 * @param string $defaultHighlightColor
-	 */
-	public function setDefaultHighlightColor( $defaultHighlightColor ) {
-		$this->defaultHighlightColor = $defaultHighlightColor;
 	}
 }

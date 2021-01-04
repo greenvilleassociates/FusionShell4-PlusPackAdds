@@ -5,7 +5,7 @@
  *
  * @covers UploadStash
  */
-class UploadStashTest extends MediaWikiIntegrationTestCase {
+class UploadStashTest extends MediaWikiTestCase {
 	/**
 	 * @var TestUser[] Array of UploadStashTestUser
 	 */
@@ -14,13 +14,14 @@ class UploadStashTest extends MediaWikiIntegrationTestCase {
 	/**
 	 * @var string
 	 */
-	private $tmpFile;
+	private $bug29408File;
 
-	protected function setUp() : void {
+	protected function setUp() {
 		parent::setUp();
 
-		$this->tmpFile = $this->getNewTempFile();
-		file_put_contents( $this->tmpFile, "\x00" );
+		// Setup a file for T31408
+		$this->bug29408File = wfTempDir() . '/bug29408';
+		file_put_contents( $this->bug29408File, "\x00" );
 
 		self::$users = [
 			'sysop' => new TestUser(
@@ -36,6 +37,35 @@ class UploadStashTest extends MediaWikiIntegrationTestCase {
 				[]
 			)
 		];
+	}
+
+	protected function tearDown() {
+		if ( file_exists( $this->bug29408File . "." ) ) {
+			unlink( $this->bug29408File . "." );
+		}
+
+		if ( file_exists( $this->bug29408File ) ) {
+			unlink( $this->bug29408File );
+		}
+
+		parent::tearDown();
+	}
+
+	/**
+	 * @todo give this test a real name explaining what is being tested here
+	 */
+	public function testBug29408() {
+		$this->setMwGlobals( 'wgUser', self::$users['uploader']->getUser() );
+
+		$repo = RepoGroup::singleton()->getLocalRepo();
+		$stash = new UploadStash( $repo );
+
+		// Throws exception caught by PHPUnit on failure
+		$file = $stash->stashFile( $this->bug29408File );
+		// We'll never reach this point if we hit T31408
+		$this->assertTrue( true, 'Unrecognized file without extension' );
+
+		$stash->removeFile( $file->getFileKey() );
 	}
 
 	public static function provideInvalidRequests() {
@@ -67,11 +97,11 @@ class UploadStashTest extends MediaWikiIntegrationTestCase {
 				] ) ],
 		];
 	}
-
 	/**
 	 * @dataProvider provideValidRequests
 	 */
 	public function testValidRequestWithValidRequests( $request ) {
 		$this->assertTrue( UploadFromStash::isValidRequest( $request ) );
 	}
+
 }

@@ -13,8 +13,6 @@
  * @author Kaganer
  */
 
-$fallback = 'it';
-
 $namespaceNames = [
 	NS_SPECIAL          => 'Ippiziari',
 	NS_TALK             => 'Dischussioni',

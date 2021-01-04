@@ -21,18 +21,15 @@
 namespace MediaWiki\Logger;
 
 use DateTimeZone;
-use Error;
+use Exception;
 use MWDebug;
 use MWExceptionHandler;
 use Psr\Log\AbstractLogger;
 use Psr\Log\LogLevel;
-use RuntimeException;
-use Throwable;
 use UDPTransport;
-use WikiMap;
 
 /**
- * PSR-3 logger that mimics the historic implementation of MediaWiki's former
+ * PSR-3 logger that mimics the historic implementation of MediaWiki's
  * wfErrorLog logging implementation.
  *
  * This logger is configured by the following global configuration variables:
@@ -51,35 +48,25 @@ use WikiMap;
 class LegacyLogger extends AbstractLogger {
 
 	/**
-	 * @var string
+	 * @var string $channel
 	 */
 	protected $channel;
 
-	private const LEVEL_DEBUG = 100;
-	private const LEVEL_INFO = 200;
-	private const LEVEL_NOTICE = 250;
-	private const LEVEL_WARNING = 300;
-	private const LEVEL_ERROR = 400;
-	private const LEVEL_CRITICAL = 500;
-	private const LEVEL_ALERT = 550;
-	private const LEVEL_EMERGENCY = 600;
-	private const LEVEL_INFINITY = 999;
-
 	/**
 	 * Convert \Psr\Log\LogLevel constants into int for sane comparisons
-	 * These are the same values that Monolog uses
+	 * These are the same values that Monlog uses
 	 *
 	 * @var array $levelMapping
 	 */
 	protected static $levelMapping = [
-		LogLevel::DEBUG => self::LEVEL_DEBUG,
-		LogLevel::INFO => self::LEVEL_INFO,
-		LogLevel::NOTICE => self::LEVEL_NOTICE,
-		LogLevel::WARNING => self::LEVEL_WARNING,
-		LogLevel::ERROR => self::LEVEL_ERROR,
-		LogLevel::CRITICAL => self::LEVEL_CRITICAL,
-		LogLevel::ALERT => self::LEVEL_ALERT,
-		LogLevel::EMERGENCY => self::LEVEL_EMERGENCY,
+		LogLevel::DEBUG => 100,
+		LogLevel::INFO => 200,
+		LogLevel::NOTICE => 250,
+		LogLevel::WARNING => 300,
+		LogLevel::ERROR => 400,
+		LogLevel::CRITICAL => 500,
+		LogLevel::ALERT => 550,
+		LogLevel::EMERGENCY => 600,
 	];
 
 	/**
@@ -91,66 +78,10 @@ class LegacyLogger extends AbstractLogger {
 	];
 
 	/**
-	 * Minimum level. This is just to allow faster discard of debugging
-	 * messages. Not all messages meeting the level will be logged.
-	 *
-	 * @var int
-	 */
-	private $minimumLevel;
-
-	/**
-	 * Whether the channel is a DB channel
-	 *
-	 * @var bool
-	 */
-	private $isDB;
-
-	/**
 	 * @param string $channel
 	 */
 	public function __construct( $channel ) {
-		global $wgDebugLogFile, $wgDBerrorLog, $wgDebugLogGroups, $wgDebugToolbar;
-
 		$this->channel = $channel;
-		$this->isDB = isset( self::$dbChannels[$channel] );
-
-		// Calculate minimum level, duplicating some of the logic from log() and shouldEmit()
-		if ( $wgDebugLogFile != '' || $wgDebugToolbar ) {
-			// Log all messages if there is a debug log file or debug toolbar
-			$this->minimumLevel = self::LEVEL_DEBUG;
-		} elseif ( isset( $wgDebugLogGroups[$channel] ) ) {
-			$logConfig = $wgDebugLogGroups[$channel];
-			// Log messages if the config is set, according to the configured level
-			if ( is_array( $logConfig ) && isset( $logConfig['level'] ) ) {
-				$this->minimumLevel = self::$levelMapping[$logConfig['level']];
-			} else {
-				$this->minimumLevel = self::LEVEL_DEBUG;
-			}
-		} else {
-			// No other case hit: discard all messages
-			$this->minimumLevel = self::LEVEL_INFINITY;
-		}
-		if ( $this->isDB && $wgDBerrorLog && $this->minimumLevel > self::LEVEL_ERROR ) {
-			// Log DB errors if there is a DB error log
-			$this->minimumLevel = self::LEVEL_ERROR;
-		}
-	}
-
-	/**
-	 * Change an existing Logger singleton to act like NullLogger.
-	 *
-	 * @internal For use by MediaWikiIntegrationTestCase::setNullLogger
-	 * @param null|int $level
-	 * @return int
-	 */
-	public function setMinimumForTest( ?int $level ) {
-		if ( !defined( 'MW_PHPUNIT_TEST' ) ) {
-			throw new RuntimeException( 'Not allowed outside tests' );
-		}
-		// Set LEVEL_INFINITY if given null, or restore the original level.
-		$original = $this->minimumLevel;
-		$this->minimumLevel = $level ?? self::LEVEL_INFINITY;
-		return $original;
 	}
 
 	/**
@@ -159,35 +90,22 @@ class LegacyLogger extends AbstractLogger {
 	 * @param string|int $level
 	 * @param string $message
 	 * @param array $context
+	 * @return null
 	 */
 	public function log( $level, $message, array $context = [] ) {
 		if ( is_string( $level ) ) {
 			$level = self::$levelMapping[$level];
 		}
-		if ( $level < $this->minimumLevel ) {
-			return;
-		}
-
-		if ( $this->channel === 'DBQuery'
-			&& $level === self::LEVEL_DEBUG
-			&& isset( $context['sql'] )
+		if ( $this->channel === 'DBQuery' && isset( $context['method'] )
+			&& isset( $context['master'] ) && isset( $context['runtime'] )
 		) {
-			// Also give the query information to the MWDebug tools
-			MWDebug::query(
-				$context['sql'],
-				$context['method'],
-				$context['runtime'],
-				$context['db_host']
-			);
+			MWDebug::query( $message, $context['method'], $context['master'], $context['runtime'] );
+			return; // only send profiling data to MWDebug profiling
 		}
 
-		// If this is a DB-related error, and the site has $wgDBerrorLog
-		// configured, rewrite the channel as wfLogDBError instead.
-		// Likewise, if the site does not use  $wgDBerrorLog, it should
-		// configurable like any other channel via $wgDebugLogGroups
-		// or $wgMWLoggerDefaultSpi.
-		global $wgDBerrorLog;
-		if ( $this->isDB && $level >= self::LEVEL_ERROR && $wgDBerrorLog ) {
+		if ( isset( self::$dbChannels[$this->channel] )
+			&& $level >= self::$levelMapping[LogLevel::ERROR]
+		) {
 			// Format and write DB errors to the legacy locations
 			$effectiveChannel = 'wfLogDBError';
 		} else {
@@ -226,6 +144,10 @@ class LegacyLogger extends AbstractLogger {
 			// wfLogDBError messages are emitted if a database log location is
 			// specfied.
 			$shouldEmit = (bool)$wgDBerrorLog;
+
+		} elseif ( $channel === 'wfErrorLog' ) {
+			// All messages on the wfErrorLog channel should be emitted.
+			$shouldEmit = true;
 
 		} elseif ( $channel === 'wfDebug' ) {
 			// wfDebug messages are emitted if a catch all logging file has
@@ -270,9 +192,10 @@ class LegacyLogger extends AbstractLogger {
 	/**
 	 * Format a message.
 	 *
-	 * Messages to the 'wfDebug' and 'wfLogDBError' channels receive special formatting to mimic the
-	 * historic output of the functions of the same name. All other channel values are formatted
-	 * based on the historic output of the `wfDebugLog()` global function.
+	 * Messages to the 'wfDebug', 'wfLogDBError' and 'wfErrorLog' channels
+	 * receive special fomatting to mimic the historic output of the functions
+	 * of the same name. All other channel values are formatted based on the
+	 * historic output of the `wfDebugLog()` global function.
 	 *
 	 * @param string $channel
 	 * @param string $message
@@ -288,6 +211,37 @@ class LegacyLogger extends AbstractLogger {
 		} elseif ( $channel === 'wfLogDBError' ) {
 			$text = self::formatAsWfLogDBError( $channel, $message, $context );
 
+		} elseif ( $channel === 'wfErrorLog' ) {
+			$text = "{$message}\n";
+
+		} elseif ( $channel === 'profileoutput' ) {
+			// Legacy wfLogProfilingData formatitng
+			$forward = '';
+			if ( isset( $context['forwarded_for'] ) ) {
+				$forward = " forwarded for {$context['forwarded_for']}";
+			}
+			if ( isset( $context['client_ip'] ) ) {
+				$forward .= " client IP {$context['client_ip']}";
+			}
+			if ( isset( $context['from'] ) ) {
+				$forward .= " from {$context['from']}";
+			}
+			if ( $forward ) {
+				$forward = "\t(proxied via {$context['proxy']}{$forward})";
+			}
+			if ( $context['anon'] ) {
+				$forward .= ' anon';
+			}
+			if ( !isset( $context['url'] ) ) {
+				$context['url'] = 'n/a';
+			}
+
+			$log = sprintf( "%s\t%04.3f\t%s%s\n",
+				gmdate( 'YmdHis' ), $context['elapsed'], $context['url'], $forward );
+
+			$text = self::formatAsWfDebugLog(
+				$channel, $log . $context['output'], $context );
+
 		} elseif ( !isset( $wgDebugLogGroups[$channel] ) ) {
 			$text = self::formatAsWfDebug(
 				$channel, "[{$channel}] {$message}", $context );
@@ -297,16 +251,16 @@ class LegacyLogger extends AbstractLogger {
 			$text = self::formatAsWfDebugLog( $channel, $message, $context );
 		}
 
-		// Append stacktrace of throwable if available
+		// Append stacktrace of exception if available
 		if ( $wgLogExceptionBacktrace && isset( $context['exception'] ) ) {
 			$e = $context['exception'];
 			$backtrace = false;
 
-			if ( $e instanceof Throwable ) {
+			if ( $e instanceof Exception ) {
 				$backtrace = MWExceptionHandler::getRedactedTrace( $e );
 
 			} elseif ( is_array( $e ) && isset( $e['trace'] ) ) {
-				// Throwable has already been unpacked as structured data
+				// Exception has already been unpacked as structured data
 				$backtrace = $e['trace'];
 			}
 
@@ -360,7 +314,7 @@ class LegacyLogger extends AbstractLogger {
 		$date = $d->format( 'D M j G:i:s T Y' );
 
 		$host = wfHostname();
-		$wiki = WikiMap::getCurrentWikiId();
+		$wiki = wfWikiID();
 
 		$text = "{$date}\t{$host}\t{$wiki}\t{$message}\n";
 		return $text;
@@ -376,7 +330,7 @@ class LegacyLogger extends AbstractLogger {
 	 */
 	protected static function formatAsWfDebugLog( $channel, $message, $context ) {
 		$time = wfTimestamp( TS_DB );
-		$wiki = WikiMap::getCurrentWikiId();
+		$wiki = wfWikiID();
 		$host = wfHostname();
 		$text = "{$time} {$host} {$wiki}: {$message}\n";
 		return $text;
@@ -408,7 +362,7 @@ class LegacyLogger extends AbstractLogger {
 	 * @return string
 	 */
 	protected static function flatten( $item ) {
-		if ( $item === null ) {
+		if ( null === $item ) {
 			return '[Null]';
 		}
 
@@ -438,9 +392,8 @@ class LegacyLogger extends AbstractLogger {
 			return $item->format( 'c' );
 		}
 
-		if ( $item instanceof Throwable ) {
-			$which = $item instanceof Error ? 'Error' : 'Exception';
-			return '[' . $which . ' ' . get_class( $item ) . '( ' .
+		if ( $item instanceof Exception ) {
+			return '[Exception ' . get_class( $item ) . '( ' .
 				$item->getFile() . ':' . $item->getLine() . ') ' .
 				$item->getMessage() . ']';
 		}
@@ -514,7 +467,7 @@ class LegacyLogger extends AbstractLogger {
 			$transport = UDPTransport::newFromString( $file );
 			$transport->emit( $text );
 		} else {
-			\Wikimedia\suppressWarnings();
+			\MediaWiki\suppressWarnings();
 			$exists = file_exists( $file );
 			$size = $exists ? filesize( $file ) : false;
 			if ( !$exists ||
@@ -522,7 +475,7 @@ class LegacyLogger extends AbstractLogger {
 			) {
 				file_put_contents( $file, $text, FILE_APPEND );
 			}
-			\Wikimedia\restoreWarnings();
+			\MediaWiki\restoreWarnings();
 		}
 	}
 

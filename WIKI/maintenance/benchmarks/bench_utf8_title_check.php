@@ -21,7 +21,7 @@
  * @ingroup Benchmark
  */
 
-require_once __DIR__ . '/../includes/Benchmarker.php';
+require_once __DIR__ . '/Benchmarker.php';
 
 /**
  * This little benchmark executes the regexp formerly used in Language->checkTitleEncoding()
@@ -37,11 +37,10 @@ class BenchUtf8TitleCheck extends Benchmarker {
 	public function __construct() {
 		parent::__construct();
 
-		// phpcs:disable Generic.Files.LineLength
+		// @codingStandardsIgnoreStart Ignore long line warnings.
 		$this->data = [
 			"",
-			// 7bit ASCII
-			"United States of America",
+			"United States of America", // 7bit ASCII
 			"S%C3%A9rie%20t%C3%A9l%C3%A9vis%C3%A9e",
 			"Acteur%7CAlbert%20Robbins%7CAnglais%7CAnn%20Donahue%7CAnthony%20E.%20Zuiker%7CCarol%20Mendelsohn",
 			// This comes from T38839
@@ -60,7 +59,7 @@ class BenchUtf8TitleCheck extends Benchmarker {
 			. "Sara%20Sidle%7CSofia%20Curtis%7CS%C3%A9rie%20t%C3%A9l%C3%A9vis%C3%A9e%7CWallace%20Langham%7C"
 			. "Warrick%20Brown%7CWendy%20Simms%7C%C3%89tats-Unis"
 		];
-		// phpcs:enable
+		// @codingStandardsIgnoreEnd
 
 		$this->addDescription( "Benchmark for using a regexp vs. mb_check_encoding " .
 			"to check for UTF-8 encoding." );
@@ -111,5 +110,5 @@ class BenchUtf8TitleCheck extends Benchmarker {
 	}
 }
 
-$maintClass = BenchUtf8TitleCheck::class;
+$maintClass = 'BenchUtf8TitleCheck';
 require_once RUN_MAINTENANCE_IF_MAIN;

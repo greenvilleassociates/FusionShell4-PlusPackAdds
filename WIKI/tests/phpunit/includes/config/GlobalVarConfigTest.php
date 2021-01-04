@@ -1,14 +1,15 @@
 <?php
 
-class GlobalVarConfigTest extends MediaWikiIntegrationTestCase {
+class GlobalVarConfigTest extends MediaWikiTestCase {
 
 	/**
 	 * @covers GlobalVarConfig::newInstance
 	 */
 	public function testNewInstance() {
 		$config = GlobalVarConfig::newInstance();
-		$this->assertInstanceOf( GlobalVarConfig::class, $config );
-		$this->setMwGlobals( 'wgBaz', 'somevalue' );
+		$this->assertInstanceOf( 'GlobalVarConfig', $config );
+		$this->maybeStashGlobal( 'wgBaz' );
+		$GLOBALS['wgBaz'] = 'somevalue';
 		// Check prefix is set to 'wg'
 		$this->assertEquals( 'somevalue', $config->get( 'Baz' ) );
 	}
@@ -19,10 +20,12 @@ class GlobalVarConfigTest extends MediaWikiIntegrationTestCase {
 	 */
 	public function testConstructor( $prefix ) {
 		$var = $prefix . 'GlobalVarConfigTest';
-		$this->setMwGlobals( $var, 'testvalue' );
+		$rand = wfRandomString();
+		$this->maybeStashGlobal( $var );
+		$GLOBALS[$var] = $rand;
 		$config = new GlobalVarConfig( $prefix );
-		$this->assertInstanceOf( GlobalVarConfig::class, $config );
-		$this->assertEquals( 'testvalue', $config->get( 'GlobalVarConfigTest' ) );
+		$this->assertInstanceOf( 'GlobalVarConfig', $config );
+		$this->assertEquals( $rand, $config->get( 'GlobalVarConfigTest' ) );
 	}
 
 	public static function provideConstructor() {
@@ -40,7 +43,9 @@ class GlobalVarConfigTest extends MediaWikiIntegrationTestCase {
 	 * @covers GlobalVarConfig::hasWithPrefix
 	 */
 	public function testHas() {
-		$this->setMwGlobals( 'wgGlobalVarConfigTestHas', 'testvalue' );
+		$this->maybeStashGlobal( 'wgGlobalVarConfigTestHas' );
+		$GLOBALS['wgGlobalVarConfigTestHas'] = wfRandomString();
+		$this->maybeStashGlobal( 'wgGlobalVarConfigTestNotHas' );
 		$config = new GlobalVarConfig();
 		$this->assertTrue( $config->has( 'GlobalVarConfigTestHas' ) );
 		$this->assertFalse( $config->has( 'GlobalVarConfigTestNotHas' ) );
@@ -78,9 +83,15 @@ class GlobalVarConfigTest extends MediaWikiIntegrationTestCase {
 	public function testGet( $name, $prefix, $expected ) {
 		$config = new GlobalVarConfig( $prefix );
 		if ( $expected === false ) {
-			$this->expectException( ConfigException::class );
-			$this->expectExceptionMessage( 'GlobalVarConfig::get: undefined option:' );
+			$this->setExpectedException( 'ConfigException', 'GlobalVarConfig::get: undefined option:' );
 		}
 		$this->assertEquals( $config->get( $name ), $expected );
+	}
+
+	private function maybeStashGlobal( $var ) {
+		if ( array_key_exists( $var, $GLOBALS ) ) {
+			// Will be reset after this test is over
+			$this->stashMwGlobals( $var );
+		}
 	}
 }

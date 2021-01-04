@@ -16,6 +16,7 @@
  * http://www.gnu.org/copyleft/gpl.html
  *
  * @file
+ * @license GPL 2+
  */
 
 /**
@@ -50,7 +51,7 @@ class NamespaceAwareForeignTitleFactory implements ForeignTitleFactory {
 	 */
 	public function __construct( $foreignNamespaces ) {
 		$this->foreignNamespaces = $foreignNamespaces;
-		if ( $foreignNamespaces !== null ) {
+		if ( !is_null( $foreignNamespaces ) ) {
 			$this->foreignNamespacesFlipped = [];
 			foreach ( $foreignNamespaces as $id => $name ) {
 				$newKey = self::normalizeNamespaceName( $name );
@@ -71,7 +72,7 @@ class NamespaceAwareForeignTitleFactory implements ForeignTitleFactory {
 	public function createForeignTitle( $title, $ns = null ) {
 		// Export schema version 0.5 and earlier (MW 1.18 and earlier) does not
 		// contain a <ns> tag, so we need to be able to handle that case.
-		if ( $ns === null ) {
+		if ( is_null( $ns ) ) {
 			return self::parseTitleNoNs( $title );
 		} else {
 			return self::parseTitleWithNs( $title, $ns );

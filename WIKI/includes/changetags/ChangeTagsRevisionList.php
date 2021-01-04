@@ -19,7 +19,6 @@
  * @ingroup Change tagging
  */
 
-use MediaWiki\MediaWikiServices;
 use Wikimedia\Rdbms\IDatabase;
 
 /**
@@ -37,18 +36,18 @@ class ChangeTagsRevisionList extends ChangeTagsList {
 	 */
 	public function doQuery( $db ) {
 		$ids = array_map( 'intval', $this->ids );
-		$revQuery = MediaWikiServices::getInstance()
-			->getRevisionStore()
-			->getQueryInfo( [ 'user' ] );
 		$queryInfo = [
-			'tables' => $revQuery['tables'],
-			'fields' => $revQuery['fields'],
+			'tables' => [ 'revision', 'user' ],
+			'fields' => array_merge( Revision::selectFields(), Revision::selectUserFields() ),
 			'conds' => [
 				'rev_page' => $this->title->getArticleID(),
 				'rev_id' => $ids,
 			],
 			'options' => [ 'ORDER BY' => 'rev_id DESC' ],
-			'join_conds' => $revQuery['joins'],
+			'join_conds' => [
+				'page' => Revision::pageJoinCond(),
+				'user' => Revision::userJoinCond(),
+			],
 		];
 		ChangeTags::modifyDisplayQuery(
 			$queryInfo['tables'],
@@ -77,13 +76,15 @@ class ChangeTagsRevisionList extends ChangeTagsList {
 	 *
 	 * @param array $tagsToAdd
 	 * @param array $tagsToRemove
-	 * @param string|null $params
+	 * @param array $params
 	 * @param string $reason
 	 * @param User $user
 	 * @return Status
 	 */
 	public function updateChangeTagsOnAll( $tagsToAdd, $tagsToRemove, $params, $reason, $user ) {
+		// @codingStandardsIgnoreStart Generic.CodeAnalysis.ForLoopWithTestFunctionCall.NotAllowed
 		for ( $this->reset(); $this->current(); $this->next() ) {
+			// @codingStandardsIgnoreEnd
 			$item = $this->current();
 			$status = ChangeTags::updateTagsWithChecks( $tagsToAdd, $tagsToRemove,
 				null, $item->getId(), null, $params, $reason, $user );

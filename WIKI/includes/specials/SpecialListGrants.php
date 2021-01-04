@@ -28,7 +28,7 @@
  * @ingroup SpecialPage
  */
 class SpecialListGrants extends SpecialPage {
-	public function __construct() {
+	function __construct() {
 		parent::__construct( 'Listgrants' );
 	}
 
@@ -62,7 +62,7 @@ class SpecialListGrants extends SpecialPage {
 					'<span class="mw-listgrants-right-name">' . $permission . '</span>'
 				)->parse();
 			}
-			if ( $descs === [] ) {
+			if ( !count( $descs ) ) {
 				$grantCellHtml = '';
 			} else {
 				sort( $descs );

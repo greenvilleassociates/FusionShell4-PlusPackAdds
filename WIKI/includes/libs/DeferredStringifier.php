@@ -22,7 +22,6 @@
 
 /**
  * @since 1.25
- * @deprecated since 1.31, use Message::listParam() instead
  */
 class DeferredStringifier {
 	/** @var callable Callback used for result string generation */
@@ -36,11 +35,12 @@ class DeferredStringifier {
 
 	/**
 	 * @param callable $callback Callback that gets called by __toString
-	 * @param mixed ...$params Parameters to the callback
+	 * @param mixed $param,... Parameters to the callback
 	 */
-	public function __construct( $callback, ...$params ) {
+	public function __construct( $callback /*...*/ ) {
+		$this->params = func_get_args();
+		array_shift( $this->params );
 		$this->callback = $callback;
-		$this->params = $params;
 	}
 
 	/**

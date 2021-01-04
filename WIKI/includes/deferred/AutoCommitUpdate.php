@@ -15,21 +15,17 @@ class AutoCommitUpdate implements DeferrableUpdate, DeferrableCallback {
 	private $callback;
 
 	/**
-	 * @param IDatabase $dbw DB handle; update aborts if a transaction now this rolls back
+	 * @param IDatabase $dbw
 	 * @param string $fname Caller name (usually __METHOD__)
 	 * @param callable $callback Callback that takes (IDatabase, method name string)
-	 * @param IDatabase[] $conns Abort if a transaction now on one of these rolls back [optional]
 	 */
-	public function __construct( IDatabase $dbw, $fname, callable $callback, array $conns = [] ) {
+	public function __construct( IDatabase $dbw, $fname, callable $callback ) {
 		$this->dbw = $dbw;
 		$this->fname = $fname;
 		$this->callback = $callback;
-		// Register DB connections for which uncommitted changes are related to this update
-		$conns[] = $dbw;
-		foreach ( $conns as $conn ) {
-			if ( $conn->trxLevel() ) {
-				$conn->onTransactionResolution( [ $this, 'cancelOnRollback' ], $fname );
-			}
+
+		if ( $this->dbw->trxLevel() ) {
+			$this->dbw->onTransactionResolution( [ $this, 'cancelOnRollback' ], $fname );
 		}
 	}
 
@@ -43,7 +39,7 @@ class AutoCommitUpdate implements DeferrableUpdate, DeferrableCallback {
 		try {
 			/** @var Exception $e */
 			$e = null;
-			( $this->callback )( $this->dbw, $this->fname );
+			call_user_func_array( $this->callback, [ $this->dbw, $this->fname ] );
 		} catch ( Exception $e ) {
 		}
 		if ( $autoTrx ) {
@@ -54,10 +50,6 @@ class AutoCommitUpdate implements DeferrableUpdate, DeferrableCallback {
 		}
 	}
 
-	/**
-	 * @internal This method is public so that it works with onTransactionResolution()
-	 * @param int $trigger
-	 */
 	public function cancelOnRollback( $trigger ) {
 		if ( $trigger === IDatabase::TRIGGER_ROLLBACK ) {
 			$this->callback = null;

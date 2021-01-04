@@ -51,6 +51,7 @@ class SearchSuggestion {
 	private $score;
 
 	/**
+	 * Construct a new suggestion
 	 * @param float $score the suggestion score
 	 * @param string|null $text the suggestion text
 	 * @param Title|null $suggestedTitle the suggested title

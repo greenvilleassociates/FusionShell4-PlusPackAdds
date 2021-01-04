@@ -2,10 +2,8 @@
 
 class DummyContentForTesting extends AbstractContent {
 
-	public const MODEL_ID = "testing";
-
 	public function __construct( $data ) {
-		parent::__construct( self::MODEL_ID );
+		parent::__construct( "testing" );
 
 		$this->data = $data;
 	}
@@ -94,7 +92,7 @@ class DummyContentForTesting extends AbstractContent {
 
 	/**
 	 * @param Title $title
-	 * @param int|null $revId Unused.
+	 * @param int $revId Unused.
 	 * @param null|ParserOptions $options
 	 * @param bool $generateHtml Whether to generate Html (default: true). If false, the result
 	 *  of calling getText() on the ParserOutput object returned by this method is undefined.
@@ -104,7 +102,7 @@ class DummyContentForTesting extends AbstractContent {
 	public function getParserOutput( Title $title, $revId = null,
 		ParserOptions $options = null, $generateHtml = true
 	) {
-		return new ParserOutput( $this->data );
+		return new ParserOutput( $this->getNativeData() );
 	}
 
 	/**
@@ -112,12 +110,12 @@ class DummyContentForTesting extends AbstractContent {
 	 *
 	 * @param Title $title Context title for parsing
 	 * @param int|null $revId Revision ID (for {{REVISIONID}})
-	 * @param ParserOptions $options
+	 * @param ParserOptions $options Parser options
 	 * @param bool $generateHtml Whether or not to generate HTML
 	 * @param ParserOutput &$output The output object to fill (reference).
 	 */
 	protected function fillParserOutput( Title $title, $revId,
 			ParserOptions $options, $generateHtml, ParserOutput &$output ) {
-		$output = new ParserOutput( $this->data );
+		$output = new ParserOutput( $this->getNativeData() );
 	}
 }

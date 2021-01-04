@@ -1,7 +1,7 @@
 /*!
  * Live edit preview.
  */
-( function () {
+( function ( mw, $ ) {
 
 	/**
 	 * @ignore
@@ -71,7 +71,9 @@
 			$spinner.show();
 		}
 
-		$copyElements.addClass( [ 'mw-preview-copyelements', 'mw-preview-copyelements-loading' ] );
+		// Can't use fadeTo because it calls show(), and we might want to keep some elements hidden
+		// (e.g. empty #catlinks)
+		$copyElements.animate( { opacity: 0.4 }, 'fast' );
 
 		api = new mw.Api();
 		postData = {
@@ -97,8 +99,7 @@
 				rvdifftotext: $textbox.textSelection( 'getContents' ),
 				rvdifftotextpst: true,
 				rvprop: '',
-				rvsection: section === '' ? undefined : section,
-				uselang: mw.config.get( 'wgUserLanguage' )
+				rvsection: section === '' ? undefined : section
 			} );
 
 			// Wait for the summary before showing the diff so the page doesn't jump twice
@@ -135,18 +136,18 @@
 
 			parseRequest = api.post( postData );
 			parseRequest.done( function ( response ) {
-				var newList, $displaytitle, $content, $parent, $list;
+				var li, newList, $displaytitle, $content, $parent, $list;
 				if ( response.parse.jsconfigvars ) {
 					mw.config.set( response.parse.jsconfigvars );
 				}
 				if ( response.parse.modules ) {
 					mw.loader.load( response.parse.modules.concat(
+						response.parse.modulescripts,
 						response.parse.modulestyles
 					) );
 				}
 
 				newList = [];
-				// eslint-disable-next-line no-jquery/no-each-util
 				$.each( response.parse.indicators, function ( name, indicator ) {
 					newList.push(
 						$( '<div>' )
@@ -163,24 +164,12 @@
 
 				if ( response.parse.displaytitle ) {
 					$displaytitle = $( $.parseHTML( response.parse.displaytitle ) );
-					// The following messages can be used here:
-					// * editconflict
-					// * editingcomment
-					// * editingsection
-					// * editing
-					// * creating
 					$( '#firstHeading' ).msg(
 						mw.config.get( 'wgEditMessage', 'editing' ),
 						$displaytitle
 					);
 					document.title = mw.msg(
 						'pagetitle',
-						// The following messages can be used here:
-						// * editconflict
-						// * editingcomment
-						// * editingsection
-						// * editing
-						// * creating
 						mw.msg(
 							mw.config.get( 'wgEditMessage', 'editing' ),
 							$displaytitle.text()
@@ -193,15 +182,17 @@
 					$( '.catlinks[data-mw="interface"]' ).replaceWith( $content );
 				}
 				if ( response.parse.templates ) {
-					newList = response.parse.templates.map( function ( template ) {
-						return $( '<li>' )
+					newList = [];
+					$.each( response.parse.templates, function ( i, template ) {
+						li = $( '<li>' )
 							.append( $( '<a>' )
 								.attr( {
 									href: mw.util.getUrl( template.title ),
-									class: ( template.exists ? '' : 'new' )
+									'class': ( template.exists ? '' : 'new' )
 								} )
 								.text( template.title )
 							);
+						newList.push( li );
 					} );
 
 					$editform.find( '.templatesUsed .mw-editfooter-list' ).detach().empty().append( newList ).appendTo( '.templatesUsed' );
@@ -210,10 +201,10 @@
 					$( '.limitreport' ).html( response.parse.limitreporthtml );
 				}
 				if ( response.parse.langlinks && mw.config.get( 'skin' ) === 'vector' ) {
-					newList = response.parse.langlinks.map( function ( langlink ) {
+					newList = [];
+					$.each( response.parse.langlinks, function ( i, langlink ) {
 						var bcp47 = mw.language.bcp47( langlink.lang );
-						// eslint-disable-next-line mediawiki/class-doc
-						return $( '<li>' )
+						li = $( '<li>' )
 							.addClass( 'interlanguage-link interwiki-' + langlink.lang )
 							.append( $( '<a>' )
 								.attr( {
@@ -224,6 +215,7 @@
 								} )
 								.text( langlink.autonym )
 							);
+						newList.push( li );
 					} );
 					$list = $( '#p-lang ul' );
 					$parent = $list.parent();
@@ -248,10 +240,11 @@
 		$.when( parseRequest, diffRequest ).done( function ( parseResp ) {
 			var parse = parseResp && parseResp[ 0 ].parse,
 				isSubject = ( section === 'new' ),
+				summaryMsg = isSubject ? 'subject-preview' : 'summary-preview',
 				$summaryPreview = $editform.find( '.mw-summary-preview' ).empty();
 			if ( parse && parse.parsedsummary ) {
 				$summaryPreview.append(
-					mw.message( isSubject ? 'subject-preview' : 'summary-preview' ).parse(),
+					mw.message( summaryMsg ).parse(),
 					' ',
 					$( '<span>' ).addClass( 'comment' ).html(
 						// There is no equivalent to rawParams
@@ -267,14 +260,24 @@
 			mw.hook( 'wikipage.editform' ).fire( $editform );
 		} ).always( function () {
 			$spinner.hide();
-			$copyElements.removeClass( 'mw-preview-copyelements-loading' );
+			$copyElements.animate( {
+				opacity: 1
+			}, 'fast' );
 		} ).fail( function ( code, result ) {
 			// This just shows the error for whatever request failed first
-			var $errorMsg = api.getErrorMessage( result );
+			var errorMsg = 'API error: ' + code;
+			if ( code === 'http' ) {
+				errorMsg = 'HTTP error: ';
+				if ( result.exception ) {
+					errorMsg += result.exception;
+				} else {
+					errorMsg += result.textStatus;
+				}
+			}
 			$errorBox = $( '<div>' )
 				.addClass( 'errorbox' )
-				.append( $( '<strong>' ).text( mw.message( 'previewerrortext' ).text() ) )
-				.append( $errorMsg );
+				.html( '<strong>' + mw.message( 'previewerrortext' ).escaped() + '</strong><br>' )
+				.append( document.createTextNode( errorMsg ) );
 			$wikiDiff.hide();
 			$wikiPreview.hide().before( $errorBox );
 		} );
@@ -294,9 +297,9 @@
 		// can change where they are output).
 
 		if ( !document.getElementById( 'p-lang' ) && document.getElementById( 'p-tb' ) && mw.config.get( 'skin' ) === 'vector' ) {
-			$( '.portal' ).last().after(
+			$( '.portal:last' ).after(
 				$( '<div>' ).attr( {
-					class: 'portal',
+					'class': 'portal',
 					id: 'p-lang',
 					role: 'navigation',
 					'aria-labelledby': 'p-lang-label'
@@ -317,21 +320,8 @@
 				$( '<div>' )
 					.hide()
 					.attr( 'id', 'wikiDiff' )
-					// The following classes are used here:
-					// * diff-editfont-monospace
-					// * diff-editfont-sans-serif
-					// * diff-editfont-serif
-					.addClass( 'diff-editfont-' + mw.user.options.get( 'editfont' ) )
-					// TODO: Set diff-contentalign-* classes
-					.append(
-						$( '<table>' ).addClass( 'diff' ).append(
-							$( '<col>' ).addClass( 'diff-marker' ),
-							$( '<col>' ).addClass( 'diff-content' ),
-							$( '<col>' ).addClass( 'diff-marker' ),
-							$( '<col>' ).addClass( 'diff-content' ),
-							$( '<tbody>' )
-						)
-					)
+					.html( '<table class="diff"><col class="diff-marker"/><col class="diff-content"/>' +
+						'<col class="diff-marker"/><col class="diff-content"/><tbody/></table>' )
 			);
 		}
 
@@ -341,4 +331,4 @@
 		$( document.body ).on( 'click', '#wpPreview, #wpDiff', doLivePreview );
 	} );
 
-}() );
+}( mediaWiki, jQuery ) );

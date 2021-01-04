@@ -20,8 +20,6 @@
  * @file
  */
 
-use MediaWiki\MediaWikiServices;
-
 /**
  * Object to access the $_FILES array
  *
@@ -65,13 +63,14 @@ class WebRequestUpload {
 			return null;
 		}
 
+		global $wgContLang;
 		$name = $this->fileInfo['name'];
 
 		# Safari sends filenames in HTML-encoded Unicode form D...
 		# Horrid and evil! Let's try to make some kind of sense of it.
 		$name = Sanitizer::decodeCharReferences( $name );
-		$name = MediaWikiServices::getInstance()->getContentLanguage()->normalize( $name );
-		wfDebug( __METHOD__ . ": {$this->fileInfo['name']} normalized to '$name'" );
+		$name = $wgContLang->normalize( $name );
+		wfDebug( __METHOD__ . ": {$this->fileInfo['name']} normalized to '$name'\n" );
 		return $name;
 	}
 
@@ -102,22 +101,8 @@ class WebRequestUpload {
 	}
 
 	/**
-	 * Return the client specified content type
-	 *
-	 * @since 1.35
-	 * @return string|null Type or null if non-existent
-	 */
-	public function getType() {
-		if ( !$this->exists() ) {
-			return null;
-		}
-
-		return $this->fileInfo['type'];
-	}
-
-	/**
 	 * Return the upload error. See link for explanation
-	 * https://www.php.net/manual/en/features.file-upload.errors.php
+	 * https://secure.php.net/manual/en/features.file-upload.errors.php
 	 *
 	 * @return int One of the UPLOAD_ constants, 0 if non-existent
 	 */
@@ -142,7 +127,10 @@ class WebRequestUpload {
 		}
 
 		$contentLength = $this->request->getHeader( 'Content-Length' );
-		$maxPostSize = wfShorthandToInteger( ini_get( 'post_max_size' ), 0 );
+		$maxPostSize = wfShorthandToInteger(
+			ini_get( 'post_max_size' ) ?: ini_get( 'hhvm.server.max_post_size' ),
+			0
+		);
 
 		if ( $maxPostSize && $contentLength > $maxPostSize ) {
 			# post_max_size is exceeded

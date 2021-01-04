@@ -89,7 +89,7 @@ class ExplodeIterator implements Iterator {
 	}
 
 	/**
-	 * @return void
+	 * @return string
 	 */
 	public function next() {
 		if ( $this->endPos === false ) {
@@ -103,6 +103,8 @@ class ExplodeIterator implements Iterator {
 			}
 		}
 		$this->refreshCurrent();
+
+		return $this->current;
 	}
 
 	/**

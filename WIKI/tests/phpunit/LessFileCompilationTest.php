@@ -5,12 +5,11 @@
  *
  * @see https://github.com/sebastianbergmann/phpunit/blob/master/src/Extensions/PhptTestCase.php
  * @author Sam Smith <samsmith@wikimedia.org>
- * @coversNothing
  */
 class LessFileCompilationTest extends ResourceLoaderTestCase {
 
 	/**
-	 * @var string
+	 * @var string $file
 	 */
 	protected $file;
 
@@ -34,18 +33,20 @@ class LessFileCompilationTest extends ResourceLoaderTestCase {
 
 	public function testLessFileCompilation() {
 		$thisString = $this->toString();
-		$this->assertIsReadable( $this->file, "$thisString must refer to a readable file" );
+		$this->assertTrue(
+			is_string( $this->file ) && is_file( $this->file ) && is_readable( $this->file ),
+			"$thisString must refer to a readable file"
+		);
 
 		$rlContext = $this->getResourceLoaderContext();
 
 		// Bleh
-		$method = new ReflectionMethod( $this->module, 'compileLessString' );
+		$method = new ReflectionMethod( $this->module, 'compileLessFile' );
 		$method->setAccessible( true );
-		$fileContents = file_get_contents( $this->file );
-		$this->assertNotNull( $method->invoke( $this->module, $fileContents, $this->file, $rlContext ) );
+		$this->assertNotNull( $method->invoke( $this->module, $this->file, $rlContext ) );
 	}
 
-	public function toString() : string {
+	public function toString() {
 		$moduleName = $this->module->getName();
 
 		return "{$this->file} in the \"{$moduleName}\" module";

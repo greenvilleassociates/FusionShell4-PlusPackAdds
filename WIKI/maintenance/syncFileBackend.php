@@ -21,8 +21,6 @@
  * @ingroup Maintenance
  */
 
-use MediaWiki\MediaWikiServices;
-
 require_once __DIR__ . '/Maintenance.php';
 
 /**
@@ -48,20 +46,15 @@ class SyncFileBackend extends Maintenance {
 	}
 
 	public function execute() {
-		$backendGroup = MediaWikiServices::getInstance()->getFileBackendGroup();
-		$src = $backendGroup->get( $this->getOption( 'src' ) );
+		$src = FileBackendGroup::singleton()->get( $this->getOption( 'src' ) );
 
 		$posDir = $this->getOption( 'posdir' );
-		if ( $posDir != '' ) {
-			$posFile = "$posDir/" . rawurlencode( $src->getDomainId() );
-		} else {
-			$posFile = false;
-		}
+		$posFile = $posDir ? $posDir . '/' . wfWikiID() : false;
 
 		if ( $this->hasOption( 'posdump' ) ) {
 			// Just dump the current position into the specified position dir
 			if ( !$this->hasOption( 'posdir' ) ) {
-				$this->fatalError( "Param posdir required!" );
+				$this->error( "Param posdir required!", 1 );
 			}
 			if ( $this->hasOption( 'postime' ) ) {
 				$id = (int)$src->getJournal()->getPositionAtTime( $this->getOption( 'postime' ) );
@@ -83,9 +76,9 @@ class SyncFileBackend extends Maintenance {
 		}
 
 		if ( !$this->hasOption( 'dst' ) ) {
-			$this->fatalError( "Param dst required!" );
+			$this->error( "Param dst required!", 1 );
 		}
-		$dst = $backendGroup->get( $this->getOption( 'dst' ) );
+		$dst = FileBackendGroup::singleton()->get( $this->getOption( 'dst' ) );
 
 		$start = $this->getOption( 'start', 0 );
 		if ( !$start && $posFile && is_dir( $posDir ) ) {
@@ -163,12 +156,12 @@ class SyncFileBackend extends Maintenance {
 		$first = true; // first batch
 
 		if ( $start > $end ) { // sanity
-			$this->fatalError( "Error: given starting ID greater than ending ID." );
+			$this->error( "Error: given starting ID greater than ending ID.", 1 );
 		}
 
 		$next = null;
 		do {
-			$limit = min( $this->getBatchSize(), $end - $start + 1 ); // don't go pass ending ID
+			$limit = min( $this->mBatchSize, $end - $start + 1 ); // don't go pass ending ID
 			$this->output( "Doing id $start to " . ( $start + $limit - 1 ) . "...\n" );
 
 			$entries = $src->getJournal()->getChangeEntries( $start, $limit, $next );
@@ -261,7 +254,7 @@ class SyncFileBackend extends Maintenance {
 					'src' => $fsFile->getPath(), 'dst' => $dPath, 'overwrite' => 1 ];
 			} elseif ( $sExists === false ) { // does not exist in source
 				$ops[] = [ 'op' => 'delete', 'src' => $dPath, 'ignoreMissingSource' => 1 ];
-			} else {
+			} else { // error
 				$this->error( "Unable to sync '$dPath': could not stat file." );
 				$status->fatal( 'backend-fail-internal', $src->getName() );
 
@@ -310,5 +303,5 @@ class SyncFileBackend extends Maintenance {
 	}
 }
 
-$maintClass = SyncFileBackend::class;
+$maintClass = "SyncFileBackend";
 require_once RUN_MAINTENANCE_IF_MAIN;

@@ -3,9 +3,9 @@
 /**
  * @group Media
  */
-class BitmapScalingTest extends MediaWikiIntegrationTestCase {
+class BitmapScalingTest extends MediaWikiTestCase {
 
-	protected function setUp() : void {
+	protected function setUp() {
 		parent::setUp();
 
 		$this->setMwGlobals( [
@@ -124,7 +124,7 @@ class BitmapScalingTest extends MediaWikiIntegrationTestCase {
 		$file = new FakeDimensionFile( [ 4000, 4000 ] );
 		$handler = new BitmapHandler;
 		$params = [ 'width' => '3700' ]; // Still bigger than max size.
-		$this->assertEquals( TransformTooBigImageAreaError::class,
+		$this->assertEquals( 'TransformTooBigImageAreaError',
 			get_class( $handler->doTransform( $file, 'dummy path', '', $params ) ) );
 	}
 
@@ -136,7 +136,7 @@ class BitmapScalingTest extends MediaWikiIntegrationTestCase {
 		$file->mustRender = true;
 		$handler = new BitmapHandler;
 		$params = [ 'width' => '5000' ]; // Still bigger than max size.
-		$this->assertEquals( TransformTooBigImageAreaError::class,
+		$this->assertEquals( 'TransformTooBigImageAreaError',
 			get_class( $handler->doTransform( $file, 'dummy path', '', $params ) ) );
 	}
 

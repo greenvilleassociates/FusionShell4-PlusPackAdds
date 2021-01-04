@@ -21,8 +21,6 @@
  * @ingroup Media
  */
 
-use Wikimedia\XMPReader\Reader as XMPReader;
-
 /**
  * Class for reading jpegs and extracting metadata.
  * see also BitmapMetadataHandler.
@@ -32,11 +30,11 @@ use Wikimedia\XMPReader\Reader as XMPReader;
  * @ingroup Media
  */
 class JpegMetadataExtractor {
-	/**
-	 * The max segment is a sanity check. A JPEG file should never even remotely have
-	 * that many segments. Your average file has about 10.
-	 */
-	private const MAX_JPEG_SEGMENTS = 200;
+	const MAX_JPEG_SEGMENTS = 200;
+
+	// the max segment is a sanity check.
+	// A jpeg file should never even remotely have
+	// that many segments. Your average file has about 10.
 
 	/** Function to extract metadata segments of interest from jpeg files
 	 * based on GIFMetadataExtractor.
@@ -49,7 +47,7 @@ class JpegMetadataExtractor {
 	 * @return array Array of interesting segments.
 	 * @throws MWException If given invalid file.
 	 */
-	public static function segmentSplitter( $filename ) {
+	static function segmentSplitter( $filename ) {
 		$showXMP = XMPReader::isSupported();
 
 		$segmentCount = 0;
@@ -84,7 +82,7 @@ class JpegMetadataExtractor {
 				// this is just a sanity check
 				throw new MWException( 'Too many jpeg segments. Aborting' );
 			}
-			while ( $buffer !== "\xFF" && !feof( $fh ) ) {
+			while ( $buffer !== "\xFF" ) {
 				// In theory JPEG files are not allowed to contain anything between the sections,
 				// but in practice they sometimes do. It's customary to ignore the garbage data.
 				$buffer = fread( $fh, 1 );
@@ -104,9 +102,9 @@ class JpegMetadataExtractor {
 				// turns $com to valid utf-8.
 				// thus if no change, its utf-8, otherwise its something else.
 				if ( $com !== $oldCom ) {
-					Wikimedia\suppressWarnings();
+					MediaWiki\suppressWarnings();
 					$com = $oldCom = iconv( 'windows-1252', 'UTF-8//IGNORE', $oldCom );
-					Wikimedia\restoreWarnings();
+					MediaWiki\restoreWarnings();
 				}
 				// Try it again, if its still not a valid string, then probably
 				// binary junk or some really weird encoding, so don't extract.
@@ -114,7 +112,7 @@ class JpegMetadataExtractor {
 				if ( $com === $oldCom ) {
 					$segments["COM"][] = $oldCom;
 				} else {
-					wfDebug( __METHOD__ . " Ignoring JPEG comment as is garbage." );
+					wfDebug( __METHOD__ . " Ignoring JPEG comment as is garbage.\n" );
 				}
 			} elseif ( $buffer === "\xE1" ) {
 				// APP1 section (Exif, XMP, and XMP extended)
@@ -122,19 +120,16 @@ class JpegMetadataExtractor {
 				$temp = self::jpegExtractMarker( $fh );
 				// check what type of app segment this is.
 				if ( substr( $temp, 0, 29 ) === "http://ns.adobe.com/xap/1.0/\x00" && $showXMP ) {
-					// use trim to remove trailing \0 chars
-					$segments["XMP"] = trim( substr( $temp, 29 ) );
+					$segments["XMP"] = substr( $temp, 29 );
 				} elseif ( substr( $temp, 0, 35 ) === "http://ns.adobe.com/xmp/extension/\x00" && $showXMP ) {
-					// use trim to remove trailing \0 chars
-					$segments["XMP_ext"][] = trim( substr( $temp, 35 ) );
+					$segments["XMP_ext"][] = substr( $temp, 35 );
 				} elseif ( substr( $temp, 0, 29 ) === "XMP\x00://ns.adobe.com/xap/1.0/\x00" && $showXMP ) {
 					// Some images (especially flickr images) seem to have this.
 					// I really have no idea what the deal is with them, but
 					// whatever...
-					// use trim to remove trailing \0 chars
-					$segments["XMP"] = trim( substr( $temp, 29 ) );
+					$segments["XMP"] = substr( $temp, 29 );
 					wfDebug( __METHOD__ . ' Found XMP section with wrong app identifier '
-						. "Using anyways." );
+						. "Using anyways.\n" );
 				} elseif ( substr( $temp, 0, 6 ) === "Exif\0\0" ) {
 					// Just need to find out what the byte order is.
 					// because php's exif plugin sucks...
@@ -145,7 +140,7 @@ class JpegMetadataExtractor {
 					} elseif ( $byteOrderMarker === 'II' ) {
 						$segments['byteOrder'] = 'LE';
 					} else {
-						wfDebug( __METHOD__ . " Invalid byte ordering?!" );
+						wfDebug( __METHOD__ . " Invalid byte ordering?!\n" );
 					}
 				}
 			} elseif ( $buffer === "\xED" ) {
@@ -163,8 +158,6 @@ class JpegMetadataExtractor {
 				if ( $size['int'] < 2 ) {
 					throw new MWException( "invalid marker size in jpeg" );
 				}
-				// Note it's possible to seek beyond end of file if truncated.
-				// fseek doesn't report a failure in this case.
 				fseek( $fh, $size['int'] - 2, SEEK_CUR );
 			}
 		}

@@ -2,7 +2,7 @@
  * Some misc JavaScript compatibility tests,
  * just to make sure the environments we run in are consistent.
  */
-( function () {
+( function ( $ ) {
 	QUnit.module( 'mediawiki.jscompat', QUnit.newMwEnvironment() );
 
 	QUnit.test( 'Variable with Unicode letter in name', function ( assert ) {
@@ -20,7 +20,7 @@
 	// Not that we need this. ;)
 	// This fails on IE 6-8
 	// Works on IE 9, Firefox 6, Chrome 14
-	...( 'Keyword workaround: "if" as variable name using Unicode escapes', function ( assert ) {
+	QUnit.test( 'Keyword workaround: "if" as variable name using Unicode escapes', function ( assert ) {
 		var orig = "another token";
 		\u0069\u0066 = orig;
 		assert.deepEqual( \u0069\u0066, orig, '\\u0069\\u0066' );
@@ -31,7 +31,7 @@
 	// Not that we need this. ;)
 	// This fails on IE 6-9
 	// Works on Firefox 6, Chrome 14
-	...( 'Keyword workaround: "if" as member variable name using Unicode escapes', function ( assert ) {
+	QUnit.test( 'Keyword workaround: "if" as member variable name using Unicode escapes', function ( assert ) {
 		var orig = "another token";
 		var foo = {};
 		foo.\u0069\u0066 = orig;
@@ -40,8 +40,10 @@
 	*/
 
 	QUnit.test( 'Stripping of single initial newline from textarea\'s literal contents (T14130)', function ( assert ) {
-		var i, expected, $textarea,
-			maxN = 4;
+		var maxn, n,
+			expected, $textarea;
+
+		maxn = 4;
 
 		function repeat( str, n ) {
 			var out;
@@ -54,14 +56,14 @@
 			}
 		}
 
-		for ( i = 0; i < maxN; i++ ) {
-			expected = repeat( '\n', i ) + 'some text';
+		for ( n = 0; n < maxn; n++ ) {
+			expected = repeat( '\n', n ) + 'some text';
 
 			$textarea = $( '<textarea>\n' + expected + '</textarea>' );
-			assert.strictEqual( $textarea.val(), expected, 'Expecting ' + i + ' newlines (HTML contained ' + ( i + 1 ) + ')' );
+			assert.equal( $textarea.val(), expected, 'Expecting ' + n + ' newlines (HTML contained ' + ( n + 1 ) + ')' );
 
 			$textarea = $( '<textarea>' ).val( expected );
-			assert.strictEqual( $textarea.val(), expected, 'Expecting ' + i + ' newlines (from DOM set with ' + i + ')' );
+			assert.equal( $textarea.val(), expected, 'Expecting ' + n + ' newlines (from DOM set with ' + n + ')' );
 		}
 	} );
-}() );
+}( jQuery ) );

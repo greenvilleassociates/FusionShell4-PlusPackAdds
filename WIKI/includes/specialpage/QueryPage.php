@@ -21,19 +21,14 @@
  * @ingroup SpecialPage
  */
 
-use MediaWiki\Linker\LinkTarget;
-use MediaWiki\MediaWikiServices;
-use Wikimedia\Rdbms\DBError;
+use Wikimedia\Rdbms\ResultWrapper;
 use Wikimedia\Rdbms\IDatabase;
-use Wikimedia\Rdbms\IResultWrapper;
+use Wikimedia\Rdbms\DBError;
 
 /**
  * This is a class for doing query pages; since they're almost all the same,
  * we factor out some of the functionality into a superclass, and let
  * subclasses derive from it.
- *
- * @stable to extend
- *
  * @ingroup SpecialPage
  */
 abstract class QueryPage extends SpecialPage {
@@ -50,18 +45,13 @@ abstract class QueryPage extends SpecialPage {
 	 * The number of rows returned by the query. Reading this variable
 	 * only makes sense in functions that are run after the query has been
 	 * done, such as preprocessResults() and formatRow().
-	 *
-	 * @var int
 	 */
 	protected $numRows;
 
-	/**
-	 * @var string|null
-	 */
 	protected $cachedTimestamp = null;
 
 	/**
-	 * @var bool Whether to show prev/next links
+	 * Whether to show prev/next links
 	 */
 	protected $shownavigation = true;
 
@@ -71,8 +61,7 @@ abstract class QueryPage extends SpecialPage {
 	 *
 	 * DO NOT CHANGE THIS LIST without testing that
 	 * maintenance/updateSpecialPages.php still works.
-	 *
-	 * @return string[][]
+	 * @return array
 	 */
 	public static function getPages() {
 		static $qp = null;
@@ -80,69 +69,45 @@ abstract class QueryPage extends SpecialPage {
 		if ( $qp === null ) {
 			// QueryPage subclass, Special page name
 			$qp = [
-				[ SpecialAncientPages::class, 'Ancientpages' ],
-				[ SpecialBrokenRedirects::class, 'BrokenRedirects' ],
-				[ SpecialDeadendPages::class, 'Deadendpages' ],
-				[ SpecialDoubleRedirects::class, 'DoubleRedirects' ],
-				[ SpecialFileDuplicateSearch::class, 'FileDuplicateSearch' ],
-				[ SpecialListDuplicatedFiles::class, 'ListDuplicatedFiles' ],
-				[ SpecialLinkSearch::class, 'LinkSearch' ],
-				[ SpecialListRedirects::class, 'Listredirects' ],
-				[ SpecialLonelyPages::class, 'Lonelypages' ],
-				[ SpecialLongPages::class, 'Longpages' ],
-				[ SpecialMediaStatistics::class, 'MediaStatistics' ],
-				[ SpecialMIMESearch::class, 'MIMEsearch' ],
-				[ SpecialMostCategories::class, 'Mostcategories' ],
-				[ MostimagesPage::class, 'Mostimages' ],
-				[ SpecialMostInterwikis::class, 'Mostinterwikis' ],
-				[ SpecialMostLinkedCategories::class, 'Mostlinkedcategories' ],
-				[ SpecialMostLinkedTemplates::class, 'Mostlinkedtemplates' ],
-				[ SpecialMostLinked::class, 'Mostlinked' ],
-				[ SpecialMostRevisions::class, 'Mostrevisions' ],
-				[ SpecialFewestRevisions::class, 'Fewestrevisions' ],
-				[ SpecialShortPages::class, 'Shortpages' ],
-				[ SpecialUncategorizedCategories::class, 'Uncategorizedcategories' ],
-				[ SpecialUncategorizedPages::class, 'Uncategorizedpages' ],
-				[ SpecialUncategorizedImages::class, 'Uncategorizedimages' ],
-				[ SpecialUncategorizedTemplates::class, 'Uncategorizedtemplates' ],
-				[ SpecialUnusedCategories::class, 'Unusedcategories' ],
-				[ SpecialUnusedImages::class, 'Unusedimages' ],
-				[ SpecialWantedCategories::class, 'Wantedcategories' ],
-				[ WantedFilesPage::class, 'Wantedfiles' ],
-				[ WantedPagesPage::class, 'Wantedpages' ],
-				[ SpecialWantedTemplates::class, 'Wantedtemplates' ],
-				[ SpecialUnwatchedPages::class, 'Unwatchedpages' ],
-				[ SpecialUnusedTemplates::class, 'Unusedtemplates' ],
-				[ SpecialWithoutInterwiki::class, 'Withoutinterwiki' ],
+				[ 'AncientPagesPage', 'Ancientpages' ],
+				[ 'BrokenRedirectsPage', 'BrokenRedirects' ],
+				[ 'DeadendPagesPage', 'Deadendpages' ],
+				[ 'DoubleRedirectsPage', 'DoubleRedirects' ],
+				[ 'FileDuplicateSearchPage', 'FileDuplicateSearch' ],
+				[ 'ListDuplicatedFilesPage', 'ListDuplicatedFiles' ],
+				[ 'LinkSearchPage', 'LinkSearch' ],
+				[ 'ListredirectsPage', 'Listredirects' ],
+				[ 'LonelyPagesPage', 'Lonelypages' ],
+				[ 'LongPagesPage', 'Longpages' ],
+				[ 'MediaStatisticsPage', 'MediaStatistics' ],
+				[ 'MIMEsearchPage', 'MIMEsearch' ],
+				[ 'MostcategoriesPage', 'Mostcategories' ],
+				[ 'MostimagesPage', 'Mostimages' ],
+				[ 'MostinterwikisPage', 'Mostinterwikis' ],
+				[ 'MostlinkedCategoriesPage', 'Mostlinkedcategories' ],
+				[ 'MostlinkedTemplatesPage', 'Mostlinkedtemplates' ],
+				[ 'MostlinkedPage', 'Mostlinked' ],
+				[ 'MostrevisionsPage', 'Mostrevisions' ],
+				[ 'FewestrevisionsPage', 'Fewestrevisions' ],
+				[ 'ShortPagesPage', 'Shortpages' ],
+				[ 'UncategorizedCategoriesPage', 'Uncategorizedcategories' ],
+				[ 'UncategorizedPagesPage', 'Uncategorizedpages' ],
+				[ 'UncategorizedImagesPage', 'Uncategorizedimages' ],
+				[ 'UncategorizedTemplatesPage', 'Uncategorizedtemplates' ],
+				[ 'UnusedCategoriesPage', 'Unusedcategories' ],
+				[ 'UnusedimagesPage', 'Unusedimages' ],
+				[ 'WantedCategoriesPage', 'Wantedcategories' ],
+				[ 'WantedFilesPage', 'Wantedfiles' ],
+				[ 'WantedPagesPage', 'Wantedpages' ],
+				[ 'WantedTemplatesPage', 'Wantedtemplates' ],
+				[ 'UnwatchedpagesPage', 'Unwatchedpages' ],
+				[ 'UnusedtemplatesPage', 'Unusedtemplates' ],
+				[ 'WithoutInterwikiPage', 'Withoutinterwiki' ],
 			];
-			Hooks::runner()->onWgQueryPages( $qp );
+			Hooks::run( 'wgQueryPages', [ &$qp ] );
 		}
 
 		return $qp;
-	}
-
-	/**
-	 * Get a list of query pages disabled and with it's run mode
-	 * @param Config $config
-	 * @return string[]
-	 */
-	public static function getDisabledQueryPages( Config $config ) {
-		$disableQueryPageUpdate = $config->get( 'DisableQueryPageUpdate' );
-
-		if ( !is_array( $disableQueryPageUpdate ) ) {
-			return [];
-		}
-
-		$pages = [];
-		foreach ( $disableQueryPageUpdate as $name => $runMode ) {
-			if ( is_int( $name ) ) {
-				// The run mode may be omitted
-				$pages[$runMode] = 'disabled';
-			} else {
-				$pages[$name] = $runMode;
-			}
-		}
-		return $pages;
 	}
 
 	/**
@@ -150,7 +115,7 @@ abstract class QueryPage extends SpecialPage {
 	 *
 	 * @param bool $bool
 	 */
-	protected function setListoutput( $bool ) {
+	function setListoutput( $bool ) {
 		$this->listoutput = $bool;
 	}
 
@@ -177,7 +142,6 @@ abstract class QueryPage extends SpecialPage {
 	 * If this function is not overridden or returns something other than
 	 * an array, getSQL() will be used instead. This is for backwards
 	 * compatibility only and is strongly deprecated.
-	 * @stable to override
 	 * @return array
 	 * @since 1.18
 	 */
@@ -191,7 +155,7 @@ abstract class QueryPage extends SpecialPage {
 	 * @throws MWException
 	 * @return string
 	 */
-	protected function getSQL() {
+	function getSQL() {
 		/* Implement getQueryInfo() instead */
 		throw new MWException( "Bug in a QueryPage: doesn't implement getQueryInfo() nor "
 			. "getQuery() properly" );
@@ -201,11 +165,10 @@ abstract class QueryPage extends SpecialPage {
 	 * Subclasses return an array of fields to order by here. Don't append
 	 * DESC to the field names, that'll be done automatically if
 	 * sortDescending() returns true.
-	 * @stable to override
-	 * @return string[]
+	 * @return array
 	 * @since 1.18
 	 */
-	protected function getOrderFields() {
+	function getOrderFields() {
 		return [ 'value' ];
 	}
 
@@ -216,7 +179,6 @@ abstract class QueryPage extends SpecialPage {
 	 * NOTE: formatRow() may get timestamps in TS_MW (mysql), TS_DB (pgsql)
 	 *       or TS_UNIX (querycache) format, so be sure to always run them
 	 *       through wfTimestamp()
-	 * @stable to override
 	 * @return bool
 	 * @since 1.18
 	 */
@@ -227,10 +189,9 @@ abstract class QueryPage extends SpecialPage {
 	/**
 	 * Override to sort by increasing values
 	 *
-	 * @stable to override
 	 * @return bool
 	 */
-	protected function sortDescending() {
+	function sortDescending() {
 		return true;
 	}
 
@@ -239,7 +200,6 @@ abstract class QueryPage extends SpecialPage {
 	 * don't let it run in miser mode. $wgDisableQueryPages causes all query
 	 * pages to be declared expensive. Some query pages are always expensive.
 	 *
-	 * @stable to override
 	 * @return bool
 	 */
 	public function isExpensive() {
@@ -250,7 +210,6 @@ abstract class QueryPage extends SpecialPage {
 	 * Is the output of this query cacheable? Non-cacheable expensive pages
 	 * will be disabled in miser mode and will not have their results written
 	 * to the querycache table.
-	 * @stable to override
 	 * @return bool
 	 * @since 1.18
 	 */
@@ -262,7 +221,6 @@ abstract class QueryPage extends SpecialPage {
 	 * Whether or not the output of the page in question is retrieved from
 	 * the database cache.
 	 *
-	 * @stable to override
 	 * @return bool
 	 */
 	public function isCached() {
@@ -272,31 +230,29 @@ abstract class QueryPage extends SpecialPage {
 	/**
 	 * Sometime we don't want to build rss / atom feeds.
 	 *
-	 * @stable to override
 	 * @return bool
 	 */
-	public function isSyndicated() {
+	function isSyndicated() {
 		return true;
 	}
 
 	/**
 	 * Formats the results of the query for display. The skin is the current
 	 * skin; you can use it for making links. The result is a single row of
-	 * result data. You should be able to grab SQL results from it.
+	 * result data. You should be able to grab SQL results off of it.
 	 * If the function returns false, the line output will be skipped.
 	 * @param Skin $skin
 	 * @param object $result Result row
 	 * @return string|bool String or false to skip
 	 */
-	abstract protected function formatResult( $skin, $result );
+	abstract function formatResult( $skin, $result );
 
 	/**
 	 * The content returned by this function will be output before any result
 	 *
-	 * @stable to override
 	 * @return string
 	 */
-	protected function getPageHeader() {
+	function getPageHeader() {
 		return '';
 	}
 
@@ -316,17 +272,29 @@ abstract class QueryPage extends SpecialPage {
 	 * as an associative array. They will be encoded and added to the paging
 	 * links (prev/next/lengths).
 	 *
-	 * @stable to override
 	 * @return array
 	 */
-	protected function linkParameters() {
+	function linkParameters() {
 		return [];
 	}
 
 	/**
-	 * Clear the cache and save new results
+	 * Some special pages (for example SpecialListusers used to) might not return the
+	 * current object formatted, but return the previous one instead.
+	 * Setting this to return true will ensure formatResult() is called
+	 * one more time to make sure that the very last result is formatted
+	 * as well.
 	 *
-	 * @stable to override
+	 * @deprecated since 1.27
+	 *
+	 * @return bool
+	 */
+	function tryLastResult() {
+		return false;
+	}
+
+	/**
+	 * Clear the cache and save new results
 	 *
 	 * @param int|bool $limit Limit for SQL statement
 	 * @param bool $ignoreErrors Whether to ignore database errors
@@ -352,7 +320,7 @@ abstract class QueryPage extends SpecialPage {
 				$num = $res->numRows();
 				# Fetch results
 				$vals = [];
-				foreach ( $res as $i => $row ) {
+				foreach ( $res as $row ) {
 					if ( isset( $row->value ) ) {
 						if ( $this->usesTimestamps() ) {
 							$value = wfTimestamp( TS_UNIX,
@@ -361,7 +329,7 @@ abstract class QueryPage extends SpecialPage {
 							$value = intval( $row->value ); // T16414
 						}
 					} else {
-						$value = $i;
+						$value = 0;
 					}
 
 					$vals[] = [
@@ -409,36 +377,17 @@ abstract class QueryPage extends SpecialPage {
 
 	/**
 	 * Get a DB connection to be used for slow recache queries
-	 * @stable to override
 	 * @return IDatabase
 	 */
-	protected function getRecacheDB() {
+	function getRecacheDB() {
 		return wfGetDB( DB_REPLICA, [ $this->getName(), 'QueryPage::recache', 'vslow' ] );
 	}
 
 	/**
-	 * Remove a cached result.
-	 * Useful for interactive backlogs where the user can fix problems in-place.
-	 * @param LinkTarget $title The page to remove.
-	 * @since 1.34
-	 */
-	public function delete( LinkTarget $title ) {
-		if ( $this->isCached() ) {
-			$dbw = wfGetDB( DB_MASTER );
-			$dbw->delete( 'querycache', [
-				'qc_type' => $this->getName(),
-				'qc_namespace' => $title->getNamespace(),
-				'qc_title' => $title->getDBkey(),
-			], __METHOD__ );
-		}
-	}
-
-	/**
 	 * Run the query and return the result
-	 * @stable to override
 	 * @param int|bool $limit Numerical limit or false for no limit
 	 * @param int|bool $offset Numerical offset or false for no offset
-	 * @return IResultWrapper
+	 * @return ResultWrapper
 	 * @since 1.18
 	 */
 	public function reallyDoQuery( $limit, $offset = false ) {
@@ -490,7 +439,7 @@ abstract class QueryPage extends SpecialPage {
 	 * Somewhat deprecated, you probably want to be using execute()
 	 * @param int|bool $offset
 	 * @param int|bool $limit
-	 * @return IResultWrapper
+	 * @return ResultWrapper
 	 */
 	public function doQuery( $offset = false, $limit = false ) {
 		if ( $this->isCached() && $this->isCacheable() ) {
@@ -502,11 +451,9 @@ abstract class QueryPage extends SpecialPage {
 
 	/**
 	 * Fetch the query results from the query cache
-	 * @stable to override
-	 *
 	 * @param int|bool $limit Numerical limit or false for no limit
 	 * @param int|bool $offset Numerical offset or false for no offset
-	 * @return IResultWrapper
+	 * @return ResultWrapper
 	 * @since 1.18
 	 */
 	public function fetchFromCache( $limit, $offset = false ) {
@@ -545,19 +492,15 @@ abstract class QueryPage extends SpecialPage {
 	/**
 	 * Return the order fields for fetchFromCache. Default is to always use
 	 * "ORDER BY value" which was the default prior to this function.
-	 * @stable to override
 	 * @return array
 	 * @since 1.29
 	 */
-	protected function getCacheOrderFields() {
+	function getCacheOrderFields() {
 		return [ 'value' ];
 	}
 
-	/**
-	 * @return string
-	 */
 	public function getCachedTimestamp() {
-		if ( $this->cachedTimestamp === null ) {
+		if ( is_null( $this->cachedTimestamp ) ) {
 			$dbr = wfGetDB( DB_REPLICA );
 			$fname = static::class . '::getCachedTimestamp';
 			$this->cachedTimestamp = $dbr->selectField( 'querycache_info', 'qci_timestamp',
@@ -567,7 +510,7 @@ abstract class QueryPage extends SpecialPage {
 	}
 
 	/**
-	 * Returns limit and offset, as returned by $this->getRequest()->getLimitOffsetForUser().
+	 * Returns limit and offset, as returned by $this->getRequest()->getLimitOffset().
 	 * Subclasses may override this to further restrict or modify limit and offset.
 	 *
 	 * @note Restricts the offset parameter, as most query pages have inefficient paging
@@ -579,8 +522,7 @@ abstract class QueryPage extends SpecialPage {
 	 * @return int[] list( $limit, $offset )
 	 */
 	protected function getLimitOffset() {
-		list( $limit, $offset ) = $this->getRequest()
-			->getLimitOffsetForUser( $this->getUser() );
+		list( $limit, $offset ) = $this->getRequest()->getLimitOffset();
 		if ( $this->getConfig()->get( 'MiserMode' ) ) {
 			$maxResults = $this->getMaxResults();
 			// Can't display more than max results on a page
@@ -615,7 +557,6 @@ abstract class QueryPage extends SpecialPage {
 	 * Most QueryPage subclasses use inefficient paging, so limit the max amount we return
 	 * This matters for uncached query pages that might otherwise accept an offset of 3 million
 	 *
-	 * @stable to override
 	 * @since 1.27
 	 * @return int
 	 */
@@ -627,11 +568,14 @@ abstract class QueryPage extends SpecialPage {
 	/**
 	 * This is the actual workhorse. It does everything needed to make a
 	 * real, honest-to-gosh query page.
-	 * @stable to override
-	 * @param string|null $par
+	 * @param string $par
 	 */
 	public function execute( $par ) {
-		$this->checkPermissions();
+		$user = $this->getUser();
+		if ( !$this->userCanExecute( $user ) ) {
+			$this->displayRestrictionError();
+			return;
+		}
 
 		$this->setHeaders();
 		$this->outputHeader();
@@ -663,7 +607,6 @@ abstract class QueryPage extends SpecialPage {
 				$maxResults = $lang->formatNum( $this->getConfig()->get( 'QueryCacheLimit' ) );
 
 				if ( $ts ) {
-					$user = $this->getUser();
 					$updated = $lang->userTimeAndDate( $ts, $user );
 					$updateddate = $lang->userDate( $ts, $user );
 					$updatedtime = $lang->userTime( $ts, $user );
@@ -676,21 +619,13 @@ abstract class QueryPage extends SpecialPage {
 
 				# If updates on this page have been disabled, let the user know
 				# that the data set won't be refreshed for now
-				$disabledQueryPages = self::getDisabledQueryPages( $this->getConfig() );
-				if ( isset( $disabledQueryPages[$this->getName()] ) ) {
-					$runMode = $disabledQueryPages[$this->getName()];
-					if ( $runMode === 'disabled' ) {
-						$out->wrapWikiMsg(
-							"<div class=\"mw-querypage-no-updates\">\n$1\n</div>",
-							'querypage-no-updates'
-						);
-					} else {
-						// Messages used here: querypage-updates-periodical
-						$out->wrapWikiMsg(
-							"<div class=\"mw-querypage-updates-" . $runMode . "\">\n$1\n</div>",
-							'querypage-updates-' . $runMode
-						);
-					}
+				if ( is_array( $this->getConfig()->get( 'DisableQueryPageUpdate' ) )
+					&& in_array( $this->getName(), $this->getConfig()->get( 'DisableQueryPageUpdate' ) )
+				) {
+					$out->wrapWikiMsg(
+						"<div class=\"mw-querypage-no-updates\">\n$1\n</div>",
+						'querypage-no-updates'
+					);
 				}
 			}
 		}
@@ -713,8 +648,8 @@ abstract class QueryPage extends SpecialPage {
 				$miserMaxResults = $this->getConfig()->get( 'MiserMode' )
 					&& ( $this->offset + $this->limit >= $this->getMaxResults() );
 				$atEnd = ( $this->numRows <= $this->limit ) || $miserMaxResults;
-				$paging = $this->buildPrevNextNavigation( $this->offset,
-					$this->limit, $this->linkParameters(), $atEnd, $par );
+				$paging = $this->getLanguage()->viewPrevNext( $this->getPageTitle( $par ), $this->offset,
+					$this->limit, $this->linkParameters(), $atEnd );
 				$out->addHTML( '<p>' . $paging . '</p>' );
 			} else {
 				# No results to show, so don't bother with "showing X of Y" etc.
@@ -730,7 +665,7 @@ abstract class QueryPage extends SpecialPage {
 		# an OutputPage, and let them get on with it
 		$this->outputResults( $out,
 			$this->getSkin(),
-			$dbr, # Should use IResultWrapper for this
+			$dbr, # Should use a ResultWrapper for this
 			$res,
 			min( $this->numRows, $this->limit ), # do not format the one extra row, if exist
 			$this->offset );
@@ -747,16 +682,16 @@ abstract class QueryPage extends SpecialPage {
 	 * Format and output report results using the given information plus
 	 * OutputPage
 	 *
-	 * @stable to override
-	 *
 	 * @param OutputPage $out OutputPage to print to
 	 * @param Skin $skin User skin to use
 	 * @param IDatabase $dbr Database (read) connection to use
-	 * @param IResultWrapper $res Result pointer
+	 * @param ResultWrapper $res Result pointer
 	 * @param int $num Number of available result rows
 	 * @param int $offset Paging offset
 	 */
 	protected function outputResults( $out, $skin, $dbr, $res, $num, $offset ) {
+		global $wgContLang;
+
 		if ( $num > 0 ) {
 			$html = [];
 			if ( !$this->listoutput ) {
@@ -765,7 +700,20 @@ abstract class QueryPage extends SpecialPage {
 
 			# $res might contain the whole 1,000 rows, so we read up to
 			# $num [should update this to use a Pager]
+			// @codingStandardsIgnoreStart Generic.CodeAnalysis.ForLoopWithTestFunctionCall.NotAllowed
 			for ( $i = 0; $i < $num && $row = $res->fetchObject(); $i++ ) {
+				// @codingStandardsIgnoreEnd
+				$line = $this->formatResult( $skin, $row );
+				if ( $line ) {
+					$html[] = $this->listoutput
+						? $line
+						: "<li>{$line}</li>\n";
+				}
+			}
+
+			# Flush the final result
+			if ( $this->tryLastResult() ) {
+				$row = null;
 				$line = $this->formatResult( $skin, $row );
 				if ( $line ) {
 					$html[] = $this->listoutput
@@ -779,7 +727,7 @@ abstract class QueryPage extends SpecialPage {
 			}
 
 			$html = $this->listoutput
-				? MediaWikiServices::getInstance()->getContentLanguage()->listToText( $html )
+				? $wgContLang->listToText( $html )
 				: implode( '', $html );
 
 			$out->addHTML( $html );
@@ -790,44 +738,135 @@ abstract class QueryPage extends SpecialPage {
 	 * @param int $offset
 	 * @return string
 	 */
-	protected function openList( $offset ) {
+	function openList( $offset ) {
 		return "\n<ol start='" . ( $offset + 1 ) . "' class='special'>\n";
 	}
 
 	/**
 	 * @return string
 	 */
-	protected function closeList() {
+	function closeList() {
 		return "</ol>\n";
 	}
 
 	/**
 	 * Do any necessary preprocessing of the result object.
-	 * @stable to override
 	 * @param IDatabase $db
-	 * @param IResultWrapper $res
+	 * @param ResultWrapper $res
 	 */
-	protected function preprocessResults( $db, $res ) {
+	function preprocessResults( $db, $res ) {
 	}
 
 	/**
-	 * Creates a new LinkBatch object, adds all pages from the passed result wrapper (MUST include
+	 * Similar to above, but packaging in a syndicated feed instead of a web page
+	 * @param string $class
+	 * @param int $limit
+	 * @return bool
+	 */
+	function doFeed( $class = '', $limit = 50 ) {
+		if ( !$this->getConfig()->get( 'Feed' ) ) {
+			$this->getOutput()->addWikiMsg( 'feed-unavailable' );
+			return false;
+		}
+
+		$limit = min( $limit, $this->getConfig()->get( 'FeedLimit' ) );
+
+		$feedClasses = $this->getConfig()->get( 'FeedClasses' );
+		if ( isset( $feedClasses[$class] ) ) {
+			/** @var RSSFeed|AtomFeed $feed */
+			$feed = new $feedClasses[$class](
+				$this->feedTitle(),
+				$this->feedDesc(),
+				$this->feedUrl() );
+			$feed->outHeader();
+
+			$res = $this->reallyDoQuery( $limit, 0 );
+			foreach ( $res as $obj ) {
+				$item = $this->feedResult( $obj );
+				if ( $item ) {
+					$feed->outItem( $item );
+				}
+			}
+
+			$feed->outFooter();
+			return true;
+		} else {
+			return false;
+		}
+	}
+
+	/**
+	 * Override for custom handling. If the titles/links are ok, just do
+	 * feedItemDesc()
+	 * @param object $row
+	 * @return FeedItem|null
+	 */
+	function feedResult( $row ) {
+		if ( !isset( $row->title ) ) {
+			return null;
+		}
+		$title = Title::makeTitle( intval( $row->namespace ), $row->title );
+		if ( $title ) {
+			$date = isset( $row->timestamp ) ? $row->timestamp : '';
+			$comments = '';
+			if ( $title ) {
+				$talkpage = $title->getTalkPage();
+				$comments = $talkpage->getFullURL();
+			}
+
+			return new FeedItem(
+				$title->getPrefixedText(),
+				$this->feedItemDesc( $row ),
+				$title->getFullURL(),
+				$date,
+				$this->feedItemAuthor( $row ),
+				$comments );
+		} else {
+			return null;
+		}
+	}
+
+	function feedItemDesc( $row ) {
+		return isset( $row->comment ) ? htmlspecialchars( $row->comment ) : '';
+	}
+
+	function feedItemAuthor( $row ) {
+		return isset( $row->user_text ) ? $row->user_text : '';
+	}
+
+	function feedTitle() {
+		$desc = $this->getDescription();
+		$code = $this->getConfig()->get( 'LanguageCode' );
+		$sitename = $this->getConfig()->get( 'Sitename' );
+		return "$sitename - $desc [$code]";
+	}
+
+	function feedDesc() {
+		return $this->msg( 'tagline' )->text();
+	}
+
+	function feedUrl() {
+		return $this->getPageTitle()->getFullURL();
+	}
+
+	/**
+	 * Creates a new LinkBatch object, adds all pages from the passed ResultWrapper (MUST include
 	 * title and optional the namespace field) and executes the batch. This operation will pre-cache
 	 * LinkCache information like page existence and information for stub color and redirect hints.
 	 *
-	 * @param IResultWrapper $res The result wrapper to process. Needs to include the title
+	 * @param ResultWrapper $res The ResultWrapper object to process. Needs to include the title
 	 *  field and namespace field, if the $ns parameter isn't set.
-	 * @param null $ns Use this namespace for the given titles in the result wrapper,
+	 * @param null $ns Use this namespace for the given titles in the ResultWrapper object,
 	 *  instead of the namespace value of $res.
 	 */
-	protected function executeLBFromResultWrapper( IResultWrapper $res, $ns = null ) {
+	protected function executeLBFromResultWrapper( ResultWrapper $res, $ns = null ) {
 		if ( !$res->numRows() ) {
 			return;
 		}
 
 		$batch = new LinkBatch;
 		foreach ( $res as $row ) {
-			$batch->add( $ns ?? $row->namespace, $row->title );
+			$batch->add( $ns !== null ? $ns : $row->namespace, $row->title );
 		}
 		$batch->execute();
 

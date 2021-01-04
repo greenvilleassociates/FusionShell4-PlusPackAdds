@@ -22,8 +22,8 @@
  * @author Rob Church <robchur@gmail.com>
  */
 
+use Wikimedia\Rdbms\ResultWrapper;
 use Wikimedia\Rdbms\IDatabase;
-use Wikimedia\Rdbms\IResultWrapper;
 
 /**
  * Special page lists templates with a large number of
@@ -31,8 +31,8 @@ use Wikimedia\Rdbms\IResultWrapper;
  *
  * @ingroup SpecialPage
  */
-class SpecialMostLinkedTemplates extends QueryPage {
-	public function __construct( $name = 'Mostlinkedtemplates' ) {
+class MostlinkedTemplatesPage extends QueryPage {
+	function __construct( $name = 'Mostlinkedtemplates' ) {
 		parent::__construct( $name );
 	}
 
@@ -79,7 +79,7 @@ class SpecialMostLinkedTemplates extends QueryPage {
 	 * Pre-cache page existence to speed up link generation
 	 *
 	 * @param IDatabase $db
-	 * @param IResultWrapper $res
+	 * @param ResultWrapper $res
 	 */
 	public function preprocessResults( $db, $res ) {
 		$this->executeLBFromResultWrapper( $res );

@@ -58,6 +58,11 @@ $specialPageAliases['fi'] = [
 	'Captcha' => [ 'Ihmiskäyttäjävarmistus' ],
 ];
 
+/** Galician (galego) */
+$specialPageAliases['gl'] = [
+	'Captcha' => [ 'Captcha' ],
+];
+
 /** Hawaiian (Hawai`i) */
 $specialPageAliases['haw'] = [
 	'Captcha' => [ 'Kapakā', 'Kapaka' ],
@@ -83,9 +88,19 @@ $specialPageAliases['ksh'] = [
 	'Captcha' => [ 'Kaptscha' ],
 ];
 
+/** Cornish (kernowek) */
+$specialPageAliases['kw'] = [
+	'Captcha' => [ 'Captcha' ],
+];
+
 /** Northern Luri (لۊری شومالی) */
 $specialPageAliases['lrc'] = [
 	'Captcha' => [ 'رازینە_کأپچا' ],
+];
+
+/** Macedonian (македонски) */
+$specialPageAliases['mk'] = [
+	'Captcha' => [ 'Captcha' ],
 ];
 
 /** Malayalam (മലയാളം) */
@@ -98,19 +113,9 @@ $specialPageAliases['sr-ec'] = [
 	'Captcha' => [ 'ПотврдниКод', 'Потврдни_код' ],
 ];
 
-/** Serbian (Latin script) (srpski (latinica)‎) */
-$specialPageAliases['sr-el'] = [
-	'Captcha' => [ 'PotvrdniKod', 'Potvrdni_kod' ],
-];
-
 /** Turkish (Türkçe) */
 $specialPageAliases['tr'] = [
 	'Captcha' => [ 'GüvenlikKodu' ],
-];
-
-/** Urdu (اردو) */
-$specialPageAliases['ur'] = [
-	'Captcha' => [ 'کیپچا' ],
 ];
 
 /** Cantonese (粵語) */

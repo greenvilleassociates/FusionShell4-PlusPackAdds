@@ -23,8 +23,7 @@
 
 require_once __DIR__ . '/Maintenance.php';
 
-use MediaWiki\MediaWikiServices;
-use Wikimedia\Rdbms\IResultWrapper;
+use Wikimedia\Rdbms\ResultWrapper;
 
 /**
  * Maintenance script that sends purge requests for pages edited in a date
@@ -53,7 +52,7 @@ class PurgeChangedPages extends Maintenance {
 		global $wgHTCPRouting;
 
 		if ( $this->hasOption( 'htcp-dest' ) ) {
-			$parts = explode( ':', $this->getOption( 'htcp-dest' ), 2 );
+			$parts = explode( ':', $this->getOption( 'htcp-dest' ) );
 			if ( count( $parts ) < 2 ) {
 				// Add default htcp port
 				$parts[] = '4827';
@@ -77,10 +76,10 @@ class PurgeChangedPages extends Maintenance {
 			$this->maybeHelp( true );
 		}
 
-		$stuckCount = 0;
+		$stuckCount = 0; // loop breaker
 		while ( true ) {
 			// Adjust bach size if we are stuck in a second that had many changes
-			$bSize = ( $stuckCount + 1 ) * $this->getBatchSize();
+			$bSize = $this->mBatchSize + ( $stuckCount * $this->mBatchSize );
 
 			$res = $dbr->select(
 				[ 'page', 'revision' ],
@@ -100,7 +99,7 @@ class PurgeChangedPages extends Maintenance {
 				__METHOD__,
 				[ 'ORDER BY' => 'rev_timestamp', 'LIMIT' => $bSize ],
 				[
-					'page' => [ 'JOIN', 'rev_page=page_id' ],
+					'page' => [ 'INNER JOIN', 'rev_page=page_id' ],
 				]
 			);
 
@@ -137,9 +136,9 @@ class PurgeChangedPages extends Maintenance {
 				}
 			}
 
-			// Send batch of purge requests out to CDN servers
-			$hcu = MediaWikiServices::getInstance()->getHtmlCacheUpdater();
-			$hcu->purgeUrls( $urls, $hcu::PURGE_NAIVE );
+			// Send batch of purge requests out to squids
+			$squid = new CdnCacheUpdate( $urls, count( $urls ) );
+			$squid->doUpdate();
 
 			if ( $this->hasOption( 'sleep-per-batch' ) ) {
 				// sleep-per-batch is milliseconds, usleep wants micro seconds.
@@ -164,40 +163,32 @@ class PurgeChangedPages extends Maintenance {
 	 *
 	 * @todo move this elsewhere
 	 *
-	 * @param IResultWrapper $res Query result sorted by $column (ascending)
+	 * @param ResultWrapper $res Query result sorted by $column (ascending)
 	 * @param string $column
 	 * @param int $limit
 	 * @return array (array of rows, string column value)
 	 */
-	protected function pageableSortedRows( IResultWrapper $res, $column, $limit ) {
+	protected function pageableSortedRows( ResultWrapper $res, $column, $limit ) {
 		$rows = iterator_to_array( $res, false );
-
-		// Nothing to do
-		if ( !$rows ) {
-			return [ [], null ];
+		$count = count( $rows );
+		if ( !$count ) {
+			return [ [], null ]; // nothing to do
+		} elseif ( $count < $limit ) {
+			return [ $rows, $rows[$count - 1]->$column ]; // no more rows left
 		}
-
-		$lastValue = end( $rows )->$column;
-		if ( count( $rows ) < $limit ) {
-			return [ $rows, $lastValue ];
-		}
-
-		for ( $i = count( $rows ) - 1; $i >= 0; --$i ) {
-			if ( $rows[$i]->$column !== $lastValue ) {
+		$lastValue = $rows[$count - 1]->$column; // should be the highest
+		for ( $i = $count - 1; $i >= 0; --$i ) {
+			if ( $rows[$i]->$column === $lastValue ) {
+				unset( $rows[$i] );
+			} else {
 				break;
 			}
-
-			unset( $rows[$i] );
 		}
+		$lastValueLeft = count( $rows ) ? $rows[count( $rows ) - 1]->$column : null;
 
-		// No more rows left
-		if ( !$rows ) {
-			return [ [], null ];
-		}
-
-		return [ $rows, end( $rows )->$column ];
+		return [ $rows, $lastValueLeft ];
 	}
 }
 
-$maintClass = PurgeChangedPages::class;
+$maintClass = "PurgeChangedPages";
 require_once RUN_MAINTENANCE_IF_MAIN;

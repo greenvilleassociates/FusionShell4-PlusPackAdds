@@ -21,8 +21,6 @@
  * @ingroup SpecialPage
  */
 
-use MediaWiki\MediaWikiServices;
-
 /**
  * Special page lists various statistics, including the contents of
  * `site_stats`, plus page view details if enabled
@@ -47,6 +45,7 @@ class SpecialStatistics extends SpecialPage {
 		$this->total = SiteStats::pages();
 		$this->users = SiteStats::users();
 		$this->activeUsers = SiteStats::activeUsers();
+		$this->hook = '';
 
 		$text = Xml::openElement( 'table', [ 'class' => 'wikitable mw-statistics-table' ] );
 
@@ -64,9 +63,7 @@ class SpecialStatistics extends SpecialPage {
 
 		# Statistic - other
 		$extraStats = [];
-		if ( $this->getHookRunner()->onSpecialStatsAddExtra(
-			$extraStats, $this->getContext() )
-		) {
+		if ( Hooks::run( 'SpecialStatsAddExtra', [ &$extraStats, $this->getContext() ] ) ) {
 			$text .= $this->getOtherStats( $extraStats );
 		}
 
@@ -84,7 +81,7 @@ class SpecialStatistics extends SpecialPage {
 	/**
 	 * Format a row
 	 * @param string $text Description of the row
-	 * @param float|string $number A statistical number
+	 * @param float $number A statistical number
 	 * @param array $trExtraParams Params to table row, see Html::elememt
 	 * @param string $descMsg Message key
 	 * @param array|string $descMsgParam Message parameters
@@ -171,11 +168,7 @@ class SpecialStatistics extends SpecialPage {
 			Xml::tags( 'th', [ 'colspan' => '2' ],
 				$this->msg( 'statistics-header-users' )->parse() ) .
 			Xml::closeElement( 'tr' ) .
-			$this->formatRow( $this->msg( 'statistics-users' )->parse() . ' ' .
-				$this->getLinkRenderer()->makeKnownLink(
-					SpecialPage::getTitleFor( 'Listusers' ),
-					$this->msg( 'listgrouprights-members' )->text()
-				),
+			$this->formatRow( $this->msg( 'statistics-users' )->parse(),
 				$this->getLanguage()->formatNum( $this->users ),
 				[ 'class' => 'mw-statistics-users' ]
 			) .
@@ -210,8 +203,8 @@ class SpecialStatistics extends SpecialPage {
 			}
 			$msg = $this->msg( 'grouppage-' . $groupname )->inContentLanguage();
 			if ( $msg->isBlank() ) {
-				$grouppageLocalized = MediaWikiServices::getInstance()->getNamespaceInfo()->
-					getCanonicalName( NS_PROJECT ) . ':' . $groupname;
+				$grouppageLocalized = MWNamespace::getCanonicalName( NS_PROJECT ) .
+					':' . $groupname;
 			} else {
 				$grouppageLocalized = $msg->text();
 			}

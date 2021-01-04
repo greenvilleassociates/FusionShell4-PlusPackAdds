@@ -20,16 +20,12 @@
  * @ingroup Actions
  */
 
-use MediaWiki\MediaWikiServices;
-use MediaWiki\Revision\RevisionRecord;
-use MediaWiki\Revision\SlotRecord;
-
 /**
  * User interface for the rollback action
  *
  * @ingroup Actions
  */
-class RollbackAction extends FormAction {
+class RollbackAction extends FormlessAction {
 
 	public function getName() {
 		return 'rollback';
@@ -39,83 +35,42 @@ class RollbackAction extends FormAction {
 		return 'rollback';
 	}
 
-	protected function usesOOUI() {
-		return true;
-	}
-
-	protected function getDescription() {
-		return '';
-	}
-
-	public function doesWrites() {
-		return true;
-	}
-
-	public function onSuccess() {
-		return false;
-	}
-
-	public function onSubmit( $data ) {
-		return false;
-	}
-
-	protected function alterForm( HTMLForm $form ) {
-		$form->setWrapperLegendMsg( 'confirm-rollback-top' );
-		$form->setSubmitTextMsg( 'confirm-rollback-button' );
-		$form->setTokenSalt( 'rollback' );
-
-		$from = $this->getRequest()->getVal( 'from' );
-		if ( $from === null ) {
-			throw new BadRequestError( 'rollbackfailed', 'rollback-missingparam' );
-		}
-		foreach ( [ 'from', 'bot', 'hidediff', 'summary', 'token' ] as $param ) {
-			$val = $this->getRequest()->getVal( $param );
-			if ( $val !== null ) {
-				$form->addHiddenField( $param, $val );
-			}
-		}
-	}
+	/**
+	 * Temporarily unused message keys due to T88044/T136375:
+	 * - confirm-rollback-top
+	 * - confirm-rollback-button
+	 * - rollbackfailed
+	 * - rollback-missingparam
+	 * - rollback-success-notify
+	 */
 
 	/**
 	 * @throws ErrorPageError
-	 * @throws ReadOnlyError
-	 * @throws ThrottledError
 	 */
-	public function show() {
-		if ( $this->getUser()->getOption( 'showrollbackconfirmation' ) == false ||
-			 $this->getRequest()->wasPosted() ) {
-			$this->handleRollbackRequest();
-		} else {
-			$this->showRollbackConfirmationForm();
-		}
-	}
-
-	public function handleRollbackRequest() {
-		$this->enableTransactionalTimelimit();
+	public function onView() {
+		// TODO: use $this->useTransactionalTimeLimit(); when POST only
+		wfTransactionalTimeLimit();
 
 		$request = $this->getRequest();
 		$user = $this->getUser();
 		$from = $request->getVal( 'from' );
-		$rev = $this->getWikiPage()->getRevisionRecord();
+		$rev = $this->page->getRevision();
 		if ( $from === null ) {
 			throw new ErrorPageError( 'rollbackfailed', 'rollback-missingparam' );
 		}
 		if ( !$rev ) {
 			throw new ErrorPageError( 'rollbackfailed', 'rollback-missingrevision' );
 		}
-
-		$revUser = $rev->getUser();
-		$userText = $revUser ? $revUser->getName() : '';
-		if ( $from !== $userText ) {
+		if ( $from !== $rev->getUserText() ) {
 			throw new ErrorPageError( 'rollbackfailed', 'alreadyrolled', [
 				$this->getTitle()->getPrefixedText(),
 				$from,
-				$userText
+				$rev->getUserText()
 			] );
 		}
 
 		$data = null;
-		$errors = $this->getWikiPage()->doRollback(
+		$errors = $this->page->doRollback(
 			$from,
 			$request->getText( 'summary' ),
 			$request->getVal( 'token' ),
@@ -128,25 +83,21 @@ class RollbackAction extends FormAction {
 			throw new ThrottledError;
 		}
 
-		if ( $this->hasRollbackRelatedErrors( $errors ) ) {
+		if ( isset( $errors[0][0] ) &&
+			( $errors[0][0] == 'alreadyrolled' || $errors[0][0] == 'cantrollback' )
+		) {
 			$this->getOutput()->setPageTitle( $this->msg( 'rollbackfailed' ) );
 			$errArray = $errors[0];
 			$errMsg = array_shift( $errArray );
 			$this->getOutput()->addWikiMsgArray( $errMsg, $errArray );
 
-			if ( isset( $data['current-revision-record'] ) ) {
-				/** @var RevisionRecord $current */
-				$current = $data['current-revision-record'];
+			if ( isset( $data['current'] ) ) {
+				/** @var Revision $current */
+				$current = $data['current'];
 
-				if ( $current->getComment() != null ) {
-					$this->getOutput()->addWikiMsg(
-						'editcomment',
-						Message::rawParam(
-							Linker::formatComment(
-								$current->getComment()->text
-							)
-						)
-					);
+				if ( $current->getComment() != '' ) {
+					$this->getOutput()->addHTML( $this->msg( 'editcomment' )->rawParams(
+						Linker::formatComment( $current->getComment() ) )->parse() );
 				}
 			}
 
@@ -164,28 +115,25 @@ class RollbackAction extends FormAction {
 			throw new ErrorPageError( 'rollbackfailed', $error[0], array_slice( $error, 1 ) );
 		}
 
-		/** @var RevisionRecord $current */
-		$current = $data['current-revision-record'];
-		$target = $data['target-revision-record'];
+		/** @var Revision $current */
+		$current = $data['current'];
+		$target = $data['target'];
 		$newId = $data['newid'];
 		$this->getOutput()->setPageTitle( $this->msg( 'actioncomplete' ) );
 		$this->getOutput()->setRobotPolicy( 'noindex,nofollow' );
 
 		$old = Linker::revUserTools( $current );
 		$new = Linker::revUserTools( $target );
-
-		$currentUser = $current->getUser( RevisionRecord::FOR_THIS_USER, $user );
-		$targetUser = $target->getUser( RevisionRecord::FOR_THIS_USER, $user );
 		$this->getOutput()->addHTML(
 			$this->msg( 'rollback-success' )
 				->rawParams( $old, $new )
-				->params( $currentUser ? $currentUser->getName() : '' )
-				->params( $targetUser ? $targetUser->getName() : '' )
+				->params( $current->getUserText( Revision::FOR_THIS_USER, $user ) )
+				->params( $target->getUserText( Revision::FOR_THIS_USER, $user ) )
 				->parseAsBlock()
 		);
 
 		if ( $user->getBoolOption( 'watchrollback' ) ) {
-			$user->addWatch( $this->getTitle(), User::IGNORE_USER_RIGHTS );
+			$user->addWatch( $this->page->getTitle(), User::IGNORE_USER_RIGHTS );
 		}
 
 		$this->getOutput()->returnToMain( false, $this->getTitle() );
@@ -193,11 +141,7 @@ class RollbackAction extends FormAction {
 		if ( !$request->getBool( 'hidediff', false ) &&
 			!$this->getUser()->getBoolOption( 'norollbackdiff' )
 		) {
-			$contentModel = $current->getSlot( SlotRecord::MAIN, RevisionRecord::RAW )
-				->getModel();
-			$contentHandler = MediaWikiServices::getInstance()
-				->getContentHandlerFactory()
-				->getContentHandler( $contentModel );
+			$contentHandler = $current->getContentHandler();
 			$de = $contentHandler->createDifferenceEngine(
 				$this->getContext(),
 				$current->getId(),
@@ -207,53 +151,14 @@ class RollbackAction extends FormAction {
 			);
 			$de->showDiff( '', '' );
 		}
+		return;
 	}
 
-	/**
-	 * Enables transactional time limit for POST and GET requests to RollbackAction
-	 * @throws ConfigException
-	 */
-	private function enableTransactionalTimelimit() {
-		// If Rollbacks are made POST-only, use $this->useTransactionalTimeLimit()
-		wfTransactionalTimeLimit();
-		if ( !$this->getRequest()->wasPosted() ) {
-			/**
-			 * We apply the higher POST limits on GET requests
-			 * to prevent logstash.wikimedia.org from being spammed
-			 */
-			$fname = __METHOD__;
-			$trxLimits = $this->context->getConfig()->get( 'TrxProfilerLimits' );
-			$trxProfiler = Profiler::instance()->getTransactionProfiler();
-			$trxProfiler->redefineExpectations( $trxLimits['POST'], $fname );
-			DeferredUpdates::addCallableUpdate( function () use ( $trxProfiler, $trxLimits, $fname
-			) {
-				$trxProfiler->redefineExpectations( $trxLimits['PostSend-POST'], $fname );
-			} );
-		}
+	protected function getDescription() {
+		return '';
 	}
 
-	private function showRollbackConfirmationForm() {
-		$form = $this->getForm();
-		if ( $form->show() ) {
-			$this->onSuccess();
-		}
-	}
-
-	protected function getFormFields() {
-		return [
-			'intro' => [
-				'type' => 'info',
-				'vertical-label' => true,
-				'raw' => true,
-				'default' => $this->msg( 'confirm-rollback-bottom' )->parse()
-			]
-		];
-	}
-
-	private function hasRollbackRelatedErrors( array $errors ) {
-		return isset( $errors[0][0] ) &&
-			( $errors[0][0] == 'alreadyrolled' ||
-				$errors[0][0] == 'cantrollback'
-			);
+	public function doesWrites() {
+		return true;
 	}
 }

@@ -20,7 +20,6 @@
 
 namespace MediaWiki\Shell;
 
-use ExecutableFinder;
 use Psr\Log\LoggerAwareTrait;
 use Psr\Log\NullLogger;
 
@@ -38,57 +37,16 @@ class CommandFactory {
 	/** @var string|bool */
 	private $cgroup;
 
-	/** @var bool */
-	private $doLogStderr = false;
-
 	/**
-	 * @var string|bool
-	 */
-	private $restrictionMethod;
-
-	/**
-	 * @var string|bool
-	 */
-	private $firejail;
-
-	/**
+	 * Constructor
+	 *
 	 * @param array $limits See {@see Command::limits()}
 	 * @param string|bool $cgroup See {@see Command::cgroup()}
-	 * @param string|bool $restrictionMethod
 	 */
-	public function __construct( array $limits, $cgroup, $restrictionMethod ) {
+	public function __construct( array $limits, $cgroup ) {
 		$this->limits = $limits;
 		$this->cgroup = $cgroup;
-		if ( $restrictionMethod === 'autodetect' ) {
-			// On Linux systems check for firejail
-			if ( PHP_OS === 'Linux' && $this->findFirejail() !== null ) {
-				$this->restrictionMethod = 'firejail';
-			} else {
-				$this->restrictionMethod = false;
-			}
-		} else {
-			$this->restrictionMethod = $restrictionMethod;
-		}
 		$this->setLogger( new NullLogger() );
-	}
-
-	protected function findFirejail(): ?string {
-		if ( $this->firejail === null ) {
-			// Convert a `false` from ExecutableFinder to `null` (T257282)
-			$this->firejail = ExecutableFinder::findInDefaultPaths( 'firejail' ) ?: null;
-		}
-
-		return $this->firejail;
-	}
-
-	/**
-	 * When enabled, text sent to stderr will be logged with a level of 'error'.
-	 *
-	 * @param bool $yesno
-	 * @see Command::logStderr
-	 */
-	public function logStderr( bool $yesno = true ): void {
-		$this->doLogStderr = $yesno;
 	}
 
 	/**
@@ -96,18 +54,12 @@ class CommandFactory {
 	 *
 	 * @return Command
 	 */
-	public function create(): Command {
-		if ( $this->restrictionMethod === 'firejail' ) {
-			$command = new FirejailCommand( $this->findFirejail() );
-			$command->restrict( Shell::RESTRICT_DEFAULT );
-		} else {
-			$command = new Command();
-		}
+	public function create() {
+		$command = new Command();
 		$command->setLogger( $this->logger );
 
 		return $command
 			->limits( $this->limits )
-			->cgroup( $this->cgroup )
-			->logStderr( $this->doLogStderr );
+			->cgroup( $this->cgroup );
 	}
 }

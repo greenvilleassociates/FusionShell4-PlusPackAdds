@@ -21,17 +21,16 @@
  * @ingroup SpecialPage
  */
 
-use MediaWiki\MediaWikiServices;
+use Wikimedia\Rdbms\ResultWrapper;
 use Wikimedia\Rdbms\IDatabase;
-use Wikimedia\Rdbms\IResultWrapper;
 
 /**
  * A special page that listed pages that have highest interwiki count
  *
  * @ingroup SpecialPage
  */
-class SpecialMostInterwikis extends QueryPage {
-	public function __construct( $name = 'Mostinterwikis' ) {
+class MostinterwikisPage extends QueryPage {
+	function __construct( $name = 'Mostinterwikis' ) {
 		parent::__construct( $name );
 	}
 
@@ -39,7 +38,7 @@ class SpecialMostInterwikis extends QueryPage {
 		return true;
 	}
 
-	public function isSyndicated() {
+	function isSyndicated() {
 		return false;
 	}
 
@@ -53,8 +52,7 @@ class SpecialMostInterwikis extends QueryPage {
 				'title' => 'page_title',
 				'value' => 'COUNT(*)'
 			], 'conds' => [
-				'page_namespace' =>
-					MediaWikiServices::getInstance()->getNamespaceInfo()->getContentNamespaces()
+				'page_namespace' => MWNamespace::getContentNamespaces()
 			], 'options' => [
 				'HAVING' => 'COUNT(*) > 1',
 				'GROUP BY' => [
@@ -74,9 +72,9 @@ class SpecialMostInterwikis extends QueryPage {
 	 * Pre-fill the link cache
 	 *
 	 * @param IDatabase $db
-	 * @param IResultWrapper $res
+	 * @param ResultWrapper $res
 	 */
-	public function preprocessResults( $db, $res ) {
+	function preprocessResults( $db, $res ) {
 		$this->executeLBFromResultWrapper( $res );
 	}
 
@@ -85,7 +83,7 @@ class SpecialMostInterwikis extends QueryPage {
 	 * @param object $result
 	 * @return string
 	 */
-	public function formatResult( $skin, $result ) {
+	function formatResult( $skin, $result ) {
 		$title = Title::makeTitleSafe( $result->namespace, $result->title );
 		if ( !$title ) {
 			return Html::element(

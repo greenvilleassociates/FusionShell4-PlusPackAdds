@@ -1,7 +1,5 @@
 <?php
 
-use MediaWiki\MediaWikiServices;
-
 /**
  * Wraps the user object, so we can also retain full access to properties
  * like password if we log in via the API.
@@ -24,7 +22,9 @@ class TestUser {
 
 	private function assertNotReal() {
 		global $wgDBprefix;
-		if ( $wgDBprefix !== MediaWikiIntegrationTestCase::DB_PREFIX ) {
+		if ( $wgDBprefix !== MediaWikiTestCase::DB_PREFIX &&
+			$wgDBprefix !== MediaWikiTestCase::ORA_DB_PREFIX
+		) {
 			throw new MWException( "Can't create user on real database" );
 		}
 	}
@@ -140,8 +140,9 @@ class TestUser {
 			throw new MWException( "Passed User has an ID but is not in the database?" );
 		}
 
-		$passwordFactory = MediaWikiServices::getInstance()->getPasswordFactory();
-		if ( !$passwordFactory->newFromCiphertext( $row->user_password )->verify( $password ) ) {
+		$passwordFactory = new PasswordFactory();
+		$passwordFactory->init( RequestContext::getMain()->getConfig() );
+		if ( !$passwordFactory->newFromCiphertext( $row->user_password )->equals( $password ) ) {
 			$passwordHash = $passwordFactory->newFromPlaintext( $password );
 			$dbw->update(
 				'user',

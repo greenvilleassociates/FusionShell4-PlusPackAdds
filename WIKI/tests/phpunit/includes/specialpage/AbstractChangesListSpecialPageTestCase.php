@@ -6,7 +6,7 @@
  *
  * @group Database
  */
-abstract class AbstractChangesListSpecialPageTestCase extends MediaWikiIntegrationTestCase {
+abstract class AbstractChangesListSpecialPageTestCase extends MediaWikiTestCase {
 	// Must be initialized by subclass
 	/**
 	 * @var ChangesListSpecialPage
@@ -15,14 +15,11 @@ abstract class AbstractChangesListSpecialPageTestCase extends MediaWikiIntegrati
 
 	protected $oldPatrollersGroup;
 
-	protected function setUp() : void {
+	protected function setUp() {
 		global $wgGroupPermissions;
 
 		parent::setUp();
-		$this->setMwGlobals( [
-			'wgRCWatchCategoryMembership' => true,
-			'wgUseRCPatrol' => true,
-		] );
+		$this->setMwGlobals( 'wgRCWatchCategoryMembership', true );
 
 		if ( isset( $wgGroupPermissions['patrollers'] ) ) {
 			$this->oldPatrollersGroup = $wgGroupPermissions['patrollers'];
@@ -31,6 +28,12 @@ abstract class AbstractChangesListSpecialPageTestCase extends MediaWikiIntegrati
 		$wgGroupPermissions['patrollers'] = [
 			'patrol' => true,
 		];
+
+		// Deprecated
+		$this->setTemporaryHook(
+			'ChangesListSpecialPageFilters',
+			null
+		);
 
 		# setup the ChangesListSpecialPage (or subclass) object
 		$this->changesListSpecialPage = $this->getPage();
@@ -41,9 +44,7 @@ abstract class AbstractChangesListSpecialPageTestCase extends MediaWikiIntegrati
 		$this->changesListSpecialPage->registerFilters();
 	}
 
-	abstract protected function getPage();
-
-	protected function tearDown() : void {
+	protected function tearDown() {
 		global $wgGroupPermissions;
 
 		parent::tearDown();
@@ -52,8 +53,6 @@ abstract class AbstractChangesListSpecialPageTestCase extends MediaWikiIntegrati
 			$wgGroupPermissions['patrollers'] = $this->oldPatrollersGroup;
 		}
 	}
-
-	abstract public function provideParseParameters();
 
 	/**
 	 * @dataProvider provideParseParameters
@@ -85,12 +84,7 @@ abstract class AbstractChangesListSpecialPageTestCase extends MediaWikiIntegrati
 	/**
 	 * @dataProvider validateOptionsProvider
 	 */
-	public function testValidateOptions(
-		$optionsToSet,
-		$expectedRedirect,
-		$expectedRedirectOptions,
-		$rcfilters
-	) {
+	public function testValidateOptions( $optionsToSet, $expectedRedirect, $expectedRedirectOptions ) {
 		$redirectQuery = [];
 		$redirected = false;
 		$output = $this->getMockBuilder( OutputPage::class )
@@ -100,11 +94,16 @@ abstract class AbstractChangesListSpecialPageTestCase extends MediaWikiIntegrati
 		$output->method( 'redirect' )->willReturnCallback(
 			function ( $url ) use ( &$redirectQuery, &$redirected ) {
 				$urlParts = wfParseUrl( $url );
-				$query = $urlParts[ 'query' ] ?? '';
+				$query = isset( $urlParts[ 'query' ] ) ? $urlParts[ 'query' ] : '';
 				parse_str( $query, $redirectQuery );
 				$redirected = true;
 			}
 		);
+		$ctx = new RequestContext();
+
+		// Give users patrol permissions so we can test that.
+		$user = $this->getTestSysop()->getUser();
+		$ctx->setUser( $user );
 
 		// Disable this hook or it could break changeType
 		// depending on which other extensions are running.
@@ -112,12 +111,6 @@ abstract class AbstractChangesListSpecialPageTestCase extends MediaWikiIntegrati
 			'ChangesListSpecialPageStructuredFilters',
 			null
 		);
-
-		// Give users patrol permissions so we can test that.
-		$user = $this->getTestSysop()->getUser();
-		$user->setOption( 'rcenhancedfilters-disable', $rcfilters ? 0 : 1 );
-		$ctx = new RequestContext();
-		$ctx->setUser( $user );
 
 		$ctx->setOutput( $output );
 		$clsp = $this->changesListSpecialPage;

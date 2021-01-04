@@ -1,33 +1,31 @@
 <?php
+class RepoGroupTest extends MediaWikiTestCase {
 
-use MediaWiki\MediaWikiServices;
-
-/**
- * @covers RepoGroup
- */
-class RepoGroupTest extends MediaWikiIntegrationTestCase {
-
-	public function testHasForeignRepoNegative() {
+	function testHasForeignRepoNegative() {
 		$this->setMwGlobals( 'wgForeignFileRepos', [] );
-		$this->assertFalse( MediaWikiServices::getInstance()->getRepoGroup()->hasForeignRepos() );
+		RepoGroup::destroySingleton();
+		FileBackendGroup::destroySingleton();
+		$this->assertFalse( RepoGroup::singleton()->hasForeignRepos() );
 	}
 
-	public function testHasForeignRepoPositive() {
+	function testHasForeignRepoPositive() {
 		$this->setUpForeignRepo();
-		$this->assertTrue( MediaWikiServices::getInstance()->getRepoGroup()->hasForeignRepos() );
+		$this->assertTrue( RepoGroup::singleton()->hasForeignRepos() );
 	}
 
-	public function testForEachForeignRepo() {
+	function testForEachForeignRepo() {
 		$this->setUpForeignRepo();
-		$fakeCallback = $this->createMock( RepoGroupTestHelper::class );
+		$fakeCallback = $this->createMock( 'RepoGroupTestHelper' );
 		$fakeCallback->expects( $this->once() )->method( 'callback' );
 		RepoGroup::singleton()->forEachForeignRepo(
 			[ $fakeCallback, 'callback' ], [ [] ] );
 	}
 
-	public function testForEachForeignRepoNone() {
+	function testForEachForeignRepoNone() {
 		$this->setMwGlobals( 'wgForeignFileRepos', [] );
-		$fakeCallback = $this->createMock( RepoGroupTestHelper::class );
+		RepoGroup::destroySingleton();
+		FileBackendGroup::destroySingleton();
+		$fakeCallback = $this->createMock( 'RepoGroupTestHelper' );
 		$fakeCallback->expects( $this->never() )->method( 'callback' );
 		RepoGroup::singleton()->forEachForeignRepo(
 			[ $fakeCallback, 'callback' ], [ [] ] );
@@ -36,7 +34,7 @@ class RepoGroupTest extends MediaWikiIntegrationTestCase {
 	private function setUpForeignRepo() {
 		global $wgUploadDirectory;
 		$this->setMwGlobals( 'wgForeignFileRepos', [ [
-			'class' => ForeignAPIRepo::class,
+			'class' => 'ForeignAPIRepo',
 			'name' => 'wikimediacommons',
 			'backend' => 'wikimediacommons-backend',
 			'apibase' => 'https://commons.wikimedia.org/w/api.php',
@@ -46,14 +44,16 @@ class RepoGroupTest extends MediaWikiIntegrationTestCase {
 			'apiThumbCacheExpiry' => 86400,
 			'directory' => $wgUploadDirectory
 		] ] );
+		RepoGroup::destroySingleton();
+		FileBackendGroup::destroySingleton();
 	}
 }
 
 /**
- * Quick helper class to use as a mock callback for RepoGroup::forEachForeignRepo.
+ * Quick helper class to use as a mock callback for RepoGroup::singleton()->forEachForeignRepo.
  */
 class RepoGroupTestHelper {
-	public function callback( FileRepo $repo, array $foo ) {
+	function callback( FileRepo $repo, array $foo ) {
 		return true;
 	}
 }

@@ -27,7 +27,7 @@
  *
  * @ingroup SpecialPage
  */
-class SpecialEmailInvalidate extends UnlistedSpecialPage {
+class EmailInvalidation extends UnlistedSpecialPage {
 	public function __construct() {
 		parent::__construct( 'Invalidateemail', 'editmyprivateinfo' );
 	}
@@ -36,7 +36,7 @@ class SpecialEmailInvalidate extends UnlistedSpecialPage {
 		return true;
 	}
 
-	public function execute( $code ) {
+	function execute( $code ) {
 		// Ignore things like master queries/connections on GET requests.
 		// It's very convenient to just allow formless link usage.
 		$trxProfiler = Profiler::instance()->getTransactionProfiler();

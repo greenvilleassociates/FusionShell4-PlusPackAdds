@@ -1,5 +1,9 @@
 <?php
 /**
+ * Handle page deletion
+ *
+ * Copyright © 2012 Timo Tijhof
+ *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
  * the Free Software Foundation; either version 2 of the License, or
@@ -16,6 +20,7 @@
  *
  * @file
  * @ingroup Actions
+ * @author Timo Tijhof
  */
 
 /**
@@ -38,7 +43,7 @@ class DeleteAction extends FormlessAction {
 	public function show() {
 		$this->useTransactionalTimeLimit();
 		$this->addHelpLink( 'Help:Sysop deleting and undeleting' );
-		$this->getArticle()->delete();
+		$this->page->delete();
 	}
 
 	public function doesWrites() {

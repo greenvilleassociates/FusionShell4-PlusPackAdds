@@ -31,7 +31,7 @@ class LanguageYue extends Language {
 	/**
 	 * @return bool
 	 */
-	public function hasWordBreaks() {
+	function hasWordBreaks() {
 		return false;
 	}
 
@@ -43,7 +43,7 @@ class LanguageYue extends Language {
 	 * @param string $string
 	 * @return string
 	 */
-	public function segmentByWord( $string ) {
+	function segmentByWord( $string ) {
 		$reg = "/([\\xc0-\\xff][\\x80-\\xbf]*)/";
 		$s = self::insertSpace( $string, $reg );
 		return $s;
@@ -53,7 +53,7 @@ class LanguageYue extends Language {
 	 * @param string $string
 	 * @return string
 	 */
-	public function normalizeForSearch( $string ) {
+	function normalizeForSearch( $string ) {
 		// Double-width roman characters
 		$s = self::convertDoubleWidth( $string );
 		$s = trim( $s );

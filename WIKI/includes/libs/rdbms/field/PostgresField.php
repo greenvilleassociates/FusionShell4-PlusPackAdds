@@ -12,12 +12,12 @@ class PostgresField implements Field {
 	 * @param string $field
 	 * @return null|PostgresField
 	 */
-	public static function fromText( DatabasePostgres $db, $table, $field ) {
+	static function fromText( DatabasePostgres $db, $table, $field ) {
 		$q = <<<SQL
 SELECT
  attnotnull, attlen, conname AS conname,
  atthasdef,
- pg_get_expr(adbin, adrelid) AS adsrc,
+ adsrc,
  COALESCE(condeferred, 'f') AS deferred,
  COALESCE(condeferrable, 'f') AS deferrable,
  CASE WHEN typname = 'int2' THEN 'smallint'
@@ -38,65 +38,61 @@ AND attname=%s;
 SQL;
 
 		$table = $db->remappedTableName( $table );
-		foreach ( $db->getCoreSchemas() as $schema ) {
-			$res = $db->query(
-				sprintf( $q,
-					$db->addQuotes( $schema ),
-					$db->addQuotes( $table ),
-					$db->addQuotes( $field )
-				)
-			);
-			$row = $db->fetchObject( $res );
-			if ( !$row ) {
-				continue;
-			}
-			$n = new PostgresField;
-			$n->type = $row->typname;
-			$n->nullable = ( $row->attnotnull == 'f' );
-			$n->name = $field;
-			$n->tablename = $table;
-			$n->max_length = $row->attlen;
-			$n->deferrable = ( $row->deferrable == 't' );
-			$n->deferred = ( $row->deferred == 't' );
-			$n->conname = $row->conname;
-			$n->has_default = ( $row->atthasdef === 't' );
-			$n->default = $row->adsrc;
-
-			return $n;
+		$res = $db->query(
+			sprintf( $q,
+				$db->addQuotes( $db->getCoreSchema() ),
+				$db->addQuotes( $table ),
+				$db->addQuotes( $field )
+			)
+		);
+		$row = $db->fetchObject( $res );
+		if ( !$row ) {
+			return null;
 		}
+		$n = new PostgresField;
+		$n->type = $row->typname;
+		$n->nullable = ( $row->attnotnull == 'f' );
+		$n->name = $field;
+		$n->tablename = $table;
+		$n->max_length = $row->attlen;
+		$n->deferrable = ( $row->deferrable == 't' );
+		$n->deferred = ( $row->deferred == 't' );
+		$n->conname = $row->conname;
+		$n->has_default = ( $row->atthasdef === 't' );
+		$n->default = $row->adsrc;
 
-		return null;
+		return $n;
 	}
 
-	public function name() {
+	function name() {
 		return $this->name;
 	}
 
-	public function tableName() {
+	function tableName() {
 		return $this->tablename;
 	}
 
-	public function type() {
+	function type() {
 		return $this->type;
 	}
 
-	public function isNullable() {
+	function isNullable() {
 		return $this->nullable;
 	}
 
-	public function maxLength() {
+	function maxLength() {
 		return $this->max_length;
 	}
 
-	public function is_deferrable() {
+	function is_deferrable() {
 		return $this->deferrable;
 	}
 
-	public function is_deferred() {
+	function is_deferred() {
 		return $this->deferred;
 	}
 
-	public function conname() {
+	function conname() {
 		return $this->conname;
 	}
 
@@ -104,7 +100,7 @@ SQL;
 	 * @since 1.19
 	 * @return bool|mixed
 	 */
-	public function defaultValue() {
+	function defaultValue() {
 		if ( $this->has_default ) {
 			return $this->default;
 		} else {

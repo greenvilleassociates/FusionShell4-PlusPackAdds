@@ -18,6 +18,7 @@
  * http://www.gnu.org/copyleft/gpl.html
  *
  * @file
+ * @license GPL 2+
  * @author Matthew Flaschen
  */
 
@@ -26,61 +27,58 @@
 // What to call it.  FilterStructure?  That would also let me make
 // setUnidirectionalConflict protected.
 
-use Wikimedia\Rdbms\IDatabase;
-
 /**
  * Represents a filter group (used on ChangesListSpecialPage and descendants)
  *
  * @since 1.29
- * @method registerFilter($filter)
  */
 abstract class ChangesListFilterGroup {
 	/**
 	 * Name (internal identifier)
 	 *
-	 * @var string
+	 * @var string $name
 	 */
 	protected $name;
 
 	/**
 	 * i18n key for title
 	 *
-	 * @var string
+	 * @var string $title
 	 */
 	protected $title;
 
 	/**
 	 * i18n key for header of What's This?
 	 *
-	 * @var string|null
+	 * @var string|null $whatsThisHeader
 	 */
 	protected $whatsThisHeader;
 
 	/**
 	 * i18n key for body of What's This?
 	 *
-	 * @var string|null
+	 * @var string|null $whatsThisBody
 	 */
 	protected $whatsThisBody;
 
 	/**
 	 * URL of What's This? link
 	 *
-	 * @var string|null
+	 * @var string|null $whatsThisUrl
 	 */
 	protected $whatsThisUrl;
 
 	/**
 	 * i18n key for What's This? link
 	 *
-	 * @var string|null
+	 * @var string|null $whatsThisLinkText
 	 */
 	protected $whatsThisLinkText;
 
 	/**
 	 * Type, from a TYPE constant of a subclass
 	 *
-	 * @var string
+	 * @var string $type
 	 */
 	protected $type;
 
@@ -88,14 +86,14 @@ abstract class ChangesListFilterGroup {
 	 * Priority integer.  Higher values means higher up in the
 	 * group list.
 	 *
-	 * @var string
+	 * @var string $priority
 	 */
 	protected $priority;
 
 	/**
 	 * Associative array of filters, as ChangesListFilter objects, with filter name as key
 	 *
-	 * @var array
+	 * @var array $filters
 	 */
 	protected $filters;
 
@@ -103,7 +101,7 @@ abstract class ChangesListFilterGroup {
 	 * Whether this group is full coverage.  This means that checking every item in the
 	 * group means no changes list (e.g. RecentChanges) entries are filtered out.
 	 *
-	 * @var bool
+	 * @var bool $isFullCoverage
 	 */
 	protected $isFullCoverage;
 
@@ -111,7 +109,7 @@ abstract class ChangesListFilterGroup {
 	 * Array of associative arrays with conflict information.  See
 	 * setUnidirectionalConflict
 	 *
-	 * @var array
+	 * @var array $conflictingGroups
 	 */
 	protected $conflictingGroups = [];
 
@@ -119,13 +117,13 @@ abstract class ChangesListFilterGroup {
 	 * Array of associative arrays with conflict information.  See
 	 * setUnidirectionalConflict
 	 *
-	 * @var array
+	 * @var array $conflictingFilters
 	 */
 	protected $conflictingFilters = [];
 
-	private const DEFAULT_PRIORITY = -100;
+	const DEFAULT_PRIORITY = -100;
 
-	private const RESERVED_NAME_CHAR = '_';
+	const RESERVED_NAME_CHAR = '_';
 
 	/**
 	 * Create a new filter group with the specified configuration
@@ -175,7 +173,11 @@ abstract class ChangesListFilterGroup {
 		}
 
 		$this->type = $groupDefinition['type'];
-		$this->priority = $groupDefinition['priority'] ?? self::DEFAULT_PRIORITY;
+		if ( isset( $groupDefinition['priority'] ) ) {
+			$this->priority = $groupDefinition['priority'];
+		} else {
+			$this->priority = self::DEFAULT_PRIORITY;
+		}
 
 		$this->isFullCoverage = $groupDefinition['isFullCoverage'];
 
@@ -219,7 +221,8 @@ abstract class ChangesListFilterGroup {
 	 * (not filtered out), even for the hide-based filters.  So e.g. conflicting with
 	 * 'hideanons' means there is a conflict if only anonymous users are *shown*.
 	 *
-	 * @param ChangesListFilterGroup|ChangesListFilter $other
+	 * @param ChangesListFilterGroup|ChangesListFilter $other Other
+	 *  ChangesListFilterGroup or ChangesListFilter
 	 * @param string $globalKey i18n key for top-level conflict message
 	 * @param string $forwardKey i18n key for conflict message in this
 	 *  direction (when in UI context of $this object)
@@ -250,7 +253,8 @@ abstract class ChangesListFilterGroup {
 	 *
 	 * Internal use ONLY.
 	 *
-	 * @param ChangesListFilterGroup|ChangesListFilter $other
+	 * @param ChangesListFilterGroup|ChangesListFilter $other Other
+	 *  ChangesListFilterGroup or ChangesListFilter
 	 * @param string $globalDescription i18n key for top-level conflict message
 	 * @param string $contextDescription i18n key for conflict message in this
 	 *  direction (when in UI context of $this object)
@@ -319,8 +323,16 @@ abstract class ChangesListFilterGroup {
 	 * @return ChangesListFilter|null Specified filter, or null if it is not registered
 	 */
 	public function getFilter( $name ) {
-		return $this->filters[$name] ?? null;
+		return isset( $this->filters[$name] ) ? $this->filters[$name] : null;
 	}
+
+	/**
+	 * Check whether the URL parameter is for the group, or for individual filters.
+	 * Defaults can also be defined on the group if and only if this is true.
+	 *
+	 * @return bool True if and only if the URL parameter is per-group
+	 */
+	abstract public function isPerGroupRequestParameter();
 
 	/**
 	 * Gets the JS data in the format required by the front-end of the structured UI
@@ -355,7 +367,7 @@ abstract class ChangesListFilterGroup {
 		}
 
 		usort( $this->filters, function ( $a, $b ) {
-			return $b->getPriority() <=> $a->getPriority();
+			return $b->getPriority() - $a->getPriority();
 		} );
 
 		foreach ( $this->filters as $filterName => $filter ) {
@@ -430,41 +442,11 @@ abstract class ChangesListFilterGroup {
 	 * @return bool
 	 */
 	public function anySelected( FormOptions $opts ) {
-		return (bool)count( array_filter(
+		return !!count( array_filter(
 			$this->getFilters(),
 			function ( ChangesListFilter $filter ) use ( $opts ) {
 				return $filter->isSelected( $opts );
 			}
 		) );
 	}
-
-	/**
-	 * Modifies the query to include the filter group.
-	 *
-	 * The modification is only done if the filter group is in effect.  This means that
-	 * one or more valid and allowed filters were selected.
-	 *
-	 * @param IDatabase $dbr Database, for addQuotes, makeList, and similar
-	 * @param ChangesListSpecialPage $specialPage Current special page
-	 * @param array &$tables Array of tables; see IDatabase::select $table
-	 * @param array &$fields Array of fields; see IDatabase::select $vars
-	 * @param array &$conds Array of conditions; see IDatabase::select $conds
-	 * @param array &$query_options Array of query options; see IDatabase::select $options
-	 * @param array &$join_conds Array of join conditions; see IDatabase::select $join_conds
-	 * @param FormOptions $opts Wrapper for the current request options and their defaults
-	 * @param bool $isStructuredFiltersEnabled True if the Structured UI is currently enabled
-	 */
-	abstract public function modifyQuery( IDatabase $dbr, ChangesListSpecialPage $specialPage,
-		&$tables, &$fields, &$conds, &$query_options, &$join_conds,
-		FormOptions $opts, $isStructuredFiltersEnabled );
-
-	/**
-	 * All the options represented by this filter group to $opts
-	 *
-	 * @param FormOptions $opts
-	 * @param bool $allowDefaults
-	 * @param bool $isStructuredFiltersEnabled
-	 */
-	abstract public function addOptions( FormOptions $opts, $allowDefaults,
-		$isStructuredFiltersEnabled );
 }

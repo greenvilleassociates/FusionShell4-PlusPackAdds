@@ -44,21 +44,21 @@ class DumpFilter {
 	/**
 	 * @param DumpOutput &$sink
 	 */
-	public function __construct( &$sink ) {
+	function __construct( &$sink ) {
 		$this->sink =& $sink;
 	}
 
 	/**
 	 * @param string $string
 	 */
-	public function writeOpenStream( $string ) {
+	function writeOpenStream( $string ) {
 		$this->sink->writeOpenStream( $string );
 	}
 
 	/**
 	 * @param string $string
 	 */
-	public function writeCloseStream( $string ) {
+	function writeCloseStream( $string ) {
 		$this->sink->writeCloseStream( $string );
 	}
 
@@ -66,8 +66,8 @@ class DumpFilter {
 	 * @param object $page
 	 * @param string $string
 	 */
-	public function writeOpenPage( $page, $string ) {
-		$this->sendingThisPage = $this->pass( $page );
+	function writeOpenPage( $page, $string ) {
+		$this->sendingThisPage = $this->pass( $page, $string );
 		if ( $this->sendingThisPage ) {
 			$this->sink->writeOpenPage( $page, $string );
 		}
@@ -76,7 +76,7 @@ class DumpFilter {
 	/**
 	 * @param string $string
 	 */
-	public function writeClosePage( $string ) {
+	function writeClosePage( $string ) {
 		if ( $this->sendingThisPage ) {
 			$this->sink->writeClosePage( $string );
 			$this->sendingThisPage = false;
@@ -87,7 +87,7 @@ class DumpFilter {
 	 * @param object $rev
 	 * @param string $string
 	 */
-	public function writeRevision( $rev, $string ) {
+	function writeRevision( $rev, $string ) {
 		if ( $this->sendingThisPage ) {
 			$this->sink->writeRevision( $rev, $string );
 		}
@@ -97,31 +97,29 @@ class DumpFilter {
 	 * @param object $rev
 	 * @param string $string
 	 */
-	public function writeLogItem( $rev, $string ) {
+	function writeLogItem( $rev, $string ) {
 		$this->sink->writeRevision( $rev, $string );
 	}
 
 	/**
-	 * @see DumpOutput::closeRenameAndReopen()
-	 * @param string|string[] $newname
+	 * @param string $newname
 	 */
-	public function closeRenameAndReopen( $newname ) {
+	function closeRenameAndReopen( $newname ) {
 		$this->sink->closeRenameAndReopen( $newname );
 	}
 
 	/**
-	 * @see DumpOutput::closeAndRename()
-	 * @param string|string[] $newname
+	 * @param string $newname
 	 * @param bool $open
 	 */
-	public function closeAndRename( $newname, $open = false ) {
+	function closeAndRename( $newname, $open = false ) {
 		$this->sink->closeAndRename( $newname, $open );
 	}
 
 	/**
 	 * @return array
 	 */
-	public function getFilenames() {
+	function getFilenames() {
 		return $this->sink->getFilenames();
 	}
 
@@ -130,7 +128,7 @@ class DumpFilter {
 	 * @param object $page
 	 * @return bool
 	 */
-	protected function pass( $page ) {
+	function pass( $page ) {
 		return true;
 	}
 }

@@ -23,8 +23,6 @@
  * @file
  */
 
-use MediaWiki\ParamValidator\TypeDef\UserDef;
-
 /**
  * @ingroup API
  */
@@ -53,33 +51,27 @@ class ApiUserrights extends ApiBase {
 
 		// Deny if the user is blocked and doesn't have the full 'userrights' permission.
 		// This matches what Special:UserRights does for the web UI.
-		if ( !$this->getPermissionManager()->userHasRight( $pUser, 'userrights' ) ) {
-			$block = $pUser->getBlock();
-			if ( $block && $block->isSitewide() ) {
-				$this->dieBlocked( $block );
-			}
+		if ( $pUser->isBlocked() && !$pUser->isAllowed( 'userrights' ) ) {
+			$this->dieBlocked( $pUser->getBlock() );
 		}
 
 		$params = $this->extractRequestParams();
 
 		// Figure out expiry times from the input
-		// $params['expiry'] is not set in CentralAuth's ApiGlobalUserRights subclass
+		// $params['expiry'] may not be set in subclasses
 		if ( isset( $params['expiry'] ) ) {
 			$expiry = (array)$params['expiry'];
 		} else {
 			$expiry = [ 'infinity' ];
 		}
-		$add = (array)$params['add'];
-		if ( !$add ) {
-			$expiry = [];
-		} elseif ( count( $expiry ) !== count( $add ) ) {
+		if ( count( $expiry ) !== count( $params['add'] ) ) {
 			if ( count( $expiry ) === 1 ) {
-				$expiry = array_fill( 0, count( $add ), $expiry[0] );
+				$expiry = array_fill( 0, count( $params['add'] ), $expiry[0] );
 			} else {
 				$this->dieWithError( [
 					'apierror-toofewexpiries',
 					count( $expiry ),
-					count( $add )
+					count( $params['add'] )
 				] );
 			}
 		}
@@ -87,7 +79,7 @@ class ApiUserrights extends ApiBase {
 		// Validate the expiries
 		$groupExpiries = [];
 		foreach ( $expiry as $index => $expiryValue ) {
-			$group = $add[$index];
+			$group = $params['add'][$index];
 			$groupExpiries[$group] = UserrightsPage::expiryToTimestamp( $expiryValue );
 
 			if ( $groupExpiries[$group] === false ) {
@@ -105,7 +97,7 @@ class ApiUserrights extends ApiBase {
 		$tags = $params['tags'];
 
 		// Check if user can add tags
-		if ( $tags !== null ) {
+		if ( !is_null( $tags ) ) {
 			$ableToTag = ChangeTags::canAddTagsAccompanyingChange( $tags, $pUser );
 			if ( !$ableToTag->isOK() ) {
 				$this->dieStatus( $ableToTag );
@@ -114,13 +106,11 @@ class ApiUserrights extends ApiBase {
 
 		$form = $this->getUserRightsPage();
 		$form->setContext( $this->getContext() );
-		$r = [];
 		$r['user'] = $user->getName();
 		$r['userid'] = $user->getId();
 		list( $r['added'], $r['removed'] ) = $form->doSaveUserGroups(
-			// Don't pass null to doSaveUserGroups() for array params, cast to empty array
-			$user, $add, (array)$params['remove'],
-			$params['reason'], (array)$tags, $groupExpiries
+			$user, (array)$params['add'], (array)$params['remove'],
+			$params['reason'], $tags, $groupExpiries
 		);
 
 		$result = $this->getResult();
@@ -140,7 +130,7 @@ class ApiUserrights extends ApiBase {
 
 		$this->requireOnlyOneParameter( $params, 'user', 'userid' );
 
-		$user = $params['user'] ?? '#' . $params['userid'];
+		$user = isset( $params['user'] ) ? $params['user'] : '#' . $params['userid'];
 
 		$form = $this->getUserRightsPage();
 		$form->setContext( $this->getContext() );
@@ -162,25 +152,16 @@ class ApiUserrights extends ApiBase {
 		return true;
 	}
 
-	public function getAllowedParams( $flags = 0 ) {
-		$allGroups = $this->getAllGroups();
-
-		if ( $flags & ApiBase::GET_VALUES_FOR_HELP ) {
-			sort( $allGroups );
-		}
-
+	public function getAllowedParams() {
 		$a = [
 			'user' => [
 				ApiBase::PARAM_TYPE => 'user',
-				UserDef::PARAM_ALLOWED_USER_TYPES => [ 'name', 'id' ],
-				UserDef::PARAM_RETURN_OBJECT => true,
 			],
 			'userid' => [
 				ApiBase::PARAM_TYPE => 'integer',
-				ApiBase::PARAM_DEPRECATED => true,
 			],
 			'add' => [
-				ApiBase::PARAM_TYPE => $allGroups,
+				ApiBase::PARAM_TYPE => $this->getAllGroups(),
 				ApiBase::PARAM_ISMULTI => true
 			],
 			'expiry' => [
@@ -189,7 +170,7 @@ class ApiUserrights extends ApiBase {
 				ApiBase::PARAM_DFLT => 'infinite',
 			],
 			'remove' => [
-				ApiBase::PARAM_TYPE => $allGroups,
+				ApiBase::PARAM_TYPE => $this->getAllGroups(),
 				ApiBase::PARAM_ISMULTI => true
 			],
 			'reason' => [
@@ -204,7 +185,6 @@ class ApiUserrights extends ApiBase {
 				ApiBase::PARAM_ISMULTI => true
 			],
 		];
-		// CentralAuth's ApiGlobalUserRights subclass can't handle expiries
 		if ( !$this->getUserRightsPage()->canProcessExpiries() ) {
 			unset( $a['expiry'] );
 		}

@@ -1,20 +1,16 @@
 <?php
 
-use MediaWiki\MediaWikiServices;
-
 /**
  * Base class that store and restore the Language objects
  */
-abstract class MediaWikiLangTestCase extends MediaWikiIntegrationTestCase {
-	protected function setUp() : void {
-		global $wgLanguageCode;
+abstract class MediaWikiLangTestCase extends MediaWikiTestCase {
+	protected function setUp() {
+		global $wgLanguageCode, $wgContLang;
 
-		$services = MediaWikiServices::getInstance();
-		$contLang = $services->getContentLanguage();
-		if ( $wgLanguageCode != $contLang->getCode() ) {
+		if ( $wgLanguageCode != $wgContLang->getCode() ) {
 			throw new MWException( "Error in MediaWikiLangTestCase::setUp(): " .
-				"\$wgLanguageCode ('$wgLanguageCode') is different from content language code (" .
-				$contLang->getCode() . ")" );
+				"\$wgLanguageCode ('$wgLanguageCode') is different from " .
+				"\$wgContLang->getCode() (" . $wgContLang->getCode() . ")" );
 		}
 
 		parent::setUp();
@@ -23,6 +19,6 @@ abstract class MediaWikiLangTestCase extends MediaWikiIntegrationTestCase {
 		// For mainpage to be 'Main Page'
 		$this->setContentLang( 'en' );
 
-		$services->getMessageCache()->disable();
+		MessageCache::singleton()->disable();
 	}
 }

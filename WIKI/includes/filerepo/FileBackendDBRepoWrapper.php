@@ -45,7 +45,7 @@ class FileBackendDBRepoWrapper extends FileBackend {
 	protected $repoName;
 	/** @var Closure */
 	protected $dbHandleFunc;
-	/** @var MapCacheLRU */
+	/** @var ProcessCacheLRU */
 	protected $resolvedPathCache;
 	/** @var DBConnRef[] */
 	protected $dbs;
@@ -54,12 +54,12 @@ class FileBackendDBRepoWrapper extends FileBackend {
 		/** @var FileBackend $backend */
 		$backend = $config['backend'];
 		$config['name'] = $backend->getName();
-		$config['domainId'] = $backend->getDomainId();
+		$config['wikiId'] = $backend->getWikiId();
 		parent::__construct( $config );
 		$this->backend = $config['backend'];
 		$this->repoName = $config['repoName'];
 		$this->dbHandleFunc = $config['dbHandleFactory'];
-		$this->resolvedPathCache = new MapCacheLRU( 100 );
+		$this->resolvedPathCache = new ProcessCacheLRU( 100 );
 	}
 
 	/**
@@ -92,9 +92,9 @@ class FileBackendDBRepoWrapper extends FileBackend {
 	 * E.g. mwstore://local-backend/local-public/a/ab/<name>.jpg
 	 * => mwstore://local-backend/local-original/x/y/z/<sha1>.jpg
 	 *
-	 * @param string[] $paths
+	 * @param array $paths
 	 * @param bool $latest
-	 * @return string[] Translated paths in same order
+	 * @return array Translated paths in same order
 	 */
 	public function getBackendPaths( array $paths, $latest = true ) {
 		$db = $this->getDB( $latest ? DB_MASTER : DB_REPLICA );
@@ -102,8 +102,8 @@ class FileBackendDBRepoWrapper extends FileBackend {
 		// @TODO: batching
 		$resolved = [];
 		foreach ( $paths as $i => $path ) {
-			if ( !$latest && $this->resolvedPathCache->hasField( $path, 'target', 10 ) ) {
-				$resolved[$i] = $this->resolvedPathCache->getField( $path, 'target' );
+			if ( !$latest && $this->resolvedPathCache->has( $path, 'target', 10 ) ) {
+				$resolved[$i] = $this->resolvedPathCache->get( $path, 'target' );
 				continue;
 			}
 
@@ -127,12 +127,12 @@ class FileBackendDBRepoWrapper extends FileBackend {
 					continue;
 				}
 				$resolved[$i] = $this->getPathForSHA1( $sha1 );
-				$this->resolvedPathCache->setField( $path, 'target', $resolved[$i] );
+				$this->resolvedPathCache->set( $path, 'target', $resolved[$i] );
 			} elseif ( $container === "{$this->repoName}-deleted" ) {
 				$name = basename( $path ); // <hash>.<ext>
 				$sha1 = substr( $name, 0, strpos( $name, '.' ) ); // ignore extension
 				$resolved[$i] = $this->getPathForSHA1( $sha1 );
-				$this->resolvedPathCache->setField( $path, 'target', $resolved[$i] );
+				$this->resolvedPathCache->set( $path, 'target', $resolved[$i] );
 			} else {
 				$resolved[$i] = $path;
 			}
@@ -150,8 +150,8 @@ class FileBackendDBRepoWrapper extends FileBackend {
 		return $this->backend->doOperationsInternal( $this->mungeOpPaths( $ops ), $opts );
 	}
 
-	protected function doQuickOperationsInternal( array $ops, array $opts ) {
-		return $this->backend->doQuickOperationsInternal( $this->mungeOpPaths( $ops ), $opts );
+	protected function doQuickOperationsInternal( array $ops ) {
+		return $this->backend->doQuickOperationsInternal( $this->mungeOpPaths( $ops ) );
 	}
 
 	protected function doPrepare( array $params ) {
@@ -341,8 +341,8 @@ class FileBackendDBRepoWrapper extends FileBackend {
 	 *
 	 * This leaves destination paths alone since we don't want those to mutate
 	 *
-	 * @param array[] $ops
-	 * @return array[]
+	 * @param array $ops
+	 * @return array
 	 */
 	protected function mungeOpPaths( array $ops ) {
 		// Ops that use 'src' and do not mutate core file data there

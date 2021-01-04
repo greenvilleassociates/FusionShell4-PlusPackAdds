@@ -3,50 +3,37 @@
 namespace MediaWiki\Tidy;
 
 use RemexHtml\Serializer\Serializer;
-use RemexHtml\Serializer\SerializerWithTracer;
 use RemexHtml\Tokenizer\Tokenizer;
 use RemexHtml\TreeBuilder\Dispatcher;
 use RemexHtml\TreeBuilder\TreeBuilder;
 use RemexHtml\TreeBuilder\TreeMutationTracer;
 
 class RemexDriver extends TidyDriverBase {
-	private $treeMutationTrace;
-	private $serializerTrace;
-	private $mungerTrace;
+	private $trace;
 	private $pwrap;
 
 	public function __construct( array $config ) {
 		$config += [
 			'treeMutationTrace' => false,
-			'serializerTrace' => false,
-			'mungerTrace' => false,
 			'pwrap' => true
 		];
-		$this->treeMutationTrace = $config['treeMutationTrace'];
-		$this->serializerTrace = $config['serializerTrace'];
-		$this->mungerTrace = $config['mungerTrace'];
+		$this->trace = $config['treeMutationTrace'];
 		$this->pwrap = $config['pwrap'];
 		parent::__construct( $config );
 	}
 
 	public function tidy( $text ) {
-		$traceCallback = function ( $msg ) {
-			wfDebug( "RemexHtml: $msg" );
-		};
-
 		$formatter = new RemexCompatFormatter;
-		if ( $this->serializerTrace ) {
-			$serializer = new SerializerWithTracer( $formatter, null, $traceCallback );
-		} else {
-			$serializer = new Serializer( $formatter );
-		}
+		$serializer = new Serializer( $formatter );
 		if ( $this->pwrap ) {
-			$munger = new RemexCompatMunger( $serializer, $this->mungerTrace );
+			$munger = new RemexCompatMunger( $serializer );
 		} else {
 			$munger = $serializer;
 		}
-		if ( $this->treeMutationTrace ) {
-			$tracer = new TreeMutationTracer( $munger, $traceCallback );
+		if ( $this->trace ) {
+			$tracer = new TreeMutationTracer( $munger, function ( $msg ) {
+				wfDebug( "RemexHtml: $msg" );
+			} );
 		} else {
 			$tracer = $munger;
 		}
@@ -61,7 +48,6 @@ class RemexDriver extends TidyDriverBase {
 			'ignoreNulls' => true,
 			'skipPreprocess' => true,
 		] );
-
 		$tokenizer->execute( [
 			'fragmentNamespace' => \RemexHtml\HTMLData::NS_HTML,
 			'fragmentName' => 'body'

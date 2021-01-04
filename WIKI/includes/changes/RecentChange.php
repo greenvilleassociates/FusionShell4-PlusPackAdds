@@ -19,9 +19,6 @@
  *
  * @file
  */
-use MediaWiki\ChangeTags\Taggable;
-use MediaWiki\MediaWikiServices;
-use Wikimedia\IPUtils;
 
 /**
  * Utility class for creating new RC entries
@@ -37,7 +34,6 @@ use Wikimedia\IPUtils;
  *  rc_cur_id       page_id of associated page entry
  *  rc_user         user id who made the entry
  *  rc_user_text    user name who made the entry
- *  rc_actor        actor id who made the entry
  *  rc_comment      edit summary
  *  rc_this_oldid   rev_id associated with this entry (or zero)
  *  rc_last_oldid   rev_id associated with the entry before this one (or zero)
@@ -63,56 +59,35 @@ use Wikimedia\IPUtils;
  * temporary:       not stored in the database
  *      notificationtimestamp
  *      numberofWatchingusers
- *      watchlistExpiry        for temporary watchlist items
  *
  * @todo Deprecate access to mAttribs (direct or via getAttributes). Right now
  *  we're having to include both rc_comment and rc_comment_text/rc_comment_data
  *  so random crap works right.
  */
-class RecentChange implements Taggable {
+class RecentChange {
 	// Constants for the rc_source field.  Extensions may also have
 	// their own source constants.
-	public const SRC_EDIT = 'mw.edit';
-	public const SRC_NEW = 'mw.new';
-	public const SRC_LOG = 'mw.log';
-	public const SRC_EXTERNAL = 'mw.external'; // obsolete
-	public const SRC_CATEGORIZE = 'mw.categorize';
+	const SRC_EDIT = 'mw.edit';
+	const SRC_NEW = 'mw.new';
+	const SRC_LOG = 'mw.log';
+	const SRC_EXTERNAL = 'mw.external'; // obsolete
+	const SRC_CATEGORIZE = 'mw.categorize';
 
-	public const PRC_UNPATROLLED = 0;
-	public const PRC_PATROLLED = 1;
-	public const PRC_AUTOPATROLLED = 2;
-
-	/**
-	 * @var bool For save() - save to the database only, without any events.
-	 */
-	public const SEND_NONE = true;
-
-	/**
-	 * @var bool For save() - do emit the change to RCFeeds (usually public).
-	 */
-	public const SEND_FEED = false;
-
-	/** @var array */
 	public $mAttribs = [];
 	public $mExtra = [];
 
 	/**
-	 * @var Title|false
+	 * @var Title
 	 */
 	public $mTitle = false;
 
 	/**
-	 * @var User|false
+	 * @var User
 	 */
 	private $mPerformer = false;
 
 	public $numberofWatchingusers = 0; # Dummy to prevent error message in SpecialRecentChangesLinked
 	public $notificationtimestamp;
-
-	/**
-	 * @var string|null The expiry time, if this is a temporary watchlist item.
-	 */
-	public $watchlistExpiry;
 
 	/**
 	 * @var int Line number of recent change. Default -1.
@@ -127,7 +102,7 @@ class RecentChange implements Taggable {
 	/**
 	 * @var array Array of change types
 	 */
-	private const CHANGE_TYPES = [
+	private static $changeTypes = [
 		'edit' => RC_EDIT,
 		'new' => RC_NEW,
 		'log' => RC_LOG,
@@ -165,10 +140,10 @@ class RecentChange implements Taggable {
 			return $retval;
 		}
 
-		if ( !array_key_exists( $type, self::CHANGE_TYPES ) ) {
+		if ( !array_key_exists( $type, self::$changeTypes ) ) {
 			throw new MWException( "Unknown type '$type'" );
 		}
-		return self::CHANGE_TYPES[$type];
+		return self::$changeTypes[$type];
 	}
 
 	/**
@@ -178,7 +153,7 @@ class RecentChange implements Taggable {
 	 * @return string $type
 	 */
 	public static function parseFromRCType( $rcType ) {
-		return array_search( $rcType, self::CHANGE_TYPES, true ) ?: "$rcType";
+		return array_search( $rcType, self::$changeTypes, true ) ?: "$rcType";
 	}
 
 	/**
@@ -189,7 +164,7 @@ class RecentChange implements Taggable {
 	 * @return array
 	 */
 	public static function getChangeTypes() {
-		return array_keys( self::CHANGE_TYPES );
+		return array_keys( self::$changeTypes );
 	}
 
 	/**
@@ -217,10 +192,7 @@ class RecentChange implements Taggable {
 		$dbType = DB_REPLICA
 	) {
 		$db = wfGetDB( $dbType );
-		$rcQuery = self::getQueryInfo();
-		$row = $db->selectRow(
-			$rcQuery['tables'], $rcQuery['fields'], $conds, $fname, [], $rcQuery['joins']
-		);
+		$row = $db->selectRow( 'recentchanges', self::selectFields(), $conds, $fname );
 		if ( $row !== false ) {
 			return self::newFromRow( $row );
 		} else {
@@ -229,44 +201,38 @@ class RecentChange implements Taggable {
 	}
 
 	/**
-	 * Return the tables, fields, and join conditions to be selected to create
+	 * Return the list of recentchanges fields that should be selected to create
 	 * a new recentchanges object.
-	 * @since 1.31
-	 * @return array With three keys:
-	 *   - tables: (string[]) to include in the `$table` to `IDatabase->select()`
-	 *   - fields: (string[]) to include in the `$vars` to `IDatabase->select()`
-	 *   - joins: (array) to include in the `$join_conds` to `IDatabase->select()`
+	 * @todo Deprecate this in favor of a method that returns tables and joins
+	 *  as well, and use CommentStore::getJoin().
+	 * @return array
 	 */
-	public static function getQueryInfo() {
-		$commentQuery = CommentStore::getStore()->getJoin( 'rc_comment' );
-		$actorQuery = ActorMigration::newMigration()->getJoin( 'rc_user' );
+	public static function selectFields() {
 		return [
-			'tables' => [ 'recentchanges' ] + $commentQuery['tables'] + $actorQuery['tables'],
-			'fields' => [
-				'rc_id',
-				'rc_timestamp',
-				'rc_namespace',
-				'rc_title',
-				'rc_minor',
-				'rc_bot',
-				'rc_new',
-				'rc_cur_id',
-				'rc_this_oldid',
-				'rc_last_oldid',
-				'rc_type',
-				'rc_source',
-				'rc_patrolled',
-				'rc_ip',
-				'rc_old_len',
-				'rc_new_len',
-				'rc_deleted',
-				'rc_logid',
-				'rc_log_type',
-				'rc_log_action',
-				'rc_params',
-			] + $commentQuery['fields'] + $actorQuery['fields'],
-			'joins' => $commentQuery['joins'] + $actorQuery['joins'],
-		];
+			'rc_id',
+			'rc_timestamp',
+			'rc_user',
+			'rc_user_text',
+			'rc_namespace',
+			'rc_title',
+			'rc_minor',
+			'rc_bot',
+			'rc_new',
+			'rc_cur_id',
+			'rc_this_oldid',
+			'rc_last_oldid',
+			'rc_type',
+			'rc_source',
+			'rc_patrolled',
+			'rc_ip',
+			'rc_old_len',
+			'rc_new_len',
+			'rc_deleted',
+			'rc_logid',
+			'rc_log_type',
+			'rc_log_action',
+			'rc_params',
+		] + CommentStore::newKey( 'rc_comment' )->getFields();
 	}
 
 	# Accessors
@@ -303,14 +269,10 @@ class RecentChange implements Taggable {
 	 */
 	public function getPerformer() {
 		if ( $this->mPerformer === false ) {
-			if ( !empty( $this->mAttribs['rc_actor'] ) ) {
-				$this->mPerformer = User::newFromActorId( $this->mAttribs['rc_actor'] );
-			} elseif ( !empty( $this->mAttribs['rc_user'] ) ) {
+			if ( $this->mAttribs['rc_user'] ) {
 				$this->mPerformer = User::newFromId( $this->mAttribs['rc_user'] );
-			} elseif ( !empty( $this->mAttribs['rc_user_text'] ) ) {
-				$this->mPerformer = User::newFromName( $this->mAttribs['rc_user_text'], false );
 			} else {
-				throw new MWException( 'RecentChange object lacks rc_actor, rc_user, and rc_user_text' );
+				$this->mPerformer = User::newFromName( $this->mAttribs['rc_user_text'], false );
 			}
 		}
 
@@ -319,14 +281,9 @@ class RecentChange implements Taggable {
 
 	/**
 	 * Writes the data in this object to the database
-	 *
-	 * For compatibility reasons, the SEND_ constants internally reference a value
-	 * that may seem negated from their purpose (none=true, feed=false). This is
-	 * because the parameter used to be called "$noudp", defaulting to false.
-	 *
-	 * @param bool $send self::SEND_FEED or self::SEND_NONE
+	 * @param bool $noudp
 	 */
-	public function save( $send = self::SEND_FEED ) {
+	public function save( $noudp = false ) {
 		global $wgPutIPinRC, $wgUseEnotif, $wgShowUpdatedMarker;
 
 		$dbw = wfGetDB( DB_MASTER );
@@ -350,7 +307,7 @@ class RecentChange implements Taggable {
 		}
 
 		# If our database is strict about IP addresses, use NULL instead of an empty string
-		$strictIPs = $dbw->getType() === 'postgres'; // legacy
+		$strictIPs = in_array( $dbw->getType(), [ 'oracle', 'postgres' ] ); // legacy
 		if ( $strictIPs && $this->mAttribs['rc_ip'] == '' ) {
 			unset( $this->mAttribs['rc_ip'] );
 		}
@@ -366,21 +323,11 @@ class RecentChange implements Taggable {
 			unset( $this->mAttribs['rc_cur_id'] );
 		}
 
-		$row = $this->mAttribs;
-
 		# Convert mAttribs['rc_comment'] for CommentStore
+		$row = $this->mAttribs;
 		$comment = $row['rc_comment'];
 		unset( $row['rc_comment'], $row['rc_comment_text'], $row['rc_comment_data'] );
-		$row += CommentStore::getStore()->insert( $dbw, 'rc_comment', $comment );
-
-		# Convert mAttribs['rc_user'] etc for ActorMigration
-		$user = User::newFromAnyId(
-			$row['rc_user'] ?? null,
-			$row['rc_user_text'] ?? null,
-			$row['rc_actor'] ?? null
-		);
-		unset( $row['rc_user'], $row['rc_user_text'], $row['rc_actor'] );
-		$row += ActorMigration::newMigration()->getInsertValues( $dbw, 'rc_user', $user );
+		$row += CommentStore::newKey( 'rc_comment' )->insert( $dbw, $comment );
 
 		# Don't reuse an existing rc_id for the new row, if one happens to be
 		# set for some reason.
@@ -393,15 +340,17 @@ class RecentChange implements Taggable {
 		$this->mAttribs['rc_id'] = $dbw->insertId();
 
 		# Notify extensions
-		Hooks::runner()->onRecentChange_save( $this );
+		// Avoid PHP 7.1 warning from passing $this by reference
+		$rc = $this;
+		Hooks::run( 'RecentChange_save', [ &$rc ] );
 
 		if ( count( $this->tags ) ) {
 			ChangeTags::addTags( $this->tags, $this->mAttribs['rc_id'],
 				$this->mAttribs['rc_this_oldid'], $this->mAttribs['rc_logid'], null, $this );
 		}
 
-		if ( $send === self::SEND_FEED ) {
-			// Emit the change to external applications via RCFeeds.
+		# Notify external application via UDP
+		if ( !$noudp ) {
 			$this->notifyRCFeeds();
 		}
 
@@ -412,12 +361,12 @@ class RecentChange implements Taggable {
 
 			// Never send an RC notification email about categorization changes
 			if (
-				Hooks::runner()->onAbortEmailNotification( $editor, $title, $this ) &&
+				Hooks::run( 'AbortEmailNotification', [ $editor, $title, $this ] ) &&
 				$this->mAttribs['rc_type'] != RC_CATEGORIZE
 			) {
 				// @FIXME: This would be better as an extension hook
 				// Send emails or email jobs once this row is safely committed
-				$dbw->onTransactionCommitOrIdle(
+				$dbw->onTransactionIdle(
 					function () use ( $editor, $title ) {
 						$enotif = new EmailNotification();
 						$enotif->notifyOnPageChange(
@@ -443,7 +392,7 @@ class RecentChange implements Taggable {
 
 	/**
 	 * Notify all the feeds about the change.
-	 * @param array|null $feeds Optional feeds to send to, defaults to $wgRCFeeds
+	 * @param array $feeds Optional feeds to send to, defaults to $wgRCFeeds
 	 */
 	public function notifyRCFeeds( array $feeds = null ) {
 		global $wgRCFeeds;
@@ -473,7 +422,11 @@ class RecentChange implements Taggable {
 				continue;
 			}
 
-			$actionComment = $this->mExtra['actionCommentIRC'] ?? null;
+			if ( isset( $this->mExtra['actionCommentIRC'] ) ) {
+				$actionComment = $this->mExtra['actionCommentIRC'];
+			} else {
+				$actionComment = null;
+			}
 
 			$feed = RCFeed::factory( $params );
 			$feed->notify( $this, $actionComment );
@@ -507,17 +460,13 @@ class RecentChange implements Taggable {
 	/**
 	 * Mark a given change as patrolled
 	 *
-	 * @deprecated since 1.35, use doMarkPatrolled directly
-	 *
 	 * @param RecentChange|int $change RecentChange or corresponding rc_id
 	 * @param bool $auto For automatic patrol
-	 * @param string|string[]|null $tags Change tags to add to the patrol log entry
+	 * @param string|string[] $tags Change tags to add to the patrol log entry
 	 *   ($user should be able to add the specified tags before this is called)
-	 * @return array[]|null See doMarkPatrolled(), or null if $change is not an existing rc_id
+	 * @return array See doMarkPatrolled(), or null if $change is not an existing rc_id
 	 */
 	public static function markPatrolled( $change, $auto = false, $tags = null ) {
-		wfDeprecated( __METHOD__, '1.35' );
-
 		global $wgUser;
 
 		$change = $change instanceof RecentChange
@@ -538,21 +487,12 @@ class RecentChange implements Taggable {
 	 * 'markedaspatrollederror-noautopatrol' as errors
 	 * @param User $user User object doing the action
 	 * @param bool $auto For automatic patrol
-	 * @param string|string[]|null $tags Change tags to add to the patrol log entry
+	 * @param string|string[] $tags Change tags to add to the patrol log entry
 	 *   ($user should be able to add the specified tags before this is called)
-	 * @return array[] Array of permissions errors, see PermissionManager::getPermissionErrors()
+	 * @return array Array of permissions errors, see Title::getUserPermissionsErrors()
 	 */
 	public function doMarkPatrolled( User $user, $auto = false, $tags = null ) {
 		global $wgUseRCPatrol, $wgUseNPPatrol, $wgUseFilePatrol;
-
-		$permManager = MediaWikiServices::getInstance()->getPermissionManager();
-
-		// Fix up $tags so that the MarkPatrolled hook below always gets an array
-		if ( $tags === null ) {
-			$tags = [];
-		} elseif ( is_string( $tags ) ) {
-			$tags = [ $tags ];
-		}
 
 		$errors = [];
 		// If recentchanges patrol is disabled, only new pages or new file versions
@@ -564,19 +504,16 @@ class RecentChange implements Taggable {
 		}
 		// Automatic patrol needs "autopatrol", ordinary patrol needs "patrol"
 		$right = $auto ? 'autopatrol' : 'patrol';
-		$errors = array_merge(
-			$errors,
-			$permManager->getPermissionErrors( $right, $user, $this->getTitle() )
-		);
-		if ( !Hooks::runner()->onMarkPatrolled(
-			$this->getAttribute( 'rc_id' ), $user, false, $auto, $tags )
+		$errors = array_merge( $errors, $this->getTitle()->getUserPermissionsErrors( $right, $user ) );
+		if ( !Hooks::run( 'MarkPatrolled',
+					[ $this->getAttribute( 'rc_id' ), &$user, false, $auto ] )
 		) {
 			$errors[] = [ 'hookaborted' ];
 		}
 		// Users without the 'autopatrol' right can't patrol their
 		// own revisions
-		if ( $user->getName() === $this->getAttribute( 'rc_user_text' ) &&
-			!$permManager->userHasRight( $user, 'autopatrol' )
+		if ( $user->getName() === $this->getAttribute( 'rc_user_text' )
+			&& !$user->isAllowed( 'autopatrol' )
 		) {
 			$errors[] = [ 'markedaspatrollederror-noautopatrol' ];
 		}
@@ -592,8 +529,10 @@ class RecentChange implements Taggable {
 		// Log this patrol event
 		PatrolLog::record( $this, $auto, $user, $tags );
 
-		Hooks::runner()->onMarkPatrolledComplete(
-			$this->getAttribute( 'rc_id' ), $user, false, $auto );
+		Hooks::run(
+			'MarkPatrolledComplete',
+			[ $this->getAttribute( 'rc_id' ), &$user, false, $auto ]
+		);
 
 		return [];
 	}
@@ -607,7 +546,7 @@ class RecentChange implements Taggable {
 		$dbw->update(
 			'recentchanges',
 			[
-				'rc_patrolled' => self::PRC_PATROLLED
+				'rc_patrolled' => 1
 			],
 			[
 				'rc_id' => $this->getAttribute( 'rc_id' )
@@ -625,9 +564,9 @@ class RecentChange implements Taggable {
 	 * Makes an entry in the database corresponding to an edit
 	 *
 	 * @param string $timestamp
-	 * @param Title $title
+	 * @param Title &$title
 	 * @param bool $minor
-	 * @param User $user
+	 * @param User &$user
 	 * @param string $comment
 	 * @param int $oldId
 	 * @param string $lastTimestamp
@@ -641,7 +580,7 @@ class RecentChange implements Taggable {
 	 * @return RecentChange
 	 */
 	public static function notifyEdit(
-		$timestamp, $title, $minor, $user, $comment, $oldId, $lastTimestamp,
+		$timestamp, &$title, $minor, &$user, $comment, $oldId, $lastTimestamp,
 		$bot, $ip = '', $oldSize = 0, $newSize = 0, $newId = 0, $patrol = 0,
 		$tags = []
 	) {
@@ -658,7 +597,6 @@ class RecentChange implements Taggable {
 			'rc_cur_id' => $title->getArticleID(),
 			'rc_user' => $user->getId(),
 			'rc_user_text' => $user->getName(),
-			'rc_actor' => $user->getActorId(),
 			'rc_comment' => &$comment,
 			'rc_comment_text' => &$comment,
 			'rc_comment_data' => null,
@@ -689,6 +627,9 @@ class RecentChange implements Taggable {
 			function () use ( $rc, $tags ) {
 				$rc->addTags( $tags );
 				$rc->save();
+				if ( $rc->mAttribs['rc_patrolled'] ) {
+					PatrolLog::record( $rc, true, $rc->getPerformer() );
+				}
 			},
 			DeferredUpdates::POSTSEND,
 			wfGetDB( DB_MASTER )
@@ -702,9 +643,9 @@ class RecentChange implements Taggable {
 	 * Note: the title object must be loaded with the new id using resetArticleID()
 	 *
 	 * @param string $timestamp
-	 * @param Title $title
+	 * @param Title &$title
 	 * @param bool $minor
-	 * @param User $user
+	 * @param User &$user
 	 * @param string $comment
 	 * @param bool $bot
 	 * @param string $ip
@@ -715,7 +656,7 @@ class RecentChange implements Taggable {
 	 * @return RecentChange
 	 */
 	public static function notifyNew(
-		$timestamp, $title, $minor, $user, $comment, $bot,
+		$timestamp, &$title, $minor, &$user, $comment, $bot,
 		$ip = '', $size = 0, $newId = 0, $patrol = 0, $tags = []
 	) {
 		$rc = new RecentChange;
@@ -731,7 +672,6 @@ class RecentChange implements Taggable {
 			'rc_cur_id' => $title->getArticleID(),
 			'rc_user' => $user->getId(),
 			'rc_user_text' => $user->getName(),
-			'rc_actor' => $user->getActorId(),
 			'rc_comment' => &$comment,
 			'rc_comment_text' => &$comment,
 			'rc_comment_data' => null,
@@ -762,6 +702,9 @@ class RecentChange implements Taggable {
 			function () use ( $rc, $tags ) {
 				$rc->addTags( $tags );
 				$rc->save();
+				if ( $rc->mAttribs['rc_patrolled'] ) {
+					PatrolLog::record( $rc, true, $rc->getPerformer() );
+				}
 			},
 			DeferredUpdates::POSTSEND,
 			wfGetDB( DB_MASTER )
@@ -772,8 +715,8 @@ class RecentChange implements Taggable {
 
 	/**
 	 * @param string $timestamp
-	 * @param Title $title
-	 * @param User $user
+	 * @param Title &$title
+	 * @param User &$user
 	 * @param string $actionComment
 	 * @param string $ip
 	 * @param string $type
@@ -785,7 +728,7 @@ class RecentChange implements Taggable {
 	 * @param string $actionCommentIRC
 	 * @return bool
 	 */
-	public static function notifyLog( $timestamp, $title, $user, $actionComment, $ip, $type,
+	public static function notifyLog( $timestamp, &$title, &$user, $actionComment, $ip, $type,
 		$action, $target, $logComment, $params, $newId = 0, $actionCommentIRC = ''
 	) {
 		global $wgLogRestrictions;
@@ -803,8 +746,8 @@ class RecentChange implements Taggable {
 
 	/**
 	 * @param string $timestamp
-	 * @param Title $title
-	 * @param User $user
+	 * @param Title &$title
+	 * @param User &$user
 	 * @param string $actionComment
 	 * @param string $ip
 	 * @param string $type
@@ -818,11 +761,10 @@ class RecentChange implements Taggable {
 	 * @param bool $isPatrollable Whether this log entry is patrollable
 	 * @return RecentChange
 	 */
-	public static function newLogEntry( $timestamp, $title, $user, $actionComment, $ip,
+	public static function newLogEntry( $timestamp, &$title, &$user, $actionComment, $ip,
 		$type, $action, $target, $logComment, $params, $newId = 0, $actionCommentIRC = '',
 		$revId = 0, $isPatrollable = false ) {
 		global $wgRequest;
-		$permissionManager = MediaWikiServices::getInstance()->getPermissionManager();
 
 		# # Get pageStatus for email notification
 		switch ( $type . '-' . $action ) {
@@ -847,8 +789,7 @@ class RecentChange implements Taggable {
 		}
 
 		// Allow unpatrolled status for patrollable log entries
-		$canAutopatrol = $permissionManager->userHasRight( $user, 'autopatrol' );
-		$markPatrolled = $isPatrollable ? $canAutopatrol : true;
+		$markPatrolled = $isPatrollable ? $user->isAllowed( 'autopatrol' ) : true;
 
 		$rc = new RecentChange;
 		$rc->mTitle = $target;
@@ -863,16 +804,14 @@ class RecentChange implements Taggable {
 			'rc_cur_id' => $target->getArticleID(),
 			'rc_user' => $user->getId(),
 			'rc_user_text' => $user->getName(),
-			'rc_actor' => $user->getActorId(),
 			'rc_comment' => &$logComment,
 			'rc_comment_text' => &$logComment,
 			'rc_comment_data' => null,
 			'rc_this_oldid' => $revId,
 			'rc_last_oldid' => 0,
-			'rc_bot' => $permissionManager->userHasRight( $user, 'bot' ) ?
-				(int)$wgRequest->getBool( 'bot', true ) : 0,
+			'rc_bot' => $user->isAllowed( 'bot' ) ? (int)$wgRequest->getBool( 'bot', true ) : 0,
 			'rc_ip' => self::checkIPAddress( $ip ),
-			'rc_patrolled' => $markPatrolled ? self::PRC_AUTOPATROLLED : self::PRC_UNPATROLLED,
+			'rc_patrolled' => $markPatrolled ? 1 : 0,
 			'rc_new' => 0, # obsolete
 			'rc_old_len' => null,
 			'rc_new_len' => null,
@@ -902,7 +841,7 @@ class RecentChange implements Taggable {
 	 *
 	 * @param string $timestamp Timestamp of the recent change to occur
 	 * @param Title $categoryTitle Title of the category a page is being added to or removed from
-	 * @param User|null $user User object of the user that made the change
+	 * @param User $user User object of the user that made the change
 	 * @param string $comment Change summary
 	 * @param Title $pageTitle Title of the page that is being added or removed
 	 * @param int $oldRevId Parent revision ID of this change
@@ -911,14 +850,14 @@ class RecentChange implements Taggable {
 	 * @param bool $bot true, if the change was made by a bot
 	 * @param string $ip IP address of the user, if the change was made anonymously
 	 * @param int $deleted Indicates whether the change has been deleted
-	 * @param bool|null $added true, if the category was added, false for removed
+	 * @param bool $added true, if the category was added, false for removed
 	 *
 	 * @return RecentChange
 	 */
 	public static function newForCategorization(
 		$timestamp,
 		Title $categoryTitle,
-		?User $user,
+		User $user = null,
 		$comment,
 		Title $pageTitle,
 		$oldRevId,
@@ -950,7 +889,6 @@ class RecentChange implements Taggable {
 			'rc_cur_id' => $pageTitle->getArticleID(),
 			'rc_user' => $user ? $user->getId() : 0,
 			'rc_user_text' => $user ? $user->getName() : '',
-			'rc_actor' => $user ? $user->getActorId() : null,
 			'rc_comment' => &$comment,
 			'rc_comment_text' => &$comment,
 			'rc_comment_data' => null,
@@ -958,7 +896,7 @@ class RecentChange implements Taggable {
 			'rc_last_oldid' => $oldRevId,
 			'rc_bot' => $bot ? 1 : 0,
 			'rc_ip' => self::checkIPAddress( $ip ),
-			'rc_patrolled' => self::PRC_AUTOPATROLLED, // Always patrolled, just like log entries
+			'rc_patrolled' => 1, // Always patrolled, just like log entries
 			'rc_new' => 0, # obsolete
 			'rc_old_len' => null,
 			'rc_new_len' => null,
@@ -990,7 +928,7 @@ class RecentChange implements Taggable {
 	 */
 	public function getParam( $name ) {
 		$params = $this->parseParams();
-		return $params[$name] ?? null;
+		return isset( $params[$name] ) ? $params[$name] : null;
 	}
 
 	/**
@@ -1012,27 +950,12 @@ class RecentChange implements Taggable {
 			}
 		}
 
-		$comment = CommentStore::getStore()
-			// Legacy because $row may have come from self::selectFields()
-			->getCommentLegacy( wfGetDB( DB_REPLICA ), 'rc_comment', $row, true )
-			->text;
+		$comment = CommentStore::newKey( 'rc_comment' )
+			// Legacy because $row probably came from self::selectFields()
+			->getCommentLegacy( wfGetDB( DB_REPLICA ), $row, true )->text;
 		$this->mAttribs['rc_comment'] = &$comment;
 		$this->mAttribs['rc_comment_text'] = &$comment;
 		$this->mAttribs['rc_comment_data'] = null;
-
-		$user = User::newFromAnyId(
-			$this->mAttribs['rc_user'] ?? null,
-			$this->mAttribs['rc_user_text'] ?? null,
-			$this->mAttribs['rc_actor'] ?? null
-		);
-		$this->mAttribs['rc_user'] = $user->getId();
-		$this->mAttribs['rc_user_text'] = $user->getName();
-		$this->mAttribs['rc_actor'] = $user->getActorId();
-
-		// Watchlist expiry.
-		if ( isset( $row->we_expiry ) && $row->we_expiry ) {
-			$this->watchlistExpiry = wfTimestamp( TS_MW, $row->we_expiry );
-		}
 	}
 
 	/**
@@ -1043,28 +966,9 @@ class RecentChange implements Taggable {
 	 */
 	public function getAttribute( $name ) {
 		if ( $name === 'rc_comment' ) {
-			return CommentStore::getStore()
-				->getComment( 'rc_comment', $this->mAttribs, true )->text;
+			return CommentStore::newKey( 'rc_comment' )->getComment( $this->mAttribs, true )->text;
 		}
-
-		if ( $name === 'rc_user' || $name === 'rc_user_text' || $name === 'rc_actor' ) {
-			$user = User::newFromAnyId(
-				$this->mAttribs['rc_user'] ?? null,
-				$this->mAttribs['rc_user_text'] ?? null,
-				$this->mAttribs['rc_actor'] ?? null
-			);
-			if ( $name === 'rc_user' ) {
-				return $user->getId();
-			}
-			if ( $name === 'rc_user_text' ) {
-				return $user->getName();
-			}
-			if ( $name === 'rc_actor' ) {
-				return $user->getActorId();
-			}
-		}
-
-		return $this->mAttribs[$name] ?? null;
+		return isset( $this->mAttribs[$name] ) ? $this->mAttribs[$name] : null;
 	}
 
 	/**
@@ -1120,7 +1024,7 @@ class RecentChange implements Taggable {
 	private static function checkIPAddress( $ip ) {
 		global $wgRequest;
 		if ( $ip ) {
-			if ( !IPUtils::isIPAddress( $ip ) ) {
+			if ( !IP::isIPAddress( $ip ) ) {
 				throw new MWException( "Attempt to write \"" . $ip .
 					"\" as an IP address into recent changes" );
 			}
@@ -1159,9 +1063,9 @@ class RecentChange implements Taggable {
 	public function parseParams() {
 		$rcParams = $this->getAttribute( 'rc_params' );
 
-		Wikimedia\suppressWarnings();
+		MediaWiki\suppressWarnings();
 		$unserializedParams = unserialize( $rcParams );
-		Wikimedia\restoreWarnings();
+		MediaWiki\restoreWarnings();
 
 		return $unserializedParams;
 	}
@@ -1172,7 +1076,7 @@ class RecentChange implements Taggable {
 	 *
 	 * @since 1.28
 	 *
-	 * @param string|string[] $tags
+	 * @param string|array $tags
 	 */
 	public function addTags( $tags ) {
 		if ( is_string( $tags ) ) {

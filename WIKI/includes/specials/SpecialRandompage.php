@@ -22,8 +22,6 @@
  * @author Rob Church <robchur@gmail.com>, Ilmari Karonen
  */
 
-use MediaWiki\MediaWikiServices;
-
 /**
  * Special page to direct the user to a random page
  *
@@ -35,8 +33,7 @@ class RandomPage extends SpecialPage {
 	protected $extra = []; // Extra SQL statements
 
 	public function __construct( $name = 'Randompage' ) {
-		$this->namespaces = MediaWikiServices::getInstance()->getNamespaceInfo()->
-			getContentNamespaces();
+		$this->namespaces = MWNamespace::getContentNamespaces();
 		parent::__construct( $name );
 	}
 
@@ -57,16 +54,17 @@ class RandomPage extends SpecialPage {
 	}
 
 	public function execute( $par ) {
+		global $wgContLang;
+
 		if ( is_string( $par ) ) {
 			// Testing for stringiness since we want to catch
 			// the empty string to mean main namespace only.
-			$this->setNamespace(
-				MediaWikiServices::getInstance()->getContentLanguage()->getNsIndex( $par ) );
+			$this->setNamespace( $wgContLang->getNsIndex( $par ) );
 		}
 
 		$title = $this->getRandomTitle();
 
-		if ( $title === null ) {
+		if ( is_null( $title ) ) {
 			$this->setHeaders();
 			// Message: randompage-nopages, randomredirect-nopages
 			$this->getOutput()->addWikiMsg( strtolower( $this->getName() ) . '-nopages',
@@ -87,17 +85,17 @@ class RandomPage extends SpecialPage {
 	 * @return string
 	 */
 	private function getNsList() {
-		$contLang = MediaWikiServices::getInstance()->getContentLanguage();
+		global $wgContLang;
 		$nsNames = [];
 		foreach ( $this->namespaces as $n ) {
 			if ( $n === NS_MAIN ) {
 				$nsNames[] = $this->msg( 'blanknamespace' )->plain();
 			} else {
-				$nsNames[] = $contLang->getNsText( $n );
+				$nsNames[] = $wgContLang->getNsText( $n );
 			}
 		}
 
-		return $contLang->commaList( $nsNames );
+		return $wgContLang->commaList( $nsNames );
 	}
 
 	/**
@@ -108,14 +106,14 @@ class RandomPage extends SpecialPage {
 		$randstr = wfRandom();
 		$title = null;
 
-		if ( !$this->getHookRunner()->onSpecialRandomGetRandomTitle(
-			$randstr, $this->isRedir, $this->namespaces,
-			$this->extra, $title )
-		) {
+		if ( !Hooks::run(
+			'SpecialRandomGetRandomTitle',
+			[ &$randstr, &$this->isRedir, &$this->namespaces, &$this->extra, &$title ]
+		) ) {
 			return $title;
 		}
 
-		$row = $this->selectRandomPageFromDB( $randstr, __METHOD__ );
+		$row = $this->selectRandomPageFromDB( $randstr );
 
 		/* If we picked a value that was higher than any in
 		 * the DB, wrap around and select the page with the
@@ -125,7 +123,7 @@ class RandomPage extends SpecialPage {
 		 * causes anyway.  Trust me, I'm a mathematician. :)
 		 */
 		if ( !$row ) {
-			$row = $this->selectRandomPageFromDB( "0", __METHOD__ );
+			$row = $this->selectRandomPageFromDB( "0" );
 		}
 
 		if ( $row ) {
@@ -146,7 +144,7 @@ class RandomPage extends SpecialPage {
 		$joinConds = [];
 
 		// Allow extensions to modify the query
-		$this->getHookRunner()->onRandomPageQuery( $tables, $conds, $joinConds );
+		Hooks::run( 'RandomPageQuery', [ &$tables, &$conds, &$joinConds ] );
 
 		return [
 			'tables' => $tables,

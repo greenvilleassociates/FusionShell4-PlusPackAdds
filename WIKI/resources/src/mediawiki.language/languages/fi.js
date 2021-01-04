@@ -3,10 +3,10 @@
  * @author Santhosh Thottingal
  */
 
-mw.language.convertGrammar = function ( word, form ) {
+mediaWiki.language.convertGrammar = function ( word, form ) {
 	var grammarForms, aou, origWord;
 
-	grammarForms = mw.language.getData( 'fi', 'grammarForms' );
+	grammarForms = mediaWiki.language.getData( 'fi', 'grammarForms' );
 	if ( grammarForms && grammarForms[ form ] ) {
 		return grammarForms[ form ][ word ];
 	}

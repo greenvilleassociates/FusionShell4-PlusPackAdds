@@ -1,12 +1,5 @@
-@import '../variables.less';
-
-.oo-ui-defaultOverlay,
-.skin-vector .oo-ui-windowManager-modal > .oo-ui-dialog,
+.oo-ui-windowManager-modal,
 .skin-vector .ve-ui-overlay-global {
-	z-index: @z-index-overlay;
-}
-
-body > .oo-ui-windowManager,
-.oo-ui-defaultOverlay {
-	font-size: @font-size-base;
+	z-index: 101;
+	position: relative;
 }

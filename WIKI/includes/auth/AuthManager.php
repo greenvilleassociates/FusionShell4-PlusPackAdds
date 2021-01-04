@@ -24,18 +24,13 @@
 namespace MediaWiki\Auth;
 
 use Config;
-use MediaWiki\HookContainer\HookContainer;
-use MediaWiki\HookContainer\HookRunner;
 use MediaWiki\MediaWikiServices;
-use MediaWiki\Permissions\PermissionManager;
 use Psr\Log\LoggerAwareInterface;
 use Psr\Log\LoggerInterface;
-use Psr\Log\NullLogger;
 use Status;
 use StatusValue;
 use User;
 use WebRequest;
-use Wikimedia\ObjectFactory;
 
 /**
  * This serves as the entry point to the authentication system.
@@ -58,8 +53,7 @@ use Wikimedia\ObjectFactory;
  * Code that is related to some SessionProvider or PrimaryAuthenticationProvider can
  * create a (non-reserved) user by calling AuthManager::autoCreateUser(); it is then the provider's
  * responsibility to ensure that the user can authenticate somehow (see especially
- * PrimaryAuthenticationProvider::autoCreatedAccount()). The same functionality can also be used
- * from Maintenance scripts such as createAndPromote.php.
+ * PrimaryAuthenticationProvider::autoCreatedAccount()).
  * If you are writing code that is not associated with such a provider and needs to create accounts
  * programmatically for real users, you should rethink your architecture. There is no good way to
  * do that as such code has no knowledge of what authentication methods are enabled on the wiki and
@@ -87,42 +81,36 @@ use Wikimedia\ObjectFactory;
  */
 class AuthManager implements LoggerAwareInterface {
 	/** Log in with an existing (not necessarily local) user */
-	public const ACTION_LOGIN = 'login';
+	const ACTION_LOGIN = 'login';
 	/** Continue a login process that was interrupted by the need for user input or communication
-	 * with an external provider
-	 */
-	public const ACTION_LOGIN_CONTINUE = 'login-continue';
+	 * with an external provider */
+	const ACTION_LOGIN_CONTINUE = 'login-continue';
 	/** Create a new user */
-	public const ACTION_CREATE = 'create';
+	const ACTION_CREATE = 'create';
 	/** Continue a user creation process that was interrupted by the need for user input or
-	 * communication with an external provider
-	 */
-	public const ACTION_CREATE_CONTINUE = 'create-continue';
+	 * communication with an external provider */
+	const ACTION_CREATE_CONTINUE = 'create-continue';
 	/** Link an existing user to a third-party account */
-	public const ACTION_LINK = 'link';
+	const ACTION_LINK = 'link';
 	/** Continue a user linking process that was interrupted by the need for user input or
-	 * communication with an external provider
-	 */
-	public const ACTION_LINK_CONTINUE = 'link-continue';
+	 * communication with an external provider */
+	const ACTION_LINK_CONTINUE = 'link-continue';
 	/** Change a user's credentials */
-	public const ACTION_CHANGE = 'change';
+	const ACTION_CHANGE = 'change';
 	/** Remove a user's credentials */
-	public const ACTION_REMOVE = 'remove';
+	const ACTION_REMOVE = 'remove';
 	/** Like ACTION_REMOVE but for linking providers only */
-	public const ACTION_UNLINK = 'unlink';
+	const ACTION_UNLINK = 'unlink';
 
 	/** Security-sensitive operations are ok. */
-	public const SEC_OK = 'ok';
+	const SEC_OK = 'ok';
 	/** Security-sensitive operations should re-authenticate. */
-	public const SEC_REAUTH = 'reauth';
+	const SEC_REAUTH = 'reauth';
 	/** Security-sensitive should not be performed. */
-	public const SEC_FAIL = 'fail';
+	const SEC_FAIL = 'fail';
 
 	/** Auto-creation is due to SessionManager */
-	public const AUTOCREATE_SOURCE_SESSION = \MediaWiki\Session\SessionManager::class;
-
-	/** Auto-creation is due to a Maintenance script */
-	public const AUTOCREATE_SOURCE_MAINT = '::Maintenance::';
+	const AUTOCREATE_SOURCE_SESSION = \MediaWiki\Session\SessionManager::class;
 
 	/** @var AuthManager|null */
 	private static $instance = null;
@@ -133,14 +121,8 @@ class AuthManager implements LoggerAwareInterface {
 	/** @var Config */
 	private $config;
 
-	/** @var ObjectFactory */
-	private $objectFactory;
-
 	/** @var LoggerInterface */
 	private $logger;
-
-	/** @var PermissionManager */
-	private $permManager;
 
 	/** @var AuthenticationProvider[] */
 	private $allAuthenticationProviders = [];
@@ -157,42 +139,28 @@ class AuthManager implements LoggerAwareInterface {
 	/** @var CreatedAccountAuthenticationRequest[] */
 	private $createdAccountAuthenticationRequests = [];
 
-	/** @var HookContainer */
-	private $hookContainer;
-
-	/** @var HookRunner */
-	private $hookRunner;
-
 	/**
 	 * Get the global AuthManager
 	 * @return AuthManager
-	 * @deprecated since 1.35 use MediaWikiServices::getInstance()->getAuthManager() instead.
 	 */
 	public static function singleton() {
-		return MediaWikiServices::getInstance()->getAuthManager();
+		if ( self::$instance === null ) {
+			self::$instance = new self(
+				\RequestContext::getMain()->getRequest(),
+				MediaWikiServices::getInstance()->getMainConfig()
+			);
+		}
+		return self::$instance;
 	}
 
 	/**
 	 * @param WebRequest $request
 	 * @param Config $config
-	 * @param ObjectFactory $objectFactory
-	 * @param PermissionManager $permManager
-	 * @param HookContainer $hookContainer
 	 */
-	public function __construct(
-		WebRequest $request,
-		Config $config,
-		ObjectFactory $objectFactory,
-		PermissionManager $permManager,
-		HookContainer $hookContainer
-	) {
+	public function __construct( WebRequest $request, Config $config ) {
 		$this->request = $request;
 		$this->config = $config;
-		$this->objectFactory = $objectFactory;
-		$this->permManager = $permManager;
-		$this->hookContainer = $hookContainer;
-		$this->hookRunner = new HookRunner( $hookContainer );
-		$this->setLogger( new NullLogger() );
+		$this->setLogger( \MediaWiki\Logger\LoggerFactory::getInstance( 'authentication' ) );
 	}
 
 	/**
@@ -245,7 +213,6 @@ class AuthManager implements LoggerAwareInterface {
 			$provider->setLogger( $this->logger );
 			$provider->setManager( $this );
 			$provider->setConfig( $this->config );
-			$provider->setHookContainer( $this->hookContainer );
 			$id = $provider->getUniqueId();
 			if ( isset( $this->allAuthenticationProviders[$id] ) ) {
 				throw new \RuntimeException(
@@ -256,6 +223,25 @@ class AuthManager implements LoggerAwareInterface {
 			}
 			$this->allAuthenticationProviders[$id] = $provider;
 			$this->primaryAuthenticationProviders[$id] = $provider;
+		}
+	}
+
+	/**
+	 * Call a legacy AuthPlugin method, if necessary
+	 * @codeCoverageIgnore
+	 * @deprecated For backwards compatibility only, should be avoided in new code
+	 * @param string $method AuthPlugin method to call
+	 * @param array $params Parameters to pass
+	 * @param mixed $return Return value if AuthPlugin wasn't called
+	 * @return mixed Return value from the AuthPlugin method, or $return
+	 */
+	public static function callLegacyAuthPlugin( $method, array $params, $return = null ) {
+		global $wgAuth;
+
+		if ( $wgAuth && !$wgAuth instanceof AuthManagerAuthPlugin ) {
+			return call_user_func_array( [ $wgAuth, $method ], $params );
+		} else {
+			return $return;
 		}
 	}
 
@@ -349,8 +335,7 @@ class AuthManager implements LoggerAwareInterface {
 			$this->setSessionDataForUser( $user );
 			$this->callMethodOnProviders( 7, 'postAuthentication', [ $user, $ret ] );
 			$session->remove( 'AuthManager::authnState' );
-			$this->getHookRunner()->onAuthManagerLoginAuthenticateAudit(
-				$ret, $user, $user->getName(), [] );
+			\Hooks::run( 'AuthManagerLoginAuthenticateAudit', [ $ret, $user, $user->getName() ] );
 			return $ret;
 		}
 
@@ -366,7 +351,7 @@ class AuthManager implements LoggerAwareInterface {
 				$this->callMethodOnProviders( 7, 'postAuthentication',
 					[ User::newFromName( $guessUserName ) ?: null, $ret ]
 				);
-				$this->getHookRunner()->onAuthManagerLoginAuthenticateAudit( $ret, null, $guessUserName, [] );
+				\Hooks::run( 'AuthManagerLoginAuthenticateAudit', [ $ret, null, $guessUserName ] );
 				return $ret;
 			}
 		}
@@ -466,12 +451,12 @@ class AuthManager implements LoggerAwareInterface {
 				foreach ( $this->getPrimaryAuthenticationProviders() as $id => $provider ) {
 					$res = $provider->beginPrimaryAuthentication( $reqs );
 					switch ( $res->status ) {
-						case AuthenticationResponse::PASS:
+						case AuthenticationResponse::PASS;
 							$state['primary'] = $id;
 							$state['primaryResponse'] = $res;
 							$this->logger->debug( "Primary login with $id succeeded" );
 							break 2;
-						case AuthenticationResponse::FAIL:
+						case AuthenticationResponse::FAIL;
 							$this->logger->debug( "Login failed in primary authentication by $id" );
 							if ( $res->createRequest || $state['maybeLink'] ) {
 								$res->createRequest = new CreateFromLoginAuthenticationRequest(
@@ -482,14 +467,13 @@ class AuthManager implements LoggerAwareInterface {
 								[ User::newFromName( $guessUserName ) ?: null, $res ]
 							);
 							$session->remove( 'AuthManager::authnState' );
-							$this->getHookRunner()->onAuthManagerLoginAuthenticateAudit(
-								$res, null, $guessUserName, [] );
+							\Hooks::run( 'AuthManagerLoginAuthenticateAudit', [ $res, null, $guessUserName ] );
 							return $res;
-						case AuthenticationResponse::ABSTAIN:
+						case AuthenticationResponse::ABSTAIN;
 							// Continue loop
 							break;
-						case AuthenticationResponse::REDIRECT:
-						case AuthenticationResponse::UI:
+						case AuthenticationResponse::REDIRECT;
+						case AuthenticationResponse::UI;
 							$this->logger->debug( "Primary login with $id returned $res->status" );
 							$this->fillRequests( $res->neededRequests, self::ACTION_LOGIN, $guessUserName );
 							$state['primary'] = $id;
@@ -534,11 +518,11 @@ class AuthManager implements LoggerAwareInterface {
 				$id = $provider->getUniqueId();
 				$res = $provider->continuePrimaryAuthentication( $reqs );
 				switch ( $res->status ) {
-					case AuthenticationResponse::PASS:
+					case AuthenticationResponse::PASS;
 						$state['primaryResponse'] = $res;
 						$this->logger->debug( "Primary login with $id succeeded" );
 						break;
-					case AuthenticationResponse::FAIL:
+					case AuthenticationResponse::FAIL;
 						$this->logger->debug( "Login failed in primary authentication by $id" );
 						if ( $res->createRequest || $state['maybeLink'] ) {
 							$res->createRequest = new CreateFromLoginAuthenticationRequest(
@@ -549,11 +533,10 @@ class AuthManager implements LoggerAwareInterface {
 							[ User::newFromName( $guessUserName ) ?: null, $res ]
 						);
 						$session->remove( 'AuthManager::authnState' );
-						$this->getHookRunner()->onAuthManagerLoginAuthenticateAudit(
-							$res, null, $guessUserName, [] );
+						\Hooks::run( 'AuthManagerLoginAuthenticateAudit', [ $res, null, $guessUserName ] );
 						return $res;
-					case AuthenticationResponse::REDIRECT:
-					case AuthenticationResponse::UI:
+					case AuthenticationResponse::REDIRECT;
+					case AuthenticationResponse::UI;
 						$this->logger->debug( "Primary login with $id returned $res->status" );
 						$this->fillRequests( $res->neededRequests, self::ACTION_LOGIN, $guessUserName );
 						$state['continueRequests'] = $res->neededRequests;
@@ -641,8 +624,7 @@ class AuthManager implements LoggerAwareInterface {
 					);
 					$this->callMethodOnProviders( 7, 'postAuthentication', [ $user, $ret ] );
 					$session->remove( 'AuthManager::authnState' );
-					$this->getHookRunner()->onAuthManagerLoginAuthenticateAudit(
-						$ret, $user, $user->getName(), [] );
+					\Hooks::run( 'AuthManagerLoginAuthenticateAudit', [ $ret, $user, $user->getName() ] );
 					return $ret;
 				}
 			}
@@ -665,21 +647,20 @@ class AuthManager implements LoggerAwareInterface {
 					continue;
 				}
 				switch ( $res->status ) {
-					case AuthenticationResponse::PASS:
+					case AuthenticationResponse::PASS;
 						$this->logger->debug( "Secondary login with $id succeeded" );
 						// fall through
-					case AuthenticationResponse::ABSTAIN:
+					case AuthenticationResponse::ABSTAIN;
 						$state['secondary'][$id] = true;
 						break;
-					case AuthenticationResponse::FAIL:
+					case AuthenticationResponse::FAIL;
 						$this->logger->debug( "Login failed in secondary authentication by $id" );
 						$this->callMethodOnProviders( 7, 'postAuthentication', [ $user, $res ] );
 						$session->remove( 'AuthManager::authnState' );
-						$this->getHookRunner()->onAuthManagerLoginAuthenticateAudit(
-							$res, $user, $user->getName(), [] );
+						\Hooks::run( 'AuthManagerLoginAuthenticateAudit', [ $res, $user, $user->getName() ] );
 						return $res;
-					case AuthenticationResponse::REDIRECT:
-					case AuthenticationResponse::UI:
+					case AuthenticationResponse::REDIRECT;
+					case AuthenticationResponse::UI;
 						$this->logger->debug( "Secondary login with $id returned " . $res->status );
 						$this->fillRequests( $res->neededRequests, self::ACTION_LOGIN, $user->getName() );
 						$state['secondary'][$id] = false;
@@ -699,9 +680,8 @@ class AuthManager implements LoggerAwareInterface {
 			// Step 4: Authentication complete! Set the user in the session and
 			// clean up.
 
-			$this->logger->info( 'Login for {user} succeeded from {clientip}', [
+			$this->logger->info( 'Login for {user} succeeded', [
 				'user' => $user->getName(),
-				'clientip' => $this->request->getIP(),
 			] );
 			/** @var RememberMeAuthenticationRequest $req */
 			$req = AuthenticationRequest::getRequestByClass(
@@ -712,8 +692,7 @@ class AuthManager implements LoggerAwareInterface {
 			$this->callMethodOnProviders( 7, 'postAuthentication', [ $user, $ret ] );
 			$session->remove( 'AuthManager::authnState' );
 			$this->removeAuthenticationSessionData( null );
-			$this->getHookRunner()->onAuthManagerLoginAuthenticateAudit(
-				$ret, $user, $user->getName(), [] );
+			\Hooks::run( 'AuthManagerLoginAuthenticateAudit', [ $ret, $user, $user->getName() ] );
 			return $ret;
 		} catch ( \Exception $ex ) {
 			$session->remove( 'AuthManager::authnState' );
@@ -782,20 +761,16 @@ class AuthManager implements LoggerAwareInterface {
 			}
 		}
 
-		$this->getHookRunner()->onSecuritySensitiveOperationStatus(
-			$status, $operation, $session, $timeSinceLogin );
+		\Hooks::run( 'SecuritySensitiveOperationStatus', [
+			&$status, $operation, $session, $timeSinceLogin
+		] );
 
 		// If authentication is not possible, downgrade from "REAUTH" to "FAIL".
 		if ( !$this->canAuthenticateNow() && $status === self::SEC_REAUTH ) {
 			$status = self::SEC_FAIL;
 		}
 
-		$this->logger->info( __METHOD__ . ": $operation is $status for '{user}'",
-			[
-				'user' => $session->getUser()->getName(),
-				'clientip' => $this->getRequest()->getIP(),
-			]
-		);
+		$this->logger->info( __METHOD__ . ": $operation is $status" );
 
 		return $status;
 	}
@@ -843,7 +818,7 @@ class AuthManager implements LoggerAwareInterface {
 		return array_keys( $ret );
 	}
 
-	/** @} */
+	/**@}*/
 
 	/**
 	 * @name Authentication data changing
@@ -877,16 +852,10 @@ class AuthManager implements LoggerAwareInterface {
 		$any = false;
 		$providers = $this->getPrimaryAuthenticationProviders() +
 			$this->getSecondaryAuthenticationProviders();
-
 		foreach ( $providers as $provider ) {
 			$status = $provider->providerAllowsAuthenticationDataChange( $req, $checkData );
 			if ( !$status->isGood() ) {
-				// If status is not good because reset email password last attempt was within
-				// $wgPasswordReminderResendTime then return good status with throttled-mailpassword value;
-				// otherwise, return the $status wrapped.
-				return $status->hasMessage( 'throttled-mailpassword' )
-					? Status::newGood( 'throttled-mailpassword' )
-					: Status::wrap( $status );
+				return Status::wrap( $status );
 			}
 			$any = $any || $status->value !== 'ignored';
 		}
@@ -911,11 +880,8 @@ class AuthManager implements LoggerAwareInterface {
 	 * returned success.
 	 *
 	 * @param AuthenticationRequest $req
-	 * @param bool $isAddition Set true if this represents an addition of
-	 *  credentials rather than a change. The main difference is that additions
-	 *  should not invalidate BotPasswords. If you're not sure, leave it false.
 	 */
-	public function changeAuthenticationData( AuthenticationRequest $req, $isAddition = false ) {
+	public function changeAuthenticationData( AuthenticationRequest $req ) {
 		$this->logger->info( 'Changing authentication data for {user} class {what}', [
 			'user' => is_string( $req->username ) ? $req->username : '<no name>',
 			'what' => get_class( $req ),
@@ -925,12 +891,10 @@ class AuthManager implements LoggerAwareInterface {
 
 		// When the main account's authentication data is changed, invalidate
 		// all BotPasswords too.
-		if ( !$isAddition ) {
-			\BotPassword::invalidateAllPasswordsForUser( $req->username );
-		}
+		\BotPassword::invalidateAllPasswordsForUser( $req->username );
 	}
 
-	/** @} */
+	/**@}*/
 
 	/**
 	 * @name Account creation
@@ -1014,34 +978,37 @@ class AuthManager implements LoggerAwareInterface {
 			return Status::newFatal( wfMessage( 'readonlytext', wfReadOnlyReason() ) );
 		}
 
-		$permErrors = $this->permManager->getPermissionErrors(
-			'createaccount',
-			$creator,
-			\SpecialPage::getTitleFor( 'CreateAccount' )
-		);
+		// This is awful, this permission check really shouldn't go through Title.
+		$permErrors = \SpecialPage::getTitleFor( 'CreateAccount' )
+			->getUserPermissionsErrors( 'createaccount', $creator, 'secure' );
 		if ( $permErrors ) {
 			$status = Status::newGood();
 			foreach ( $permErrors as $args ) {
-				$status->fatal( ...$args );
+				call_user_func_array( [ $status, 'fatal' ], $args );
 			}
 			return $status;
 		}
 
-		$ip = $this->getRequest()->getIP();
-
 		$block = $creator->isBlockedFromCreateAccount();
 		if ( $block ) {
-			$language = \RequestContext::getMain()->getLanguage();
-			$formatter = MediaWikiServices::getInstance()->getBlockErrorFormatter();
-			return Status::newFatal(
-				$formatter->getMessage( $block, $creator, $language, $ip )
-			);
+			$errorParams = [
+				$block->getTarget(),
+				$block->mReason ?: wfMessage( 'blockednoreason' )->text(),
+				$block->getByName()
+			];
+
+			if ( $block->getType() === \Block::TYPE_RANGE ) {
+				$errorMessage = 'cantcreateaccount-range-text';
+				$errorParams[] = $this->getRequest()->getIP();
+			} else {
+				$errorMessage = 'cantcreateaccount-text';
+			}
+
+			return Status::newFatal( wfMessage( $errorMessage, $errorParams ) );
 		}
 
-		if (
-			MediaWikiServices::getInstance()->getBlockManager()
-				->isDnsBlacklisted( $ip, true /* check $wgProxyWhitelist */ )
-		) {
+		$ip = $this->getRequest()->getIP();
+		if ( $creator->isDnsBlacklisted( $ip, true /* check $wgProxyWhitelist */ ) ) {
 			return Status::newFatal( 'sorbs_create_account_reason' );
 		}
 
@@ -1234,7 +1201,7 @@ class AuthManager implements LoggerAwareInterface {
 			$user->load( User::READ_LOCKING );
 
 			if ( $state['userid'] === 0 ) {
-				if ( $user->getId() !== 0 ) {
+				if ( $user->getId() != 0 ) {
 					$this->logger->debug( __METHOD__ . ': User exists locally', [
 						'user' => $user->getName(),
 						'creator' => $creator->getName(),
@@ -1245,7 +1212,7 @@ class AuthManager implements LoggerAwareInterface {
 					return $ret;
 				}
 			} else {
-				if ( $user->getId() === 0 ) {
+				if ( $user->getId() == 0 ) {
 					$this->logger->debug( __METHOD__ . ': User does not exist locally when it should', [
 						'user' => $user->getName(),
 						'creator' => $creator->getName(),
@@ -1255,7 +1222,7 @@ class AuthManager implements LoggerAwareInterface {
 						"User \"{$state['username']}\" should exist now, but doesn't!"
 					);
 				}
-				if ( $user->getId() !== $state['userid'] ) {
+				if ( $user->getId() != $state['userid'] ) {
 					$this->logger->debug( __METHOD__ . ': User ID/name mismatch', [
 						'user' => $user->getName(),
 						'creator' => $creator->getName(),
@@ -1264,7 +1231,7 @@ class AuthManager implements LoggerAwareInterface {
 					] );
 					throw new \UnexpectedValueException(
 						"User \"{$state['username']}\" exists, but " .
-							"ID {$user->getId()} !== {$state['userid']}!"
+							"ID {$user->getId()} != {$state['userid']}!"
 					);
 				}
 			}
@@ -1326,7 +1293,7 @@ class AuthManager implements LoggerAwareInterface {
 					}
 					$res = $provider->beginPrimaryAccountCreation( $user, $creator, $reqs );
 					switch ( $res->status ) {
-						case AuthenticationResponse::PASS:
+						case AuthenticationResponse::PASS;
 							$this->logger->debug( __METHOD__ . ": Primary creation passed by $id", [
 								'user' => $user->getName(),
 								'creator' => $creator->getName(),
@@ -1334,7 +1301,7 @@ class AuthManager implements LoggerAwareInterface {
 							$state['primary'] = $id;
 							$state['primaryResponse'] = $res;
 							break 2;
-						case AuthenticationResponse::FAIL:
+						case AuthenticationResponse::FAIL;
 							$this->logger->debug( __METHOD__ . ": Primary creation failed by $id", [
 								'user' => $user->getName(),
 								'creator' => $creator->getName(),
@@ -1342,11 +1309,11 @@ class AuthManager implements LoggerAwareInterface {
 							$this->callMethodOnProviders( 7, 'postAccountCreation', [ $user, $creator, $res ] );
 							$session->remove( 'AuthManager::accountCreationState' );
 							return $res;
-						case AuthenticationResponse::ABSTAIN:
+						case AuthenticationResponse::ABSTAIN;
 							// Continue loop
 							break;
-						case AuthenticationResponse::REDIRECT:
-						case AuthenticationResponse::UI:
+						case AuthenticationResponse::REDIRECT;
+						case AuthenticationResponse::UI;
 							$this->logger->debug( __METHOD__ . ": Primary creation $res->status by $id", [
 								'user' => $user->getName(),
 								'creator' => $creator->getName(),
@@ -1393,14 +1360,14 @@ class AuthManager implements LoggerAwareInterface {
 				$id = $provider->getUniqueId();
 				$res = $provider->continuePrimaryAccountCreation( $user, $creator, $reqs );
 				switch ( $res->status ) {
-					case AuthenticationResponse::PASS:
+					case AuthenticationResponse::PASS;
 						$this->logger->debug( __METHOD__ . ": Primary creation passed by $id", [
 							'user' => $user->getName(),
 							'creator' => $creator->getName(),
 						] );
 						$state['primaryResponse'] = $res;
 						break;
-					case AuthenticationResponse::FAIL:
+					case AuthenticationResponse::FAIL;
 						$this->logger->debug( __METHOD__ . ": Primary creation failed by $id", [
 							'user' => $user->getName(),
 							'creator' => $creator->getName(),
@@ -1408,8 +1375,8 @@ class AuthManager implements LoggerAwareInterface {
 						$this->callMethodOnProviders( 7, 'postAccountCreation', [ $user, $creator, $res ] );
 						$session->remove( 'AuthManager::accountCreationState' );
 						return $res;
-					case AuthenticationResponse::REDIRECT:
-					case AuthenticationResponse::UI:
+					case AuthenticationResponse::REDIRECT;
+					case AuthenticationResponse::UI;
 						$this->logger->debug( __METHOD__ . ": Primary creation $res->status by $id", [
 							'user' => $user->getName(),
 							'creator' => $creator->getName(),
@@ -1443,12 +1410,12 @@ class AuthManager implements LoggerAwareInterface {
 					// @codeCoverageIgnoreEnd
 				}
 				$this->setDefaultUserOptions( $user, $creator->isAnon() );
-				$this->getHookRunner()->onLocalUserCreated( $user, false );
+				\Hooks::run( 'LocalUserCreated', [ $user, false ] );
 				$user->saveSettings();
 				$state['userid'] = $user->getId();
 
 				// Update user count
-				\DeferredUpdates::addUpdate( \SiteStatsUpdate::factory( [ 'users' => 1 ] ) );
+				\DeferredUpdates::addUpdate( new \SiteStatsUpdate( 0, 0, 0, 0, 1 ) );
 
 				// Watch user's userpage and talk page
 				$user->addWatch( $user->getUserPage(), User::IGNORE_USER_RIGHTS );
@@ -1496,17 +1463,17 @@ class AuthManager implements LoggerAwareInterface {
 					continue;
 				}
 				switch ( $res->status ) {
-					case AuthenticationResponse::PASS:
+					case AuthenticationResponse::PASS;
 						$this->logger->debug( __METHOD__ . ": Secondary creation passed by $id", [
 							'user' => $user->getName(),
 							'creator' => $creator->getName(),
 						] );
 						// fall through
-					case AuthenticationResponse::ABSTAIN:
+					case AuthenticationResponse::ABSTAIN;
 						$state['secondary'][$id] = true;
 						break;
-					case AuthenticationResponse::REDIRECT:
-					case AuthenticationResponse::UI:
+					case AuthenticationResponse::REDIRECT;
+					case AuthenticationResponse::UI;
 						$this->logger->debug( __METHOD__ . ": Secondary creation $res->status by $id", [
 							'user' => $user->getName(),
 							'creator' => $creator->getName(),
@@ -1516,7 +1483,7 @@ class AuthManager implements LoggerAwareInterface {
 						$state['continueRequests'] = $res->neededRequests;
 						$session->setSecret( 'AuthManager::accountCreationState', $state );
 						return $res;
-					case AuthenticationResponse::FAIL:
+					case AuthenticationResponse::FAIL;
 						throw new \DomainException(
 							get_class( $provider ) . "::{$func}() returned $res->status." .
 							' Secondary providers are not allowed to fail account creation, that' .
@@ -1563,16 +1530,13 @@ class AuthManager implements LoggerAwareInterface {
 	 * explicitly (e.g. from a maintenance script) is also fine.
 	 *
 	 * @param User $user User to auto-create
-	 * @param string $source What caused the auto-creation? This must be one of:
-	 *  - the ID of a PrimaryAuthenticationProvider,
-	 *  - the constant self::AUTOCREATE_SOURCE_SESSION, or
-	 *  - the constant AUTOCREATE_SOURCE_MAINT.
+	 * @param string $source What caused the auto-creation? This must be the ID
+	 *  of a PrimaryAuthenticationProvider or the constant self::AUTOCREATE_SOURCE_SESSION.
 	 * @param bool $login Whether to also log the user in
 	 * @return Status Good if user was created, Ok if user already existed, otherwise Fatal
 	 */
 	public function autoCreateUser( User $user, $source, $login = true ) {
 		if ( $source !== self::AUTOCREATE_SOURCE_SESSION &&
-			$source !== self::AUTOCREATE_SOURCE_MAINT &&
 			!$this->getAuthenticationProvider( $source ) instanceof PrimaryAuthenticationProvider
 		) {
 			throw new \InvalidArgumentException( "Unknown auto-creation source: $source" );
@@ -1587,10 +1551,7 @@ class AuthManager implements LoggerAwareInterface {
 		// Fetch the user ID from the master, so that we don't try to create the user
 		// when they already exist, due to replication lag
 		// @codeCoverageIgnoreStart
-		if (
-			!$localId &&
-			MediaWikiServices::getInstance()->getDBLoadBalancer()->getReaderIndex() !== 0
-		) {
+		if ( !$localId && wfGetLB()->getReaderIndex() != 0 ) {
 			$localId = User::idFromName( $username, User::READ_LATEST );
 			$flags = User::READ_LATEST;
 		}
@@ -1652,13 +1613,10 @@ class AuthManager implements LoggerAwareInterface {
 
 		// Is the IP user able to create accounts?
 		$anon = new User;
-		if ( $source !== self::AUTOCREATE_SOURCE_MAINT && !MediaWikiServices::getInstance()
-				->getPermissionManager()
-				->userHasAnyRight( $anon, 'createaccount', 'autocreateaccount' )
-		) {
+		if ( !$anon->isAllowedAny( 'createaccount', 'autocreateaccount' ) ) {
 			$this->logger->debug( __METHOD__ . ': IP lacks the ability to create or autocreate accounts', [
 				'username' => $username,
-				'clientip' => $anon->getName(),
+				'ip' => $anon->getName(),
 			] );
 			$session->set( 'AuthManager::AutoCreateBlacklist', 'authmanager-autocreate-noperm' );
 			$session->persist();
@@ -1713,7 +1671,7 @@ class AuthManager implements LoggerAwareInterface {
 		}
 
 		// Checks passed, create the user...
-		$from = $_SERVER['REQUEST_URI'] ?? 'CLI';
+		$from = isset( $_SERVER['REQUEST_URI'] ) ? $_SERVER['REQUEST_URI'] : 'CLI';
 		$this->logger->info( __METHOD__ . ': creating new user ({username}) - from: {from}', [
 			'username' => $username,
 			'from' => $from,
@@ -1763,11 +1721,12 @@ class AuthManager implements LoggerAwareInterface {
 		// Inform the providers
 		$this->callMethodOnProviders( 6, 'autoCreatedAccount', [ $user, $source ] );
 
-		$this->getHookRunner()->onLocalUserCreated( $user, true );
+		\Hooks::run( 'AuthPluginAutoCreate', [ $user ], '1.27' );
+		\Hooks::run( 'LocalUserCreated', [ $user, true ] );
 		$user->saveSettings();
 
 		// Update user count
-		\DeferredUpdates::addUpdate( \SiteStatsUpdate::factory( [ 'users' => 1 ] ) );
+		\DeferredUpdates::addUpdate( new \SiteStatsUpdate( 0, 0, 0, 0, 1 ) );
 		// Watch user's userpage and talk page
 		\DeferredUpdates::addCallableUpdate( function () use ( $user ) {
 			$user->addWatch( $user->getUserPage(), User::IGNORE_USER_RIGHTS );
@@ -1794,7 +1753,7 @@ class AuthManager implements LoggerAwareInterface {
 		return Status::newGood();
 	}
 
-	/** @} */
+	/**@}*/
 
 	/**
 	 * @name Account linking
@@ -1878,26 +1837,26 @@ class AuthManager implements LoggerAwareInterface {
 
 			$res = $provider->beginPrimaryAccountLink( $user, $reqs );
 			switch ( $res->status ) {
-				case AuthenticationResponse::PASS:
+				case AuthenticationResponse::PASS;
 					$this->logger->info( "Account linked to {user} by $id", [
 						'user' => $user->getName(),
 					] );
 					$this->callMethodOnProviders( 3, 'postAccountLink', [ $user, $res ] );
 					return $res;
 
-				case AuthenticationResponse::FAIL:
+				case AuthenticationResponse::FAIL;
 					$this->logger->debug( __METHOD__ . ": Account linking failed by $id", [
 						'user' => $user->getName(),
 					] );
 					$this->callMethodOnProviders( 3, 'postAccountLink', [ $user, $res ] );
 					return $res;
 
-				case AuthenticationResponse::ABSTAIN:
+				case AuthenticationResponse::ABSTAIN;
 					// Continue loop
 					break;
 
-				case AuthenticationResponse::REDIRECT:
-				case AuthenticationResponse::UI:
+				case AuthenticationResponse::REDIRECT;
+				case AuthenticationResponse::UI;
 					$this->logger->debug( __METHOD__ . ": Account linking $res->status by $id", [
 						'user' => $user->getName(),
 					] );
@@ -1956,10 +1915,10 @@ class AuthManager implements LoggerAwareInterface {
 				$session->remove( 'AuthManager::accountLinkState' );
 				return AuthenticationResponse::newFail( wfMessage( 'noname' ) );
 			}
-			if ( $user->getId() !== $state['userid'] ) {
+			if ( $user->getId() != $state['userid'] ) {
 				throw new \UnexpectedValueException(
 					"User \"{$state['username']}\" is valid, but " .
-						"ID {$user->getId()} !== {$state['userid']}!"
+						"ID {$user->getId()} != {$state['userid']}!"
 				);
 			}
 
@@ -1985,22 +1944,22 @@ class AuthManager implements LoggerAwareInterface {
 			$id = $provider->getUniqueId();
 			$res = $provider->continuePrimaryAccountLink( $user, $reqs );
 			switch ( $res->status ) {
-				case AuthenticationResponse::PASS:
+				case AuthenticationResponse::PASS;
 					$this->logger->info( "Account linked to {user} by $id", [
 						'user' => $user->getName(),
 					] );
 					$this->callMethodOnProviders( 3, 'postAccountLink', [ $user, $res ] );
 					$session->remove( 'AuthManager::accountLinkState' );
 					return $res;
-				case AuthenticationResponse::FAIL:
+				case AuthenticationResponse::FAIL;
 					$this->logger->debug( __METHOD__ . ": Account linking failed by $id", [
 						'user' => $user->getName(),
 					] );
 					$this->callMethodOnProviders( 3, 'postAccountLink', [ $user, $res ] );
 					$session->remove( 'AuthManager::accountLinkState' );
 					return $res;
-				case AuthenticationResponse::REDIRECT:
-				case AuthenticationResponse::UI:
+				case AuthenticationResponse::REDIRECT;
+				case AuthenticationResponse::UI;
 					$this->logger->debug( __METHOD__ . ": Account linking $res->status by $id", [
 						'user' => $user->getName(),
 					] );
@@ -2019,7 +1978,7 @@ class AuthManager implements LoggerAwareInterface {
 		}
 	}
 
-	/** @} */
+	/**@}*/
 
 	/**
 	 * @name Information methods
@@ -2066,21 +2025,15 @@ class AuthManager implements LoggerAwareInterface {
 				return is_array( $state ) ? $state['continueRequests'] : [];
 
 			case self::ACTION_LINK:
-				$providers = [];
-				foreach ( $this->getPrimaryAuthenticationProviders() as $p ) {
-					if ( $p->accountCreationType() === PrimaryAuthenticationProvider::TYPE_LINK ) {
-						$providers[] = $p;
-					}
-				}
+				$providers = array_filter( $this->getPrimaryAuthenticationProviders(), function ( $p ) {
+					return $p->accountCreationType() === PrimaryAuthenticationProvider::TYPE_LINK;
+				} );
 				break;
 
 			case self::ACTION_UNLINK:
-				$providers = [];
-				foreach ( $this->getPrimaryAuthenticationProviders() as $p ) {
-					if ( $p->accountCreationType() === PrimaryAuthenticationProvider::TYPE_LINK ) {
-						$providers[] = $p;
-					}
-				}
+				$providers = array_filter( $this->getPrimaryAuthenticationProviders(), function ( $p ) {
+					return $p->accountCreationType() === PrimaryAuthenticationProvider::TYPE_LINK;
+				} );
 
 				// To providers, unlink and remove are identical.
 				$providerAction = self::ACTION_REMOVE;
@@ -2128,8 +2081,10 @@ class AuthManager implements LoggerAwareInterface {
 				$id = $req->getUniqueId();
 
 				// If a required request if from a Primary, mark it as "primary-required" instead
-				if ( $isPrimary && $req->required ) {
-					$req->required = AuthenticationRequest::PRIMARY_REQUIRED;
+				if ( $isPrimary ) {
+					if ( $req->required ) {
+						$req->required = AuthenticationRequest::PRIMARY_REQUIRED;
+					}
 				}
 
 				if (
@@ -2258,7 +2213,7 @@ class AuthManager implements LoggerAwareInterface {
 		return null;
 	}
 
-	/** @} */
+	/**@}*/
 
 	/**
 	 * @name Internal methods
@@ -2267,7 +2222,7 @@ class AuthManager implements LoggerAwareInterface {
 
 	/**
 	 * Store authentication in the current session
-	 * @note For use by AuthenticationProviders only
+	 * @protected For use by AuthenticationProviders
 	 * @param string $key
 	 * @param mixed $data Must be serializable
 	 */
@@ -2283,9 +2238,9 @@ class AuthManager implements LoggerAwareInterface {
 
 	/**
 	 * Fetch authentication data from the current session
-	 * @note For use by AuthenticationProviders only
+	 * @protected For use by AuthenticationProviders
 	 * @param string $key
-	 * @param mixed|null $default
+	 * @param mixed $default
 	 * @return mixed
 	 */
 	public function getAuthenticationSessionData( $key, $default = null ) {
@@ -2299,7 +2254,7 @@ class AuthManager implements LoggerAwareInterface {
 
 	/**
 	 * Remove authentication data
-	 * @note For use by AuthenticationProviders
+	 * @protected For use by AuthenticationProviders
 	 * @param string|null $key If null, all data is removed
 	 */
 	public function removeAuthenticationSessionData( $key ) {
@@ -2327,20 +2282,22 @@ class AuthManager implements LoggerAwareInterface {
 			$spec = [ 'sort2' => $i++ ] + $spec + [ 'sort' => 0 ];
 		}
 		unset( $spec );
-		// Sort according to the 'sort' field, and if they are equal, according to 'sort2'
 		usort( $specs, function ( $a, $b ) {
-			return $a['sort'] <=> $b['sort']
-				?: $a['sort2'] <=> $b['sort2'];
+			return ( (int)$a['sort'] ) - ( (int)$b['sort'] )
+				?: $a['sort2'] - $b['sort2'];
 		} );
 
 		$ret = [];
 		foreach ( $specs as $spec ) {
-			/** @var AuthenticationProvider $provider */
-			$provider = $this->objectFactory->createObject( $spec, [ 'assertClass' => $class ] );
+			$provider = \ObjectFactory::getObjectFromSpec( $spec );
+			if ( !$provider instanceof $class ) {
+				throw new \RuntimeException(
+					"Expected instance of $class, got " . get_class( $provider )
+				);
+			}
 			$provider->setLogger( $this->logger );
 			$provider->setManager( $this );
 			$provider->setConfig( $this->config );
-			$provider->setHookContainer( $this->getHookContainer() );
 			$id = $provider->getUniqueId();
 			if ( isset( $this->allAuthenticationProviders[$id] ) ) {
 				throw new \RuntimeException(
@@ -2428,7 +2385,7 @@ class AuthManager implements LoggerAwareInterface {
 
 		\Wikimedia\ScopedCallback::consume( $delay );
 
-		$this->getHookRunner()->onUserLoggedIn( $user );
+		\Hooks::run( 'UserLoggedIn', [ $user ] );
 	}
 
 	/**
@@ -2436,17 +2393,15 @@ class AuthManager implements LoggerAwareInterface {
 	 * @param bool $useContextLang Use 'uselang' to set the user's language
 	 */
 	private function setDefaultUserOptions( User $user, $useContextLang ) {
+		global $wgContLang;
+
 		$user->setToken();
 
-		$contLang = MediaWikiServices::getInstance()->getContentLanguage();
-
-		$lang = $useContextLang ? \RequestContext::getMain()->getLanguage() : $contLang;
+		$lang = $useContextLang ? \RequestContext::getMain()->getLanguage() : $wgContLang;
 		$user->setOption( 'language', $lang->getPreferredVariant() );
 
-		$contLangConverter = MediaWikiServices::getInstance()->getLanguageConverterFactory()
-			->getLanguageConverter();
-		if ( $contLangConverter->hasVariants() ) {
-			$user->setOption( 'variant', $contLangConverter->getPreferredVariant() );
+		if ( $wgContLang->hasVariants() ) {
+			$user->setOption( 'variant', $wgContLang->getPreferredVariant() );
 		}
 	}
 
@@ -2467,14 +2422,13 @@ class AuthManager implements LoggerAwareInterface {
 			$providers += $this->getSecondaryAuthenticationProviders();
 		}
 		foreach ( $providers as $provider ) {
-			$provider->$method( ...$args );
+			call_user_func_array( [ $provider, $method ], $args );
 		}
 	}
 
 	/**
 	 * Reset the internal caching for unit testing
-	 * @note Unit tests only
-	 * @internal
+	 * @protected Unit tests only
 	 */
 	public static function resetCache() {
 		if ( !defined( 'MW_PHPUNIT_TEST' ) ) {
@@ -2486,21 +2440,7 @@ class AuthManager implements LoggerAwareInterface {
 		self::$instance = null;
 	}
 
-	/**
-	 * @return HookContainer
-	 */
-	private function getHookContainer() {
-		return $this->hookContainer;
-	}
-
-	/**
-	 * @return HookRunner
-	 */
-	private function getHookRunner() {
-		return $this->hookRunner;
-	}
-
-	/** @} */
+	/**@}*/
 
 }
 

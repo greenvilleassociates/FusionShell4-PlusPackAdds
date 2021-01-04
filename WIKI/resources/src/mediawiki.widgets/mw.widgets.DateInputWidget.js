@@ -5,7 +5,7 @@
  * @license The MIT License (MIT); see LICENSE.txt
  */
 /* global moment */
-( function () {
+( function ( $, mw ) {
 
 	/**
 	 * Creates an mw.widgets.DateInputWidget object.
@@ -40,7 +40,7 @@
 	 *         )
 	 *       ]
 	 *     } );
-	 *     $( document.body ).append( fieldset.$element );
+	 *     $( 'body' ).append( fieldset.$element );
 	 *
 	 * The value is stored in 'YYYY-MM-DD' or 'YYYY-MM' format:
 	 *
@@ -48,7 +48,7 @@
 	 *     // Accessing values in a date input widget
 	 *     var dateInput = new mw.widgets.DateInputWidget();
 	 *     var $label = $( '<p>' );
-	 *     $( document.body ).append( $label, dateInput.$element );
+	 *     $( 'body' ).append( $label, dateInput.$element );
 	 *     dateInput.on( 'change', function () {
 	 *       // The value will always be a valid date or empty string, malformed input is ignored
 	 *       var date = dateInput.getValue();
@@ -89,7 +89,7 @@
 	 *     calendar uses relative positioning.
 	 */
 	mw.widgets.DateInputWidget = function MWWDateInputWidget( config ) {
-		var placeholderDateFormat, mustBeAfter, mustBeBefore, $overlay;
+		var placeholderDateFormat, mustBeAfter, mustBeBefore;
 
 		// Config initialization
 		config = $.extend( {
@@ -110,9 +110,7 @@
 			// We have no way to display a translated placeholder for custom formats
 			placeholderDateFormat = '';
 		} else {
-			// The following messages are used here:
-			// * mw-widgets-dateinput-placeholder-day
-			// * mw-widgets-dateinput-placeholder-month
+			// Messages: mw-widgets-dateinput-placeholder-day, mw-widgets-dateinput-placeholder-month
 			placeholderDateFormat = mw.msg( 'mw-widgets-dateinput-placeholder-' + config.precision );
 		}
 
@@ -170,7 +168,6 @@
 			focusout: this.onBlur.bind( this )
 		} );
 		this.calendar.$element.on( {
-			focusout: this.onBlur.bind( this ),
 			click: this.onCalendarClick.bind( this ),
 			keypress: this.onCalendarKeyPress.bind( this )
 		} );
@@ -192,20 +189,24 @@
 			.addClass( 'mw-widget-dateInputWidget' )
 			.append( this.$handle, this.textInput.$element, this.calendar.$element );
 
-		$overlay = config.$overlay === true ? OO.ui.getDefaultOverlay() : config.$overlay;
+		// config.overlay is the selector to be used for config.$overlay, specified from PHP
+		if ( config.overlay ) {
+			config.$overlay = $( config.overlay );
+		}
 
-		if ( $overlay ) {
+		if ( config.$overlay ) {
 			this.calendar.setFloatableContainer( this.$element );
-			$overlay.append( this.calendar.$element );
+			config.$overlay.append( this.calendar.$element );
 
 			// The text input and calendar are not in DOM order, so fix up focus transitions.
 			this.textInput.$input.on( 'keydown', function ( e ) {
 				if ( e.which === OO.ui.Keys.TAB ) {
 					if ( e.shiftKey ) {
 						// Tabbing backward from text input: normal browser behavior
+						$.noop();
 					} else {
 						// Tabbing forward from text input: just focus the calendar
-						this.calendar.$element.trigger( 'focus' );
+						this.calendar.$element.focus();
 						return false;
 					}
 				}
@@ -214,12 +215,12 @@
 				if ( e.which === OO.ui.Keys.TAB ) {
 					if ( e.shiftKey ) {
 						// Tabbing backward from calendar: just focus the text input
-						this.textInput.$input.trigger( 'focus' );
+						this.textInput.$input.focus();
 						return false;
 					} else {
 						// Tabbing forward from calendar: focus the text input, then allow normal browser
 						// behavior to move focus to next focusable after it
-						this.textInput.$input.trigger( 'focus' );
+						this.textInput.$input.focus();
 					}
 				}
 			}.bind( this ) );
@@ -408,7 +409,7 @@
 		if ( userSelected ) {
 			// Prevent focusing the handle from reopening the calendar
 			this.closing = true;
-			this.$handle.trigger( 'focus' );
+			this.$handle.focus();
 			this.closing = false;
 		}
 
@@ -427,7 +428,7 @@
 		this.textInput.toggle( true );
 		this.calendar.toggle( true );
 
-		this.textInput.$input.trigger( 'focus' );
+		this.textInput.$input.focus();
 	};
 
 	/**
@@ -464,8 +465,7 @@
 			format = llll.replace( lll.replace( ll, '' ), '' );
 
 			if ( this.longDisplayFormat ) {
-				// Replace MMM to MMMM and ddd to dddd but don't change MMMM and dddd
-				format = format.replace( /MMMM?/, 'MMMM' ).replace( /dddd?/, 'dddd' );
+				format = format.replace( 'MMM', 'MMMM' ).replace( 'ddd', 'dddd' );
 			}
 
 			return format;
@@ -581,7 +581,6 @@
 		if (
 			!this.isDisabled() &&
 			e.which === 1 &&
-			// eslint-disable-next-line no-jquery/no-class-state
 			$( e.target ).hasClass( targetClass )
 		) {
 			this.deactivate( true );
@@ -695,4 +694,4 @@
 		}
 	};
 
-}() );
+}( jQuery, mediaWiki ) );

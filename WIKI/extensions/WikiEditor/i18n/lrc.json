@@ -2,13 +2,23 @@
 	"@metadata": {
 		"authors": [
 			"Bonevarluri",
-			"Lorestani",
 			"Mogoeilor"
 		]
 	},
 	"wikieditor": "كاروری پيشرفته ويراشتگر ويكی متن",
 	"wikieditor-wikitext-tab": "ويكی متن",
 	"wikieditor-loading": "د حالت سوار كرد",
+	"wikieditor-preview-tab": "پيش زمينه",
+	"wikieditor-preview-changes-tab": "آلشتيا",
+	"wikieditor-preview-loading": "د حالت سوار كرد",
+	"wikieditor-publish-preference": "توانايی پا وه پا سی انتشار",
+	"wikieditor-publish-button-publish": "منتشر كردن",
+	"wikieditor-publish-button-cancel": "رد كردن",
+	"wikieditor-publish-dialog-title": "انتشار سی{{نوم مالگه}}",
+	"wikieditor-publish-dialog-minor": "ويرايشت كؤچك",
+	"wikieditor-publish-dialog-watch": "ديئن ای بلگه",
+	"wikieditor-publish-dialog-publish": "منتشر كردن",
+	"wikieditor-publish-dialog-goback": "ورئرد",
 	"wikieditor-toolbar": "اوزارگه ويرايشت",
 	"wikieditor-toolbar-loading": "د حالت سوار كرد",
 	"wikieditor-toolbar-tool-bold": "توپر",
@@ -63,7 +73,7 @@
 	"wikieditor-toolbar-tool-ulist": "نوم گه توپر بیه",
 	"wikieditor-toolbar-tool-olist": "نوم گه شماره دار",
 	"wikieditor-toolbar-tool-redirect": "واگردونی",
-	"wikieditor-toolbar-tool-redirect-example": "نوم بٱلگٱ هاستنی",
+	"wikieditor-toolbar-tool-redirect-example": "نوم بلگه حاستنی",
 	"wikieditor-toolbar-tool-big": "گپ",
 	"wikieditor-toolbar-tool-big-example": "نیسسه گپ",
 	"wikieditor-toolbar-tool-small": "كؤچك",

@@ -30,9 +30,9 @@ class ApiQueryContinue2Test extends ApiQueryContinueTestBase {
 	/**
 	 * Create a set of pages. These must not change, otherwise the tests might give wrong results.
 	 *
-	 * @see MediaWikiIntegrationTestCase::addDBDataOnce()
+*@see MediaWikiTestCase::addDBDataOnce()
 	 */
-	public function addDBDataOnce() {
+	function addDBDataOnce() {
 		try {
 			$this->editPage( 'AQCT73462-A', '**AQCT73462-A**  [[AQCT73462-B]] [[AQCT73462-C]]' );
 			$this->editPage( 'AQCT73462-B', '[[AQCT73462-A]]  **AQCT73462-B** [[AQCT73462-C]]' );
@@ -46,7 +46,7 @@ class ApiQueryContinue2Test extends ApiQueryContinueTestBase {
 	}
 
 	/**
-	 * @group medium
+	 * @medium
 	 */
 	public function testA() {
 		$this->mVerbose = false;

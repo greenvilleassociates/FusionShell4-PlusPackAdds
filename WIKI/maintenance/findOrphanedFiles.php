@@ -18,12 +18,10 @@
  * @file
  */
 
-use MediaWiki\MediaWikiServices;
-
 require_once __DIR__ . '/Maintenance.php';
 
 class FindOrphanedFiles extends Maintenance {
-	public function __construct() {
+	function __construct() {
 		parent::__construct();
 
 		$this->addDescription( "Find unregistered files in the 'public' repo zone." );
@@ -33,13 +31,13 @@ class FindOrphanedFiles extends Maintenance {
 		$this->setBatchSize( 500 );
 	}
 
-	public function execute() {
+	function execute() {
 		$subdir = $this->getOption( 'subdir', '' );
 		$verbose = $this->hasOption( 'verbose' );
 
-		$repo = MediaWikiServices::getInstance()->getRepoGroup()->getLocalRepo();
+		$repo = RepoGroup::singleton()->getLocalRepo();
 		if ( $repo->hasSha1Storage() ) {
-			$this->fatalError( "Local repo uses SHA-1 file storage names; aborting." );
+			$this->error( "Local repo uses SHA-1 file storage names; aborting.", 1 );
 		}
 
 		$directory = $repo->getZonePath( 'public' );
@@ -53,7 +51,7 @@ class FindOrphanedFiles extends Maintenance {
 
 		$list = $repo->getBackend()->getFileList( [ 'dir' => $directory ] );
 		if ( $list === null ) {
-			$this->fatalError( "Could not get file listing." );
+			$this->error( "Could not get file listing.", 1 );
 		}
 
 		$pathBatch = [];
@@ -63,7 +61,7 @@ class FindOrphanedFiles extends Maintenance {
 			}
 
 			$pathBatch[] = $path;
-			if ( count( $pathBatch ) >= $this->getBatchSize() ) {
+			if ( count( $pathBatch ) >= $this->mBatchSize ) {
 				$this->checkFiles( $repo, $pathBatch, $verbose );
 				$pathBatch = [];
 			}
@@ -111,17 +109,15 @@ class FindOrphanedFiles extends Maintenance {
 					$dbr->selectSQLText(
 						'image',
 						[ 'name' => 'img_name', 'old' => 0 ],
-						$imgIN ? [ 'img_name' => $imgIN ] : '1=0',
-						__METHOD__
+						$imgIN ? [ 'img_name' => $imgIN ] : '1=0'
 					),
 					$dbr->selectSQLText(
 						'oldimage',
 						[ 'name' => 'oi_archive_name', 'old' => 1 ],
-						$oiWheres ? $dbr->makeList( $oiWheres, LIST_OR ) : '1=0',
-						__METHOD__
+						$oiWheres ? $dbr->makeList( $oiWheres, LIST_OR ) : '1=0'
 					)
 				],
-				$dbr::UNION_ALL
+				true // UNION ALL (performance)
 			),
 			__METHOD__
 		);
@@ -155,5 +151,5 @@ class FindOrphanedFiles extends Maintenance {
 	}
 }
 
-$maintClass = FindOrphanedFiles::class;
+$maintClass = 'FindOrphanedFiles';
 require_once RUN_MAINTENANCE_IF_MAIN;

@@ -1,5 +1,9 @@
 <?php
 /**
+ *
+ *
+ * Created on Jun 20, 2007
+ *
  * Copyright © 2007 Roan Kattouw "<Firstname>.<Lastname>@gmail.com"
  *
  * This program is free software; you can redistribute it and/or modify
@@ -20,22 +24,10 @@
  * @file
  */
 
-use MediaWiki\ParamValidator\TypeDef\UserDef;
-use MediaWiki\User\UserIdentity;
-
 /**
  * @ingroup API
  */
 class ApiRollback extends ApiBase {
-
-	use ApiWatchlistTrait;
-
-	public function __construct( ApiMain $mainModule, $moduleName, $modulePrefix = '' ) {
-		parent::__construct( $mainModule, $moduleName, $modulePrefix );
-
-		$this->watchlistExpiryEnabled = $this->getConfig()->get( 'WatchlistExpiry' );
-		$this->watchlistMaxDuration = $this->getConfig()->get( 'WatchlistExpiryMaxDuration' );
-	}
 
 	/**
 	 * @var Title
@@ -43,7 +35,7 @@ class ApiRollback extends ApiBase {
 	private $mTitleObj = null;
 
 	/**
-	 * @var UserIdentity
+	 * @var User
 	 */
 	private $mUser = null;
 
@@ -60,24 +52,15 @@ class ApiRollback extends ApiBase {
 
 		// If change tagging was requested, check that the user is allowed to tag,
 		// and the tags are valid
-		if ( $params['tags'] ) {
+		if ( count( $params['tags'] ) ) {
 			$tagStatus = ChangeTags::canAddTagsAccompanyingChange( $params['tags'], $user );
 			if ( !$tagStatus->isOK() ) {
 				$this->dieStatus( $tagStatus );
 			}
 		}
 
-		// @TODO: remove this hack once rollback uses POST (T88044)
-		$fname = __METHOD__;
-		$trxLimits = $this->getConfig()->get( 'TrxProfilerLimits' );
-		$trxProfiler = Profiler::instance()->getTransactionProfiler();
-		$trxProfiler->redefineExpectations( $trxLimits['POST'], $fname );
-		DeferredUpdates::addCallableUpdate( function () use ( $trxProfiler, $trxLimits, $fname ) {
-			$trxProfiler->redefineExpectations( $trxLimits['PostSend-POST'], $fname );
-		} );
-
 		$retval = $pageObj->doRollback(
-			$this->getRbUser( $params )->getName(),
+			$this->getRbUser( $params ),
 			$summary,
 			$params['token'],
 			$params['markbot'],
@@ -90,24 +73,23 @@ class ApiRollback extends ApiBase {
 			$this->dieStatus( $this->errorArrayToStatus( $retval, $user ) );
 		}
 
-		$watch = $params['watchlist'] ?? 'preferences';
-		$watchlistExpiry = $this->getExpiryFromParams( $params );
+		$watch = 'preferences';
+		if ( isset( $params['watchlist'] ) ) {
+			$watch = $params['watchlist'];
+		}
 
 		// Watch pages
-		$this->setWatch( $watch, $titleObj, $user, 'watchrollback', $watchlistExpiry );
-
-		$currentRevisionRecord = $details['current-revision-record'];
-		$targetRevisionRecord = $details['target-revision-record'];
+		$this->setWatch( $watch, $titleObj, 'watchrollback' );
 
 		$info = [
 			'title' => $titleObj->getPrefixedText(),
-			'pageid' => $currentRevisionRecord->getPageId(),
+			'pageid' => intval( $details['current']->getPage() ),
 			'summary' => $details['summary'],
-			'revid' => (int)$details['newid'],
+			'revid' => intval( $details['newid'] ),
 			// The revision being reverted (previously the current revision of the page)
-			'old_revid' => $currentRevisionRecord->getID(),
+			'old_revid' => intval( $details['current']->getID() ),
 			// The revision being restored (the last revision before revision(s) by the reverted user)
-			'last_revid' => $targetRevisionRecord->getID()
+			'last_revid' => intval( $details['target']->getID() )
 		];
 
 		$this->getResult()->addValue( null, $this->getModuleName(), $info );
@@ -122,7 +104,7 @@ class ApiRollback extends ApiBase {
 	}
 
 	public function getAllowedParams() {
-		$params = [
+		return [
 			'title' => null,
 			'pageid' => [
 				ApiBase::PARAM_TYPE => 'integer'
@@ -133,19 +115,19 @@ class ApiRollback extends ApiBase {
 			],
 			'user' => [
 				ApiBase::PARAM_TYPE => 'user',
-				UserDef::PARAM_ALLOWED_USER_TYPES => [ 'name', 'ip', 'id', 'interwiki' ],
-				UserDef::PARAM_RETURN_OBJECT => true,
 				ApiBase::PARAM_REQUIRED => true
 			],
 			'summary' => '',
 			'markbot' => false,
-		];
-
-		// Params appear in the docs in the order they are defined,
-		// which is why this is here (we want it above the token param).
-		$params += $this->getWatchlistParams();
-
-		return $params + [
+			'watchlist' => [
+				ApiBase::PARAM_DFLT => 'preferences',
+				ApiBase::PARAM_TYPE => [
+					'watch',
+					'unwatch',
+					'preferences',
+					'nochange'
+				],
+			],
 			'token' => [
 				// Standard definition automatically inserted
 				ApiBase::PARAM_HELP_MSG_APPEND => [ 'api-help-param-token-webui' ],
@@ -160,14 +142,20 @@ class ApiRollback extends ApiBase {
 	/**
 	 * @param array $params
 	 *
-	 * @return UserIdentity
+	 * @return string
 	 */
-	private function getRbUser( array $params ) : UserIdentity {
+	private function getRbUser( array $params ) {
 		if ( $this->mUser !== null ) {
 			return $this->mUser;
 		}
 
-		$this->mUser = $params['user'];
+		// We need to be able to revert IPs, but getCanonicalName rejects them
+		$this->mUser = User::isIP( $params['user'] )
+			? $params['user']
+			: User::getCanonicalName( $params['user'] );
+		if ( !$this->mUser ) {
+			$this->dieWithError( [ 'apierror-invaliduser', wfEscapeWikiText( $params['user'] ) ] );
+		}
 
 		return $this->mUser;
 	}

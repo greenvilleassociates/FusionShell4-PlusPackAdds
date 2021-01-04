@@ -48,11 +48,12 @@ class FileContentsHasher {
 	 * Get a hash of a file's contents, either by retrieving a previously-
 	 * computed hash from the cache, or by computing a hash from the file.
 	 *
+	 * @private
 	 * @param string $filePath Full path to the file.
 	 * @param string $algo Name of selected hashing algorithm.
 	 * @return string|bool Hash of file contents, or false if the file could not be read.
 	 */
-	private function getFileContentsHashInternal( $filePath, $algo = 'md4' ) {
+	public function getFileContentsHashInternal( $filePath, $algo = 'md4' ) {
 		$mtime = filemtime( $filePath );
 		if ( $mtime === false ) {
 			return false;
@@ -92,21 +93,20 @@ class FileContentsHasher {
 			$filePaths = (array)$filePaths;
 		}
 
-		Wikimedia\suppressWarnings();
+		MediaWiki\suppressWarnings();
 
 		if ( count( $filePaths ) === 1 ) {
 			$hash = $instance->getFileContentsHashInternal( $filePaths[0], $algo );
-			Wikimedia\restoreWarnings();
+			MediaWiki\restoreWarnings();
 			return $hash;
 		}
 
 		sort( $filePaths );
-		$hashes = [];
-		foreach ( $filePaths as $filePath ) {
-			$hashes[] = $instance->getFileContentsHashInternal( $filePath, $algo ) ?: '';
-		}
+		$hashes = array_map( function ( $filePath ) use ( $instance, $algo ) {
+			return $instance->getFileContentsHashInternal( $filePath, $algo ) ?: '';
+		}, $filePaths );
 
-		Wikimedia\restoreWarnings();
+		MediaWiki\restoreWarnings();
 
 		$hashes = implode( '', $hashes );
 		return $hashes ? hash( $algo, $hashes ) : false;

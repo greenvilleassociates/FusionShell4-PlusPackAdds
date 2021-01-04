@@ -20,14 +20,10 @@
  * @file
  * @ingroup SpecialPage
  */
-
 use MediaWiki\Logger\LoggerFactory;
-use MediaWiki\MediaWikiServices;
-use OOUI\IconWidget;
-use Wikimedia\Rdbms\DBQueryTimeoutError;
+use Wikimedia\Rdbms\ResultWrapper;
 use Wikimedia\Rdbms\FakeResultWrapper;
 use Wikimedia\Rdbms\IDatabase;
-use Wikimedia\Rdbms\IResultWrapper;
 
 /**
  * Special page which uses a ChangesList to show query results.
@@ -37,40 +33,19 @@ use Wikimedia\Rdbms\IResultWrapper;
  */
 abstract class ChangesListSpecialPage extends SpecialPage {
 	/**
-	 * Maximum length of a tag description in UTF-8 characters.
-	 * Longer descriptions will be truncated.
-	 */
-	private const TAG_DESC_CHARACTER_LIMIT = 120;
-
-	/**
 	 * Preference name for saved queries. Subclasses that use saved queries should override this.
 	 * @var string
 	 */
 	protected static $savedQueriesPreferenceName;
-
-	/**
-	 * Preference name for 'days'. Subclasses should override this.
-	 * @var string
-	 */
-	protected static $daysPreferenceName;
-
-	/**
-	 * Preference name for 'limit'. Subclasses should override this.
-	 * @var string
-	 */
-	protected static $limitPreferenceName;
-
-	/**
-	 * Preference name for collapsing the active filter display. Subclasses should override this.
-	 * @var string
-	 */
-	protected static $collapsedPreferenceName;
 
 	/** @var string */
 	protected $rcSubpage;
 
 	/** @var FormOptions */
 	protected $rcOptions;
+
+	/** @var array */
+	protected $customFilters;
 
 	// Order of both groups and filters is significant; first is top-most priority,
 	// descending from there.
@@ -84,35 +59,30 @@ abstract class ChangesListSpecialPage extends SpecialPage {
 	 *
 	 * Groups are displayed to the user in the structured UI.  However, if necessary,
 	 * all of the filters in a group can be configured to only display on the
-	 * unstuctured UI, in which case you don't need a group title.
+	 * unstuctured UI, in which case you don't need a group title.  This is done in
+	 * getFilterGroupDefinitionFromLegacyCustomFilters, for example.
 	 *
-	 * @var array
+	 * @var array $filterGroupDefinitions
 	 */
 	private $filterGroupDefinitions;
 
 	// Same format as filterGroupDefinitions, but for a single group (reviewStatus)
 	// that is registered conditionally.
-	private $legacyReviewStatusFilterGroupDefinition;
-
-	// Single filter group registered conditionally
 	private $reviewStatusFilterGroupDefinition;
 
-	// Single filter group registered conditionally
+	// Single filter registered conditionally
 	private $hideCategorizationFilterDefinition;
 
 	/**
 	 * Filter groups, and their contained filters
 	 * This is an associative array (with group name as key) of ChangesListFilterGroup objects.
 	 *
-	 * @var ChangesListFilterGroup[]
+	 * @var array $filterGroups
 	 */
 	protected $filterGroups = [];
 
 	public function __construct( $name, $restriction ) {
 		parent::__construct( $name, $restriction );
-
-		$nonRevisionTypes = [ RC_LOG ];
-		$this->getHookRunner()->onSpecialWatchlistGetNonRevisionTypes( $nonRevisionTypes );
 
 		$this->filterGroupDefinitions = [
 			[
@@ -129,11 +99,7 @@ abstract class ChangesListSpecialPage extends SpecialPage {
 						'queryCallable' => function ( $specialClassName, $ctx, $dbr, &$tables, &$fields, &$conds,
 							&$query_options, &$join_conds
 						) {
-							$actorMigration = ActorMigration::newMigration();
-							$actorQuery = $actorMigration->getJoin( 'rc_user' );
-							$tables += $actorQuery['tables'];
-							$join_conds += $actorQuery['joins'];
-							$conds[] = $actorMigration->isAnon( $actorQuery['fields']['rc_user'] );
+							$conds[] = 'rc_user = 0';
 						},
 						'isReplacedInStructuredUi' => true,
 
@@ -147,11 +113,7 @@ abstract class ChangesListSpecialPage extends SpecialPage {
 						'queryCallable' => function ( $specialClassName, $ctx, $dbr, &$tables, &$fields, &$conds,
 							&$query_options, &$join_conds
 						) {
-							$actorMigration = ActorMigration::newMigration();
-							$actorQuery = $actorMigration->getJoin( 'rc_user' );
-							$tables += $actorQuery['tables'];
-							$join_conds += $actorQuery['joins'];
-							$conds[] = $actorMigration->isNotAnon( $actorQuery['fields']['rc_user'] );
+							$conds[] = 'rc_user != 0';
 						},
 						'isReplacedInStructuredUi' => true,
 					]
@@ -160,7 +122,7 @@ abstract class ChangesListSpecialPage extends SpecialPage {
 
 			[
 				'name' => 'userExpLevel',
-				'title' => 'rcfilters-filtergroup-user-experience-level',
+				'title' => 'rcfilters-filtergroup-userExpLevel',
 				'class' => ChangesListStringOptionsFilterGroup::class,
 				'isFullCoverage' => true,
 				'filters' => [
@@ -236,10 +198,8 @@ abstract class ChangesListSpecialPage extends SpecialPage {
 						'queryCallable' => function ( $specialClassName, $ctx, $dbr, &$tables, &$fields, &$conds,
 							&$query_options, &$join_conds
 						) {
-							$actorQuery = ActorMigration::newMigration()->getWhere( $dbr, 'rc_user', $ctx->getUser() );
-							$tables += $actorQuery['tables'];
-							$join_conds += $actorQuery['joins'];
-							$conds[] = 'NOT(' . $actorQuery['conds'] . ')';
+							$user = $ctx->getUser();
+							$conds[] = 'rc_user_text != ' . $dbr->addQuotes( $user->getName() );
 						},
 						'cssClassSuffix' => 'self',
 						'isRowApplicableCallable' => function ( $ctx, $rc ) {
@@ -254,11 +214,8 @@ abstract class ChangesListSpecialPage extends SpecialPage {
 						'queryCallable' => function ( $specialClassName, $ctx, $dbr, &$tables, &$fields, &$conds,
 							&$query_options, &$join_conds
 						) {
-							$actorQuery = ActorMigration::newMigration()
-								->getWhere( $dbr, 'rc_user', $ctx->getUser(), false );
-							$tables += $actorQuery['tables'];
-							$join_conds += $actorQuery['joins'];
-							$conds[] = $actorQuery['conds'];
+							$user = $ctx->getUser();
+							$conds[] = 'rc_user_text = ' . $dbr->addQuotes( $user->getName() );
 						},
 						'cssClassSuffix' => 'others',
 						'isRowApplicableCallable' => function ( $ctx, $rc ) {
@@ -284,7 +241,7 @@ abstract class ChangesListSpecialPage extends SpecialPage {
 						'queryCallable' => function ( $specialClassName, $ctx, $dbr, &$tables, &$fields, &$conds,
 							&$query_options, &$join_conds
 						) {
-							$conds['rc_bot'] = 0;
+							$conds[] = 'rc_bot = 0';
 						},
 						'cssClassSuffix' => 'bot',
 						'isRowApplicableCallable' => function ( $ctx, $rc ) {
@@ -299,7 +256,7 @@ abstract class ChangesListSpecialPage extends SpecialPage {
 						'queryCallable' => function ( $specialClassName, $ctx, $dbr, &$tables, &$fields, &$conds,
 							&$query_options, &$join_conds
 						) {
-							$conds['rc_bot'] = 1;
+							$conds[] = 'rc_bot = 1';
 						},
 						'cssClassSuffix' => 'human',
 						'isRowApplicableCallable' => function ( $ctx, $rc ) {
@@ -309,7 +266,7 @@ abstract class ChangesListSpecialPage extends SpecialPage {
 				]
 			],
 
-			// significance (conditional)
+			// reviewStatus (conditional)
 
 			[
 				'name' => 'significance',
@@ -355,7 +312,7 @@ abstract class ChangesListSpecialPage extends SpecialPage {
 
 			[
 				'name' => 'lastRevision',
-				'title' => 'rcfilters-filtergroup-lastrevision',
+				'title' => 'rcfilters-filtergroup-lastRevision',
 				'class' => ChangesListBooleanFilterGroup::class,
 				'priority' => -7,
 				'filters' => [
@@ -365,14 +322,8 @@ abstract class ChangesListSpecialPage extends SpecialPage {
 						'description' => 'rcfilters-filter-lastrevision-description',
 						'default' => false,
 						'queryCallable' => function ( $specialClassName, $ctx, $dbr, &$tables, &$fields, &$conds,
-							&$query_options, &$join_conds ) use ( $nonRevisionTypes ) {
-							$conds[] = $dbr->makeList(
-								[
-									'rc_this_oldid <> page_latest',
-									'rc_type' => $nonRevisionTypes,
-								],
-								LIST_OR
-							);
+							&$query_options, &$join_conds ) {
+							$conds[] = 'rc_this_oldid <> page_latest';
 						},
 						'cssClassSuffix' => 'last',
 						'isRowApplicableCallable' => function ( $ctx, $rc ) {
@@ -385,14 +336,8 @@ abstract class ChangesListSpecialPage extends SpecialPage {
 						'description' => 'rcfilters-filter-previousrevision-description',
 						'default' => false,
 						'queryCallable' => function ( $specialClassName, $ctx, $dbr, &$tables, &$fields, &$conds,
-							&$query_options, &$join_conds ) use ( $nonRevisionTypes ) {
-							$conds[] = $dbr->makeList(
-								[
-									'rc_this_oldid = page_latest',
-									'rc_type' => $nonRevisionTypes,
-								],
-								LIST_OR
-							);
+							&$query_options, &$join_conds ) {
+							$conds[] = 'rc_this_oldid = page_latest';
 						},
 						'cssClassSuffix' => 'previous',
 						'isRowApplicableCallable' => function ( $ctx, $rc ) {
@@ -465,14 +410,17 @@ abstract class ChangesListSpecialPage extends SpecialPage {
 
 		];
 
-		$this->legacyReviewStatusFilterGroupDefinition = [
+		$this->reviewStatusFilterGroupDefinition = [
 			[
-				'name' => 'legacyReviewStatus',
+				'name' => 'reviewStatus',
 				'title' => 'rcfilters-filtergroup-reviewstatus',
 				'class' => ChangesListBooleanFilterGroup::class,
+				'priority' => -5,
 				'filters' => [
 					[
 						'name' => 'hidepatrolled',
+						'label' => 'rcfilters-filter-patrolled-label',
+						'description' => 'rcfilters-filter-patrolled-description',
 						// rcshowhidepatr-show, rcshowhidepatr-hide
 						// wlshowhidepatr
 						'showHideSuffix' => 'showhidepatr',
@@ -480,77 +428,29 @@ abstract class ChangesListSpecialPage extends SpecialPage {
 						'queryCallable' => function ( $specialClassName, $ctx, $dbr, &$tables, &$fields, &$conds,
 							&$query_options, &$join_conds
 						) {
-							$conds['rc_patrolled'] = RecentChange::PRC_UNPATROLLED;
+							$conds[] = 'rc_patrolled = 0';
 						},
-						'isReplacedInStructuredUi' => true,
+						'cssClassSuffix' => 'patrolled',
+						'isRowApplicableCallable' => function ( $ctx, $rc ) {
+							return $rc->getAttribute( 'rc_patrolled' );
+						},
 					],
 					[
 						'name' => 'hideunpatrolled',
+						'label' => 'rcfilters-filter-unpatrolled-label',
+						'description' => 'rcfilters-filter-unpatrolled-description',
 						'default' => false,
 						'queryCallable' => function ( $specialClassName, $ctx, $dbr, &$tables, &$fields, &$conds,
 							&$query_options, &$join_conds
 						) {
-							$conds[] = 'rc_patrolled != ' . RecentChange::PRC_UNPATROLLED;
+							$conds[] = 'rc_patrolled = 1';
 						},
-						'isReplacedInStructuredUi' => true,
-					],
-				],
-			]
-		];
-
-		$this->reviewStatusFilterGroupDefinition = [
-			[
-				'name' => 'reviewStatus',
-				'title' => 'rcfilters-filtergroup-reviewstatus',
-				'class' => ChangesListStringOptionsFilterGroup::class,
-				'isFullCoverage' => true,
-				'priority' => -5,
-				'filters' => [
-					[
-						'name' => 'unpatrolled',
-						'label' => 'rcfilters-filter-reviewstatus-unpatrolled-label',
-						'description' => 'rcfilters-filter-reviewstatus-unpatrolled-description',
-						'cssClassSuffix' => 'reviewstatus-unpatrolled',
+						'cssClassSuffix' => 'unpatrolled',
 						'isRowApplicableCallable' => function ( $ctx, $rc ) {
-							return $rc->getAttribute( 'rc_patrolled' ) == RecentChange::PRC_UNPATROLLED;
-						},
-					],
-					[
-						'name' => 'manual',
-						'label' => 'rcfilters-filter-reviewstatus-manual-label',
-						'description' => 'rcfilters-filter-reviewstatus-manual-description',
-						'cssClassSuffix' => 'reviewstatus-manual',
-						'isRowApplicableCallable' => function ( $ctx, $rc ) {
-							return $rc->getAttribute( 'rc_patrolled' ) == RecentChange::PRC_PATROLLED;
-						},
-					],
-					[
-						'name' => 'auto',
-						'label' => 'rcfilters-filter-reviewstatus-auto-label',
-						'description' => 'rcfilters-filter-reviewstatus-auto-description',
-						'cssClassSuffix' => 'reviewstatus-auto',
-						'isRowApplicableCallable' => function ( $ctx, $rc ) {
-							return $rc->getAttribute( 'rc_patrolled' ) == RecentChange::PRC_AUTOPATROLLED;
+							return !$rc->getAttribute( 'rc_patrolled' );
 						},
 					],
 				],
-				'default' => ChangesListStringOptionsFilterGroup::NONE,
-				'queryCallable' => function ( $specialPageClassName, $ctx, $dbr,
-					&$tables, &$fields, &$conds, &$query_options, &$join_conds, $selected
-				) {
-					if ( $selected === [] ) {
-						return;
-					}
-					$rcPatrolledValues = [
-						'unpatrolled' => RecentChange::PRC_UNPATROLLED,
-						'manual' => RecentChange::PRC_PATROLLED,
-						'auto' => RecentChange::PRC_AUTOPATROLLED,
-					];
-					// e.g. rc_patrolled IN (0, 2)
-					$conds['rc_patrolled'] = array_map( function ( $s ) use ( $rcPatrolledValues ) {
-						return $rcPatrolledValues[ $s ];
-					}, $selected );
-				}
 			]
 		];
 
@@ -618,77 +518,52 @@ abstract class ChangesListSpecialPage extends SpecialPage {
 	}
 
 	/**
-	 * @param string|null $subpage
+	 * Main execution point
+	 *
+	 * @param string $subpage
 	 */
 	public function execute( $subpage ) {
 		$this->rcSubpage = $subpage;
 
-		$this->considerActionsForDefaultSavedQuery( $subpage );
-
-		// Enable OOUI and module for the clock icon.
-		if ( $this->getConfig()->get( 'WatchlistExpiry' ) ) {
-			$this->getOutput()->enableOOUI();
-			$this->getOutput()->addModules( 'mediawiki.special.changeslist.watchlistexpiry' );
-		}
-
+		$rows = $this->getRows();
 		$opts = $this->getOptions();
-		try {
-			$rows = $this->getRows();
-			if ( $rows === false ) {
-				$rows = new FakeResultWrapper( [] );
-			}
-
-			// Used by Structured UI app to get results without MW chrome
-			if ( $this->getRequest()->getVal( 'action' ) === 'render' ) {
-				$this->getOutput()->setArticleBodyOnly( true );
-			}
-
-			// Used by "live update" and "view newest" to check
-			// if there's new changes with minimal data transfer
-			if ( $this->getRequest()->getBool( 'peek' ) ) {
-				$code = $rows->numRows() > 0 ? 200 : 204;
-				$this->getOutput()->setStatusCode( $code );
-
-				if ( $this->getUser()->isAnon() !==
-					$this->getRequest()->getFuzzyBool( 'isAnon' )
-				) {
-					$this->getOutput()->setStatusCode( 205 );
-				}
-
-				return;
-			}
-
-			$batch = new LinkBatch;
-			foreach ( $rows as $row ) {
-				$batch->add( NS_USER, $row->rc_user_text );
-				$batch->add( NS_USER_TALK, $row->rc_user_text );
-				$batch->add( $row->rc_namespace, $row->rc_title );
-				if ( $row->rc_source === RecentChange::SRC_LOG ) {
-					$formatter = LogFormatter::newFromRow( $row );
-					foreach ( $formatter->getPreloadTitles() as $title ) {
-						$batch->addObj( $title );
-					}
-				}
-			}
-			$batch->execute();
-
-			$this->setHeaders();
-			$this->outputHeader();
-			$this->addModules();
-			$this->webOutput( $rows, $opts );
-
-			$rows->free();
-		} catch ( DBQueryTimeoutError $timeoutException ) {
-			MWExceptionHandler::logException( $timeoutException );
-
-			$this->setHeaders();
-			$this->outputHeader();
-			$this->addModules();
-
-			$this->getOutput()->setStatusCode( 500 );
-			$this->webOutputHeader( 0, $opts );
-			$this->outputTimeout();
+		if ( $rows === false ) {
+			$rows = new FakeResultWrapper( [] );
 		}
+
+		// Used by Structured UI app to get results without MW chrome
+		if ( $this->getRequest()->getVal( 'action' ) === 'render' ) {
+			$this->getOutput()->setArticleBodyOnly( true );
+		}
+
+		// Used by "live update" and "view newest" to check
+		// if there's new changes with minimal data transfer
+		if ( $this->getRequest()->getBool( 'peek' ) ) {
+			$code = $rows->numRows() > 0 ? 200 : 204;
+			$this->getOutput()->setStatusCode( $code );
+			return;
+		}
+
+		$batch = new LinkBatch;
+		foreach ( $rows as $row ) {
+			$batch->add( NS_USER, $row->rc_user_text );
+			$batch->add( NS_USER_TALK, $row->rc_user_text );
+			$batch->add( $row->rc_namespace, $row->rc_title );
+			if ( $row->rc_source === RecentChange::SRC_LOG ) {
+				$formatter = LogFormatter::newFromRow( $row );
+				foreach ( $formatter->getPreloadTitles() as $title ) {
+					$batch->addObj( $title );
+				}
+			}
+		}
+		$batch->execute();
+
+		$this->setHeaders();
+		$this->outputHeader();
+		$this->addModules();
+		$this->webOutput( $rows, $opts );
+
+		$rows->free();
 
 		if ( $this->getConfig()->get( 'EnableWANCacheReaper' ) ) {
 			// Clean up any bad page entries for titles showing up in RC
@@ -702,105 +577,6 @@ abstract class ChangesListSpecialPage extends SpecialPage {
 	}
 
 	/**
-	 * Check whether or not the page should load defaults, and if so, whether
-	 * a default saved query is relevant to be redirected to. If it is relevant,
-	 * redirect properly with all necessary query parameters.
-	 *
-	 * @param string $subpage
-	 */
-	protected function considerActionsForDefaultSavedQuery( $subpage ) {
-		if ( !$this->isStructuredFilterUiEnabled() || $this->including() ) {
-			return;
-		}
-
-		$knownParams = $this->getRequest()->getValues(
-			...array_keys( $this->getOptions()->getAllValues() )
-		);
-
-		// HACK: Temporarily until we can properly define "sticky" filters and parameters,
-		// we need to exclude several parameters we know should not be counted towards preventing
-		// the loading of defaults.
-		$excludedParams = [ 'limit' => '', 'days' => '', 'enhanced' => '', 'from' => '' ];
-		$knownParams = array_diff_key( $knownParams, $excludedParams );
-
-		if (
-			// If there are NO known parameters in the URL request
-			// (that are not excluded) then we need to check into loading
-			// the default saved query
-			count( $knownParams ) === 0
-		) {
-			// Get the saved queries data and parse it
-			$savedQueries = FormatJson::decode(
-				$this->getUser()->getOption( static::$savedQueriesPreferenceName ),
-				true
-			);
-
-			if ( $savedQueries && isset( $savedQueries[ 'default' ] ) ) {
-				// Only load queries that are 'version' 2, since those
-				// have parameter representation
-				if ( isset( $savedQueries[ 'version' ] ) && $savedQueries[ 'version' ] === '2' ) {
-					$savedQueryDefaultID = $savedQueries[ 'default' ];
-					$defaultQuery = $savedQueries[ 'queries' ][ $savedQueryDefaultID ][ 'data' ];
-
-					// Build the entire parameter list
-					$query = array_merge(
-						$defaultQuery[ 'params' ],
-						$defaultQuery[ 'highlights' ],
-						[
-							'urlversion' => '2',
-						]
-					);
-					// Add to the query any parameters that we may have ignored before
-					// but are still valid and requested in the URL
-					$query = array_merge( $this->getRequest()->getValues(), $query );
-					unset( $query[ 'title' ] );
-					$this->getOutput()->redirect( $this->getPageTitle( $subpage )->getCanonicalURL( $query ) );
-				} else {
-					// There's a default, but the version is not 2, and the server can't
-					// actually recognize the query itself. This happens if it is before
-					// the conversion, so we need to tell the UI to reload saved query as
-					// it does the conversion to version 2
-					$this->getOutput()->addJsConfigVars(
-						'wgStructuredChangeFiltersDefaultSavedQueryExists',
-						true
-					);
-
-					// Add the class that tells the frontend it is still loading
-					// another query
-					$this->getOutput()->addBodyClasses( 'mw-rcfilters-ui-loading' );
-				}
-			}
-		}
-	}
-
-	/**
-	 * @see $wgRCLinkDays in DefaultSettings.php.
-	 * @see $wgRCFilterByAge in DefaultSettings.php.
-	 * @return int[]
-	 */
-	protected function getLinkDays() {
-		$linkDays = $this->getConfig()->get( 'RCLinkDays' );
-		$filterByAge = $this->getConfig()->get( 'RCFilterByAge' );
-		$maxAge = $this->getConfig()->get( 'RCMaxAge' );
-		if ( $filterByAge ) {
-			// Trim it to only links which are within $wgRCMaxAge.
-			// Note that we allow one link higher than the max for things like
-			// "age 56 days" being accessible through the "60 days" link.
-			sort( $linkDays );
-
-			$maxAgeDays = $maxAge / ( 3600 * 24 );
-			foreach ( $linkDays as $i => $days ) {
-				if ( $days >= $maxAgeDays ) {
-					array_splice( $linkDays, $i + 1 );
-					break;
-				}
-			}
-		}
-
-		return $linkDays;
-	}
-
-	/**
 	 * Include the modules and configuration for the RCFilters app.
 	 * Conditional on the user having the feature enabled.
 	 *
@@ -808,187 +584,113 @@ abstract class ChangesListSpecialPage extends SpecialPage {
 	 */
 	protected function includeRcFiltersApp() {
 		$out = $this->getOutput();
-		if ( $this->isStructuredFilterUiEnabled() && !$this->including() ) {
+		if ( $this->isStructuredFilterUiEnabled() ) {
 			$jsData = $this->getStructuredFilterJsData();
+
 			$messages = [];
 			foreach ( $jsData['messageKeys'] as $key ) {
 				$messages[$key] = $this->msg( $key )->plain();
 			}
 
 			$out->addBodyClasses( 'mw-rcfilters-enabled' );
-			$collapsed = $this->getUser()->getBoolOption( static::$collapsedPreferenceName );
-			if ( $collapsed ) {
-				$out->addBodyClasses( 'mw-rcfilters-collapsed' );
-			}
 
-			// These config and message exports should be moved into a ResourceLoader data module (T201574)
+			$out->addHTML(
+				ResourceLoader::makeInlineScript(
+					ResourceLoader::makeMessageSetScript( $messages )
+				)
+			);
+
+			$experimentalStructuredChangeFilters =
+				$this->getConfig()->get( 'StructuredChangeFiltersEnableExperimentalViews' );
+
 			$out->addJsConfigVars( 'wgStructuredChangeFilters', $jsData['groups'] );
-			$out->addJsConfigVars( 'wgStructuredChangeFiltersMessages', $messages );
-			$out->addJsConfigVars( 'wgStructuredChangeFiltersCollapsedState', $collapsed );
+			$out->addJsConfigVars(
+				'wgStructuredChangeFiltersEnableExperimentalViews',
+				$experimentalStructuredChangeFilters
+			);
 
+			$out->addJsConfigVars(
+				'wgRCFiltersChangeTags',
+				$this->buildChangeTagList()
+			);
 			$out->addJsConfigVars(
 				'StructuredChangeFiltersDisplayConfig',
 				[
 					'maxDays' => (int)$this->getConfig()->get( 'RCMaxAge' ) / ( 24 * 3600 ), // Translate to days
 					'limitArray' => $this->getConfig()->get( 'RCLinkLimits' ),
 					'limitDefault' => $this->getDefaultLimit(),
-					'daysArray' => $this->getLinkDays(),
+					'daysArray' => $this->getConfig()->get( 'RCLinkDays' ),
 					'daysDefault' => $this->getDefaultDays(),
 				]
 			);
 
-			$out->addJsConfigVars(
-				'wgStructuredChangeFiltersSavedQueriesPreferenceName',
-				static::$savedQueriesPreferenceName
-			);
-			$out->addJsConfigVars(
-				'wgStructuredChangeFiltersLimitPreferenceName',
-				static::$limitPreferenceName
-			);
-			$out->addJsConfigVars(
-				'wgStructuredChangeFiltersDaysPreferenceName',
-				static::$daysPreferenceName
-			);
-			$out->addJsConfigVars(
-				'wgStructuredChangeFiltersCollapsedPreferenceName',
-				static::$collapsedPreferenceName
-			);
+			if ( static::$savedQueriesPreferenceName ) {
+				$savedQueries = FormatJson::decode(
+					$this->getUser()->getOption( static::$savedQueriesPreferenceName )
+				);
+				if ( $savedQueries && isset( $savedQueries->default ) ) {
+					// If there is a default saved query, show a loading spinner,
+					// since the frontend is going to reload the results
+					$out->addBodyClasses( 'mw-rcfilters-ui-loading' );
+				}
+				$out->addJsConfigVars(
+					'wgStructuredChangeFiltersSavedQueriesPreferenceName',
+					static::$savedQueriesPreferenceName
+				);
+			}
 		} else {
 			$out->addBodyClasses( 'mw-rcfilters-disabled' );
 		}
 	}
 
 	/**
-	 * Get essential data about getRcFiltersConfigVars() for change detection.
+	 * Fetch the change tags list for the front end
 	 *
-	 * @internal For use by Resources.php only.
-	 * @see ResourceLoaderModule::getDefinitionSummary() and ResourceLoaderModule::getVersionHash()
-	 * @param ResourceLoaderContext $context
-	 * @return array
+	 * @return Array Tag data
 	 */
-	public static function getRcFiltersConfigSummary( ResourceLoaderContext $context ) {
-		return [
-			// Reduce version computation by avoiding Message parsing
-			'RCFiltersChangeTags' => self::getChangeTagListSummary( $context ),
-			'StructuredChangeFiltersEditWatchlistUrl' =>
-				SpecialPage::getTitleFor( 'EditWatchlist' )->getLocalURL()
-		];
-	}
+	protected function buildChangeTagList() {
+		$explicitlyDefinedTags = array_fill_keys( ChangeTags::listExplicitlyDefinedTags(), 0 );
+		$softwareActivatedTags = array_fill_keys( ChangeTags::listSoftwareActivatedTags(), 0 );
 
-	/**
-	 * Get config vars to export with the mediawiki.rcfilters.filters.ui module.
-	 *
-	 * @internal For use by Resources.php only.
-	 * @param ResourceLoaderContext $context
-	 * @return array
-	 */
-	public static function getRcFiltersConfigVars( ResourceLoaderContext $context ) {
-		return [
-			'RCFiltersChangeTags' => self::getChangeTagList( $context ),
-			'StructuredChangeFiltersEditWatchlistUrl' =>
-				SpecialPage::getTitleFor( 'EditWatchlist' )->getLocalURL()
-		];
-	}
+		// Hit counts disabled for perf reasons, see T169997
+		/*
+		$tagStats = ChangeTags::tagUsageStatistics();
+		$tagHitCounts = array_merge( $explicitlyDefinedTags, $softwareActivatedTags, $tagStats );
 
-	/**
-	 * Get information about change tags, without parsing messages, for getRcFiltersConfigSummary().
-	 *
-	 * Message contents are the raw values (->plain()), because parsing messages is expensive.
-	 * Even though we're not parsing messages, building a data structure with the contents of
-	 * hundreds of i18n messages is still not cheap (see T223260#5370610), so the result of this
-	 * function is cached in WANCache for 24 hours.
-	 *
-	 * Returns an array of associative arrays with information about each tag:
-	 * - name: Tag name (string)
-	 * - labelMsg: Short description message (Message object)
-	 * - label: Short description message (raw message contents)
-	 * - descriptionMsg: Long description message (Message object)
-	 * - description: Long description message (raw message contents)
-	 * - cssClass: CSS class to use for RC entries with this tag
-	 * - hits: Number of RC entries that have this tag
-	 *
-	 * @param ResourceLoaderContext $context
-	 * @return array[] Information about each tag
-	 */
-	protected static function getChangeTagListSummary( ResourceLoaderContext $context ) {
-		$cache = MediaWikiServices::getInstance()->getMainWANObjectCache();
-		return $cache->getWithSetCallback(
-			$cache->makeKey( 'ChangesListSpecialPage-changeTagListSummary', $context->getLanguage() ),
-			WANObjectCache::TTL_DAY,
-			function ( $oldValue, &$ttl, array &$setOpts ) use ( $context ) {
-				$explicitlyDefinedTags = array_fill_keys( ChangeTags::listExplicitlyDefinedTags(), 0 );
-				$softwareActivatedTags = array_fill_keys( ChangeTags::listSoftwareActivatedTags(), 0 );
+		// Sort by hits
+		arsort( $tagHitCounts );
+		*/
+		$tagHitCounts = array_merge( $explicitlyDefinedTags, $softwareActivatedTags );
 
-				$tagStats = ChangeTags::tagUsageStatistics();
-				$tagHitCounts = array_merge( $explicitlyDefinedTags, $softwareActivatedTags, $tagStats );
+		// Build the list and data
+		$result = [];
+		foreach ( $tagHitCounts as $tagName => $hits ) {
+			if (
+				// Only get active tags
+				isset( $explicitlyDefinedTags[ $tagName ] ) ||
+				isset( $softwareActivatedTags[ $tagName ] )
+			) {
+				// Parse description
+				$desc = ChangeTags::tagLongDescriptionMessage( $tagName, $this->getContext() );
 
-				$result = [];
-				foreach ( $tagHitCounts as $tagName => $hits ) {
-					if (
-						(
-							// Only get active tags
-							isset( $explicitlyDefinedTags[ $tagName ] ) ||
-							isset( $softwareActivatedTags[ $tagName ] )
-						) &&
-						// Only get tags with more than 0 hits
-						$hits > 0
-					) {
-						$labelMsg = ChangeTags::tagShortDescriptionMessage( $tagName, $context );
-						if ( $labelMsg === false ) {
-							// Tag is hidden, skip it
-							continue;
-						}
-						$descriptionMsg = ChangeTags::tagLongDescriptionMessage( $tagName, $context );
-						$result[] = [
-							'name' => $tagName,
-							'labelMsg' => $labelMsg,
-							'label' => $labelMsg->plain(),
-							'descriptionMsg' => $descriptionMsg,
-							'description' => $descriptionMsg ? $descriptionMsg->plain() : '',
-							'cssClass' => Sanitizer::escapeClass( 'mw-tag-' . $tagName ),
-							'hits' => $hits,
-						];
-					}
-				}
-				return $result;
+				$result[] = [
+					'name' => $tagName,
+					'label' => Sanitizer::stripAllTags(
+						ChangeTags::tagDescription( $tagName, $this->getContext() )
+					),
+					'description' => $desc ? Sanitizer::stripAllTags( $desc->parse() ) : '',
+					'cssClass' => Sanitizer::escapeClass( 'mw-tag-' . $tagName ),
+					'hits' => $hits,
+				];
 			}
-		);
-	}
-
-	/**
-	 * Get information about change tags to export to JS via getRcFiltersConfigVars().
-	 *
-	 * This manipulates the label and description of each tag, which are parsed, stripped
-	 * and (in the case of description) truncated versions of these messages. Message
-	 * parsing is expensive, so to detect whether the tag list has changed, use
-	 * getChangeTagListSummary() instead.
-	 *
-	 * The result of this function is cached in WANCache for 24 hours.
-	 *
-	 * @param ResourceLoaderContext $context
-	 * @return array[] Same as getChangeTagListSummary(), with messages parsed, stripped and truncated
-	 */
-	protected static function getChangeTagList( ResourceLoaderContext $context ) {
-		$tags = self::getChangeTagListSummary( $context );
-		$language = MediaWikiServices::getInstance()->getLanguageFactory()
-			->getLanguage( $context->getLanguage() );
-		foreach ( $tags as &$tagInfo ) {
-			$tagInfo['label'] = Sanitizer::stripAllTags( $tagInfo['labelMsg']->parse() );
-			$tagInfo['description'] = $tagInfo['descriptionMsg'] ?
-				$language->truncateForVisual(
-					Sanitizer::stripAllTags( $tagInfo['descriptionMsg']->parse() ),
-					self::TAG_DESC_CHARACTER_LIMIT
-				) :
-				'';
-			unset( $tagInfo['labelMsg'] );
-			unset( $tagInfo['descriptionMsg'] );
 		}
 
-		// Instead of sorting by hit count (disabled for now), sort by display name
-		usort( $tags, function ( $a, $b ) {
+		// Instead of sorting by hit count (disabled, see above), sort by display name
+		usort( $result, function ( $a, $b ) {
 			return strcasecmp( $a['label'], $b['label'] );
 		} );
-		return $tags;
+
+		return $result;
 	}
 
 	/**
@@ -1003,20 +705,9 @@ abstract class ChangesListSpecialPage extends SpecialPage {
 	}
 
 	/**
-	 * Add the "timeout" message to the output
-	 */
-	protected function outputTimeout() {
-		$this->getOutput()->addHTML(
-			'<div class="mw-changeslist-empty mw-changeslist-timeout">' .
-			$this->msg( 'recentchanges-timeout' )->parse() .
-			'</div>'
-		);
-	}
-
-	/**
 	 * Get the database result for this special page instance. Used by ApiFeedRecentChanges.
 	 *
-	 * @return bool|IResultWrapper Result or false
+	 * @return bool|ResultWrapper Result or false
 	 */
 	public function getRows() {
 		$opts = $this->getOptions();
@@ -1060,7 +751,6 @@ abstract class ChangesListSpecialPage extends SpecialPage {
 		// information to all users just because the user that saves the edit can
 		// patrol or is logged in)
 		if ( !$this->including() && $this->getUser()->useRCPatrol() ) {
-			$this->registerFiltersFromDefinitions( $this->legacyReviewStatusFilterGroupDefinition );
 			$this->registerFiltersFromDefinitions( $this->reviewStatusFilterGroupDefinition );
 		}
 
@@ -1078,9 +768,13 @@ abstract class ChangesListSpecialPage extends SpecialPage {
 			);
 		}
 
-		$this->getHookRunner()->onChangesListSpecialPageStructuredFilters( $this );
+		Hooks::run( 'ChangesListSpecialPageStructuredFilters', [ $this ] );
 
-		$this->registerFiltersFromDefinitions( [] );
+		$unstructuredGroupDefinition =
+			$this->getFilterGroupDefinitionFromLegacyCustomFilters(
+				$this->getCustomFilters()
+			);
+		$this->registerFiltersFromDefinitions( [ $unstructuredGroupDefinition ] );
 
 		$userExperienceLevel = $this->getFilterGroup( 'userExpLevel' );
 		$registered = $userExperienceLevel->getFilter( 'registered' );
@@ -1139,7 +833,6 @@ abstract class ChangesListSpecialPage extends SpecialPage {
 	 *
 	 * There is light processing to simplify core maintenance.
 	 * @param array $definition
-	 * @phan-param array<int,array{class:string,filters:array}> $definition
 	 */
 	protected function registerFiltersFromDefinitions( array $definition ) {
 		$autoFillPriority = -1;
@@ -1165,27 +858,36 @@ abstract class ChangesListSpecialPage extends SpecialPage {
 	}
 
 	/**
-	 * @return array The legacy show/hide toggle filters
+	 * Get filter group definition from legacy custom filters
+	 *
+	 * @param array $customFilters Custom filters from legacy hooks
+	 * @return array Group definition
 	 */
-	protected function getLegacyShowHideFilters() {
-		$filters = [];
-		foreach ( $this->filterGroups as $group ) {
-			if ( $group instanceof ChangesListBooleanFilterGroup ) {
-				foreach ( $group->getFilters() as $key => $filter ) {
-					if ( $filter->displaysOnUnstructuredUi() ) {
-						$filters[ $key ] = $filter;
-					}
-				}
-			}
+	protected function getFilterGroupDefinitionFromLegacyCustomFilters( array $customFilters ) {
+		// Special internal unstructured group
+		$unstructuredGroupDefinition = [
+			'name' => 'unstructured',
+			'class' => ChangesListBooleanFilterGroup::class,
+			'priority' => -1, // Won't display in structured
+			'filters' => [],
+		];
+
+		foreach ( $customFilters as $name => $params ) {
+			$unstructuredGroupDefinition['filters'][] = [
+				'name' => $name,
+				'showHide' => $params['msg'],
+				'default' => $params['default'],
+			];
 		}
-		return $filters;
+
+		return $unstructuredGroupDefinition;
 	}
 
 	/**
 	 * Register all the filters, including legacy hook-driven ones.
 	 * Then create a FormOptions object with options as specified by the user
 	 *
-	 * @param string $parameters
+	 * @param array $parameters
 	 *
 	 * @return FormOptions
 	 */
@@ -1221,9 +923,19 @@ abstract class ChangesListSpecialPage extends SpecialPage {
 		// If urlversion=2 is set, ignore the filter defaults and set them all to false/empty
 		$useDefaults = $this->getRequest()->getInt( 'urlversion' ) !== 2;
 
+		// Add all filters
 		/** @var ChangesListFilterGroup $filterGroup */
 		foreach ( $this->filterGroups as $filterGroup ) {
-			$filterGroup->addOptions( $opts, $useDefaults, $structuredUI );
+			// URL parameters can be per-group, like 'userExpLevel',
+			// or per-filter, like 'hideminor'.
+			if ( $filterGroup->isPerGroupRequestParameter() ) {
+				$opts->add( $filterGroup->getName(), $useDefaults ? $filterGroup->getDefault() : '' );
+			} else {
+				/** @var ChangesListBooleanFilter $filter */
+				foreach ( $filterGroup->getFilters() as $filter ) {
+					$opts->add( $filter->getName(), $useDefaults ? $filter->getDefault( $structuredUI ) : false );
+				}
+			}
 		}
 
 		$opts->add( 'namespace', '', FormOptions::STRING );
@@ -1231,11 +943,6 @@ abstract class ChangesListSpecialPage extends SpecialPage {
 		$opts->add( 'associated', false );
 		$opts->add( 'urlversion', 1 );
 		$opts->add( 'tagfilter', '' );
-
-		$opts->add( 'days', $this->getDefaultDays(), FormOptions::FLOAT );
-		$opts->add( 'limit', $this->getDefaultLimit(), FormOptions::INT );
-
-		$opts->add( 'from', '' );
 
 		return $opts;
 	}
@@ -1268,7 +975,9 @@ abstract class ChangesListSpecialPage extends SpecialPage {
 	 * @return ChangesListFilterGroup|null Group, or null if not registered
 	 */
 	public function getFilterGroup( $groupName ) {
-		return $this->filterGroups[$groupName] ?? null;
+		return isset( $this->filterGroups[$groupName] ) ?
+			$this->filterGroups[$groupName] :
+			null;
 	}
 
 	// Currently, this intentionally only includes filters that display
@@ -1276,7 +985,6 @@ abstract class ChangesListSpecialPage extends SpecialPage {
 	// to include data on filters that use the unstructured UI.  messageKeys is a
 	// special top-level value, with the value being an array of the message keys to
 	// send to the client.
-
 	/**
 	 * Gets structured filter information needed by JS
 	 *
@@ -1291,11 +999,11 @@ abstract class ChangesListSpecialPage extends SpecialPage {
 		];
 
 		usort( $this->filterGroups, function ( $a, $b ) {
-			return $b->getPriority() <=> $a->getPriority();
+			return $b->getPriority() - $a->getPriority();
 		} );
 
 		foreach ( $this->filterGroups as $groupName => $group ) {
-			$groupOutput = $group->getJsData();
+			$groupOutput = $group->getJsData( $this );
 			if ( $groupOutput !== null ) {
 				$output['messageKeys'] = array_merge(
 					$output['messageKeys'],
@@ -1308,6 +1016,21 @@ abstract class ChangesListSpecialPage extends SpecialPage {
 		}
 
 		return $output;
+	}
+
+	/**
+	 * Get custom show/hide filters using deprecated ChangesListSpecialPageFilters
+	 * hook.
+	 *
+	 * @return array Map of filter URL param names to properties (msg/default)
+	 */
+	protected function getCustomFilters() {
+		if ( $this->customFilters === null ) {
+			$this->customFilters = [];
+			Hooks::run( 'ChangesListSpecialPageFilters', [ $this, &$this->customFilters ], '1.29' );
+		}
+
+		return $this->customFilters;
 	}
 
 	/**
@@ -1338,9 +1061,9 @@ abstract class ChangesListSpecialPage extends SpecialPage {
 		// or per-filter, like 'hideminor'.
 
 		foreach ( $this->filterGroups as $filterGroup ) {
-			if ( $filterGroup instanceof ChangesListStringOptionsFilterGroup ) {
+			if ( $filterGroup->isPerGroupRequestParameter() ) {
 				$stringParameterNameSet[$filterGroup->getName()] = true;
-			} elseif ( $filterGroup instanceof ChangesListBooleanFilterGroup ) {
+			} elseif ( $filterGroup->getType() === ChangesListBooleanFilterGroup::TYPE ) {
 				foreach ( $filterGroup->getFilters() as $filter ) {
 					$hideParameterNameSet[$filter->getName()] = true;
 				}
@@ -1370,16 +1093,10 @@ abstract class ChangesListSpecialPage extends SpecialPage {
 	 * @param FormOptions $opts
 	 */
 	public function validateOptions( FormOptions $opts ) {
-		$isContradictory = $this->fixContradictoryOptions( $opts );
-		$isReplaced = $this->replaceOldOptions( $opts );
-
-		if ( $isContradictory || $isReplaced ) {
+		if ( $this->fixContradictoryOptions( $opts ) ) {
 			$query = wfArrayToCgi( $this->convertParamsForLink( $opts->getChangedValues() ) );
 			$this->getOutput()->redirect( $this->getPageTitle()->getCanonicalURL( $query ) );
 		}
-
-		$opts->validateIntBounds( 'limit', 0, 5000 );
-		$opts->validateBounds( 'days', 0, $this->getConfig()->get( 'RCMaxAge' ) / ( 3600 * 24 ) );
 	}
 
 	/**
@@ -1445,56 +1162,9 @@ abstract class ChangesListSpecialPage extends SpecialPage {
 	}
 
 	/**
-	 * Replace old options with their structured UI equivalents
-	 *
-	 * @param FormOptions $opts
-	 * @return bool True if the change was made
-	 */
-	public function replaceOldOptions( FormOptions $opts ) {
-		if ( !$this->isStructuredFilterUiEnabled() ) {
-			return false;
-		}
-
-		$changed = false;
-
-		// At this point 'hideanons' and 'hideliu' cannot be both true,
-		// because fixBackwardsCompatibilityOptions resets (at least) 'hideanons' in such case
-		if ( $opts[ 'hideanons' ] ) {
-			$opts->reset( 'hideanons' );
-			$opts[ 'userExpLevel' ] = 'registered';
-			$changed = true;
-		}
-
-		if ( $opts[ 'hideliu' ] ) {
-			$opts->reset( 'hideliu' );
-			$opts[ 'userExpLevel' ] = 'unregistered';
-			$changed = true;
-		}
-
-		if ( $this->getFilterGroup( 'legacyReviewStatus' ) ) {
-			if ( $opts[ 'hidepatrolled' ] ) {
-				$opts->reset( 'hidepatrolled' );
-				$opts[ 'reviewStatus' ] = 'unpatrolled';
-				$changed = true;
-			}
-
-			if ( $opts[ 'hideunpatrolled' ] ) {
-				$opts->reset( 'hideunpatrolled' );
-				$opts[ 'reviewStatus' ] = implode(
-					ChangesListStringOptionsFilterGroup::SEPARATOR,
-					[ 'manual', 'auto' ]
-				);
-				$changed = true;
-			}
-		}
-
-		return $changed;
-	}
-
-	/**
 	 * Convert parameters values from true/false to 1/0
 	 * so they are not omitted by wfArrayToCgi()
-	 * T38524
+	 * Bug 36524
 	 *
 	 * @param array $params
 	 * @return array
@@ -1526,30 +1196,32 @@ abstract class ChangesListSpecialPage extends SpecialPage {
 		$dbr = $this->getDB();
 		$isStructuredUI = $this->isStructuredFilterUiEnabled();
 
-		/** @var ChangesListFilterGroup $filterGroup */
 		foreach ( $this->filterGroups as $filterGroup ) {
-			$filterGroup->modifyQuery( $dbr, $this, $tables, $fields, $conds,
-				$query_options, $join_conds, $opts, $isStructuredUI );
+			// URL parameters can be per-group, like 'userExpLevel',
+			// or per-filter, like 'hideminor'.
+			if ( $filterGroup->isPerGroupRequestParameter() ) {
+				$filterGroup->modifyQuery( $dbr, $this, $tables, $fields, $conds,
+					$query_options, $join_conds, $opts[$filterGroup->getName()] );
+			} else {
+				foreach ( $filterGroup->getFilters() as $filter ) {
+					if ( $filter->isActive( $opts, $isStructuredUI ) ) {
+						$filter->modifyQuery( $dbr, $this, $tables, $fields, $conds,
+							$query_options, $join_conds );
+					}
+				}
+			}
 		}
 
 		// Namespace filtering
 		if ( $opts[ 'namespace' ] !== '' ) {
 			$namespaces = explode( ';', $opts[ 'namespace' ] );
 
-			$namespaces = $this->expandSymbolicNamespaceFilters( $namespaces );
-
 			if ( $opts[ 'associated' ] ) {
-				$namespaceInfo = MediaWikiServices::getInstance()->getNamespaceInfo();
 				$associatedNamespaces = array_map(
-					function ( $ns ) use ( $namespaceInfo ){
-						return $namespaceInfo->getAssociated( $ns );
+					function ( $ns ) {
+						return MWNamespace::getAssociated( $ns );
 					},
-					array_filter(
-						$namespaces,
-						function ( $ns ) use ( $namespaceInfo ) {
-							return $namespaceInfo->hasTalkNamespace( $ns );
-						}
-					)
+					$namespaces
 				);
 				$namespaces = array_unique( array_merge( $namespaces, $associatedNamespaces ) );
 			}
@@ -1564,19 +1236,6 @@ abstract class ChangesListSpecialPage extends SpecialPage {
 			}
 			$conds[] = "rc_namespace $operator $value";
 		}
-
-		// Calculate cutoff
-		$cutoff_unixtime = time() - $opts['days'] * 3600 * 24;
-		$cutoff = $dbr->timestamp( $cutoff_unixtime );
-
-		$fromValid = preg_match( '/^[0-9]{14}$/', $opts['from'] );
-		if ( $fromValid && $opts['from'] > wfTimestamp( TS_MW, $cutoff ) ) {
-			$cutoff = $dbr->timestamp( $opts['from'] );
-		} else {
-			$opts->reset( 'from' );
-		}
-
-		$conds[] = 'rc_timestamp >= ' . $dbr->addQuotes( $cutoff );
 	}
 
 	/**
@@ -1588,15 +1247,13 @@ abstract class ChangesListSpecialPage extends SpecialPage {
 	 * @param array $query_options Array of query options; see IDatabase::select $options
 	 * @param array $join_conds Array of join conditions; see IDatabase::select $join_conds
 	 * @param FormOptions $opts
-	 * @return bool|IResultWrapper Result or false
+	 * @return bool|ResultWrapper Result or false
 	 */
 	protected function doMainQuery( $tables, $fields, $conds,
 		$query_options, $join_conds, FormOptions $opts
 	) {
-		$rcQuery = RecentChange::getQueryInfo();
-		$tables = array_merge( $tables, $rcQuery['tables'] );
-		$fields = array_merge( $rcQuery['fields'], $fields );
-		$join_conds = array_merge( $join_conds, $rcQuery['joins'] );
+		$tables[] = 'recentchanges';
+		$fields = array_merge( RecentChange::selectFields(), $fields );
 
 		ChangeTags::modifyDisplayQuery(
 			$tables,
@@ -1628,8 +1285,10 @@ abstract class ChangesListSpecialPage extends SpecialPage {
 	protected function runMainQueryHook( &$tables, &$fields, &$conds,
 		&$query_options, &$join_conds, $opts
 	) {
-		return $this->getHookRunner()->onChangesListSpecialPageQuery(
-			$this->getName(), $tables, $fields, $conds, $query_options, $join_conds, $opts );
+		return Hooks::run(
+			'ChangesListSpecialPageQuery',
+			[ $this->getName(), &$tables, &$fields, &$conds, &$query_options, &$join_conds, $opts ]
+		);
 	}
 
 	/**
@@ -1642,26 +1301,16 @@ abstract class ChangesListSpecialPage extends SpecialPage {
 	}
 
 	/**
-	 * Send header output to the OutputPage object, only called if not using feeds
-	 *
-	 * @param int $rowCount Number of database rows
-	 * @param FormOptions $opts
-	 */
-	private function webOutputHeader( $rowCount, $opts ) {
-		if ( !$this->including() ) {
-			$this->outputFeedLinks();
-			$this->doHeader( $opts, $rowCount );
-		}
-	}
-
-	/**
 	 * Send output to the OutputPage object, only called if not used feeds
 	 *
-	 * @param IResultWrapper $rows Database rows
+	 * @param ResultWrapper $rows Database rows
 	 * @param FormOptions $opts
 	 */
 	public function webOutput( $rows, $opts ) {
-		$this->webOutputHeader( $rows->numRows(), $opts );
+		if ( !$this->including() ) {
+			$this->outputFeedLinks();
+			$this->doHeader( $opts, $rows->numRows() );
+		}
 
 		$this->outputChangesList( $rows, $opts );
 	}
@@ -1676,7 +1325,7 @@ abstract class ChangesListSpecialPage extends SpecialPage {
 	/**
 	 * Build and output the actual changes list.
 	 *
-	 * @param IResultWrapper $rows Database rows
+	 * @param ResultWrapper $rows Database rows
 	 * @param FormOptions $opts
 	 */
 	abstract public function outputChangesList( $rows, $opts );
@@ -1696,8 +1345,7 @@ abstract class ChangesListSpecialPage extends SpecialPage {
 	}
 
 	/**
-	 * Send the text to be displayed before the options.
-	 * Should use $this->getOutput()->addWikiTextAsInterface()
+	 * Send the text to be displayed before the options. Should use $this->getOutput()->addWikiText()
 	 * or similar methods to print the text.
 	 *
 	 * @param FormOptions $opts
@@ -1707,8 +1355,7 @@ abstract class ChangesListSpecialPage extends SpecialPage {
 	}
 
 	/**
-	 * Send the text to be displayed after the options.
-	 * Should use $this->getOutput()->addWikiTextAsInterface()
+	 * Send the text to be displayed after the options. Should use $this->getOutput()->addWikiText()
 	 * or similar methods to print the text.
 	 *
 	 * @param FormOptions $opts
@@ -1746,9 +1393,9 @@ abstract class ChangesListSpecialPage extends SpecialPage {
 			unset( $legendItems['unpatrolled'] );
 		}
 		foreach ( $legendItems as $key => $item ) { # generate items of the legend
-			$label = $item['legend'] ?? $item['title'];
+			$label = isset( $item['legend'] ) ? $item['legend'] : $item['title'];
 			$letter = $item['letter'];
-			$cssClass = $item['class'] ?? $key;
+			$cssClass = isset( $item['class'] ) ? $item['class'] : $key;
 
 			$legend .= Html::element( 'dt',
 				[ 'class' => $cssClass ], $context->msg( $letter )->text()
@@ -1768,29 +1415,6 @@ abstract class ChangesListSpecialPage extends SpecialPage {
 			[ 'class' => 'mw-changeslist-legend-plusminus' ],
 			$context->msg( 'recentchanges-label-plusminus' )->text()
 		) . "\n";
-		// Watchlist expiry clock icon.
-		if ( $context->getConfig()->get( 'WatchlistExpiry' ) ) {
-			$widget = new IconWidget( [
-				'icon' => 'clock',
-				'classes' => [ 'mw-changesList-watchlistExpiry' ],
-			] );
-			// Link the image to its label for assistive technologies.
-			$watchlistLabelId = 'mw-changeslist-watchlistExpiry-label';
-			$widget->getIconElement()->setAttributes( [
-				'role' => 'img',
-				'aria-labelledby' => $watchlistLabelId,
-			] );
-			$legend .= Html::rawElement(
-				'dt',
-				[ 'class' => 'mw-changeslist-legend-watchlistexpiry' ],
-				$widget
-			);
-			$legend .= Html::element(
-				'dd',
-				[ 'class' => 'mw-changeslist-legend-watchlistexpiry', 'id' => $watchlistLabelId ],
-				$context->msg( 'recentchanges-legend-watchlistexpiry' )->text()
-			);
-		}
 		$legend .= Html::closeElement( 'dl' ) . "\n";
 
 		$legendHeading = $this->isStructuredFilterUiEnabled() ?
@@ -1798,11 +1422,8 @@ abstract class ChangesListSpecialPage extends SpecialPage {
 			$context->msg( 'recentchanges-legend-heading' )->parse();
 
 		# Collapsible
-		$collapsedState = $this->getRequest()->getCookie( 'changeslist-state' );
-		$collapsedClass = $collapsedState === 'collapsed' ? ' mw-collapsed' : '';
-
 		$legend =
-			'<div class="mw-changeslist-legend mw-collapsible' . $collapsedClass . '">' .
+			'<div class="mw-changeslist-legend">' .
 				$legendHeading .
 				'<div class="mw-collapsible-content">' . $legend . '</div>' .
 			'</div>';
@@ -1817,13 +1438,12 @@ abstract class ChangesListSpecialPage extends SpecialPage {
 		$out = $this->getOutput();
 		// Styles and behavior for the legend box (see makeLegend())
 		$out->addModuleStyles( [
-			'mediawiki.interface.helpers.styles',
 			'mediawiki.special.changeslist.legend',
 			'mediawiki.special.changeslist',
 		] );
 		$out->addModules( 'mediawiki.special.changeslist.legend.js' );
 
-		if ( $this->isStructuredFilterUiEnabled() && !$this->including() ) {
+		if ( $this->isStructuredFilterUiEnabled() ) {
 			$out->addModules( 'mediawiki.rcfilters.filters.ui' );
 			$out->addModuleStyles( 'mediawiki.rcfilters.filters.base.styles' );
 		}
@@ -1872,27 +1492,22 @@ abstract class ChangesListSpecialPage extends SpecialPage {
 			return;
 		}
 
-		$actorMigration = ActorMigration::newMigration();
-		$actorQuery = $actorMigration->getJoin( 'rc_user' );
-		$tables += $actorQuery['tables'];
-		$join_conds += $actorQuery['joins'];
-
 		// 'registered' but not 'unregistered', experience levels, if any, are included in 'registered'
 		if (
 			in_array( 'registered', $selectedExpLevels ) &&
 			!in_array( 'unregistered', $selectedExpLevels )
 		) {
-			$conds[] = $actorMigration->isNotAnon( $actorQuery['fields']['rc_user'] );
+			$conds[] = 'rc_user != 0';
 			return;
 		}
 
 		if ( $selectedExpLevels === [ 'unregistered' ] ) {
-			$conds[] = $actorMigration->isAnon( $actorQuery['fields']['rc_user'] );
+			$conds[] = 'rc_user = 0';
 			return;
 		}
 
 		$tables[] = 'user';
-		$join_conds['user'] = [ 'LEFT JOIN', $actorQuery['fields']['rc_user'] . ' = user_id' ];
+		$join_conds['user'] = [ 'LEFT JOIN', 'rc_user = user_id' ];
 
 		if ( $now === 0 ) {
 			$now = time();
@@ -1922,7 +1537,7 @@ abstract class ChangesListSpecialPage extends SpecialPage {
 
 		if ( in_array( 'unregistered', $selectedExpLevels ) ) {
 			$selectedExpLevels = array_diff( $selectedExpLevels, [ 'unregistered' ] );
-			$conditions[] = $actorMigration->isAnon( $actorQuery['fields']['rc_user'] );
+			$conditions[] = 'rc_user = 0';
 		}
 
 		if ( $selectedExpLevels === [ 'newcomer' ] ) {
@@ -1944,7 +1559,7 @@ abstract class ChangesListSpecialPage extends SpecialPage {
 		} elseif ( $selectedExpLevels === [ 'experienced', 'learner' ] ) {
 			$conditions[] = $aboveNewcomer;
 		} elseif ( $selectedExpLevels === [ 'experienced', 'learner', 'newcomer' ] ) {
-			$conditions[] = $actorMigration->isNotAnon( $actorQuery['fields']['rc_user'] );
+			$conditions[] = 'rc_user != 0';
 		}
 
 		if ( count( $conditions ) > 1 ) {
@@ -1964,61 +1579,35 @@ abstract class ChangesListSpecialPage extends SpecialPage {
 			return true;
 		}
 
-		return static::checkStructuredFilterUiEnabled( $this->getUser() );
+		if ( $this->getConfig()->get( 'StructuredChangeFiltersShowPreference' ) ) {
+			return !$this->getUser()->getOption( 'rcenhancedfilters-disable' );
+		} else {
+			return $this->getUser()->getOption( 'rcenhancedfilters' );
+		}
 	}
 
 	/**
-	 * Static method to check whether StructuredFilter UI is enabled for the given user
+	 * Check whether the structured filter UI is enabled by default (regardless of
+	 * this particular user's setting)
 	 *
-	 * @since 1.31
-	 * @param User $user
 	 * @return bool
 	 */
-	public static function checkStructuredFilterUiEnabled( $user ) {
-		if ( $user instanceof Config ) {
-			wfDeprecated( __METHOD__ . ' with Config argument', '1.34' );
-			$user = func_get_arg( 1 );
+	public function isStructuredFilterUiEnabledByDefault() {
+		if ( $this->getConfig()->get( 'StructuredChangeFiltersShowPreference' ) ) {
+			return !$this->getUser()->getDefaultOption( 'rcenhancedfilters-disable' );
+		} else {
+			return $this->getUser()->getDefaultOption( 'rcenhancedfilters' );
 		}
-		return !$user->getOption( 'rcenhancedfilters-disable' );
 	}
 
-	/**
-	 * Get the default value of the number of changes to display when loading
-	 * the result set.
-	 *
-	 * @since 1.30
-	 * @return int
-	 */
-	public function getDefaultLimit() {
-		return $this->getUser()->getIntOption( static::$limitPreferenceName );
-	}
+	abstract function getDefaultLimit();
 
 	/**
 	 * Get the default value of the number of days to display when loading
 	 * the result set.
 	 * Supports fractional values, and should be cast to a float.
 	 *
-	 * @since 1.30
 	 * @return float
 	 */
-	public function getDefaultDays() {
-		return floatval( $this->getUser()->getOption( static::$daysPreferenceName ) );
-	}
-
-	private function expandSymbolicNamespaceFilters( array $namespaces ) {
-		$nsInfo = MediaWikiServices::getInstance()->getNamespaceInfo();
-		$symbolicFilters = [
-			'all-contents' => $nsInfo->getSubjectNamespaces(),
-			'all-discussions' => $nsInfo->getTalkNamespaces(),
-		];
-		$additionalNamespaces = [];
-		foreach ( $symbolicFilters as $name => $values ) {
-			if ( in_array( $name, $namespaces ) ) {
-				$additionalNamespaces = array_merge( $additionalNamespaces, $values );
-			}
-		}
-		$namespaces = array_diff( $namespaces, array_keys( $symbolicFilters ) );
-		$namespaces = array_merge( $namespaces, $additionalNamespaces );
-		return array_unique( $namespaces );
-	}
+	abstract function getDefaultDays();
 }

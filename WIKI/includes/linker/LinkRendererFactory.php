@@ -16,14 +16,12 @@
  * http://www.gnu.org/copyleft/gpl.html
  *
  * @file
+ * @license GPL-2.0+
  * @author Kunal Mehta <legoktm@member.fsf.org>
  */
 namespace MediaWiki\Linker;
 
 use LinkCache;
-use MediaWiki\HookContainer\HookContainer;
-use MediaWiki\SpecialPage\SpecialPageFactory;
-use NamespaceInfo;
 use TitleFormatter;
 use User;
 
@@ -44,50 +42,19 @@ class LinkRendererFactory {
 	private $linkCache;
 
 	/**
-	 * @var NamespaceInfo
-	 */
-	private $nsInfo;
-
-	/**
-	 * @var HookContainer
-	 */
-	private $hookContainer;
-
-	/**
-	 * @var SpecialPageFactory
-	 */
-	private $specialPageFactory;
-
-	/**
-	 * @internal For use by core ServiceWiring
 	 * @param TitleFormatter $titleFormatter
 	 * @param LinkCache $linkCache
-	 * @param NamespaceInfo $nsInfo
-	 * @param SpecialPageFactory $specialPageFactory
-	 * @param HookContainer $hookContainer
 	 */
-	public function __construct(
-		TitleFormatter $titleFormatter,
-		LinkCache $linkCache,
-		NamespaceInfo $nsInfo,
-		SpecialPageFactory $specialPageFactory,
-		HookContainer $hookContainer
-	) {
+	public function __construct( TitleFormatter $titleFormatter, LinkCache $linkCache ) {
 		$this->titleFormatter = $titleFormatter;
 		$this->linkCache = $linkCache;
-		$this->nsInfo = $nsInfo;
-		$this->specialPageFactory = $specialPageFactory;
-		$this->hookContainer = $hookContainer;
 	}
 
 	/**
 	 * @return LinkRenderer
 	 */
 	public function create() {
-		return new LinkRenderer(
-			$this->titleFormatter, $this->linkCache, $this->nsInfo, $this->specialPageFactory,
-			$this->hookContainer
-		);
+		return new LinkRenderer( $this->titleFormatter, $this->linkCache );
 	}
 
 	/**

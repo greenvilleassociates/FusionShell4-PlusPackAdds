@@ -11,12 +11,13 @@ use MediaWiki\MediaWikiServices;
  */
 class ApiQueryWatchlistRawIntegrationTest extends ApiTestCase {
 
-	protected function setUp() : void {
+	protected function setUp() {
 		parent::setUp();
 		self::$users['ApiQueryWatchlistRawIntegrationTestUser']
 			= $this->getMutableTestUser();
 		self::$users['ApiQueryWatchlistRawIntegrationTestUser2']
 			= $this->getMutableTestUser();
+		$this->doLogin( 'ApiQueryWatchlistRawIntegrationTestUser' );
 	}
 
 	private function getLoggedInTestUser() {
@@ -35,14 +36,14 @@ class ApiQueryWatchlistRawIntegrationTest extends ApiTestCase {
 		return $this->doApiRequest( array_merge(
 			[ 'action' => 'query', 'list' => 'watchlistraw' ],
 			$params
-		), null, false, $this->getLoggedInTestUser() );
+		) );
 	}
 
 	private function doGeneratorWatchlistRawRequest( array $params = [] ) {
 		return $this->doApiRequest( array_merge(
 			[ 'action' => 'query', 'generator' => 'watchlistraw' ],
 			$params
-		), null, false, $this->getLoggedInTestUser() );
+		) );
 	}
 
 	private function getItemsFromApiResponse( array $response ) {
@@ -348,7 +349,7 @@ class ApiQueryWatchlistRawIntegrationTest extends ApiTestCase {
 		$firstResult = $this->doListWatchlistRawRequest( [ 'wrlimit' => 2 ] );
 		$continuationParam = $firstResult[0]['continue']['wrcontinue'];
 
-		$this->assertSame( '0|ApiQueryWatchlistRawIntegrationTestPage3', $continuationParam );
+		$this->assertEquals( '0|ApiQueryWatchlistRawIntegrationTestPage3', $continuationParam );
 
 		$continuedResult = $this->doListWatchlistRawRequest( [ 'wrcontinue' => $continuationParam ] );
 
@@ -461,7 +462,7 @@ class ApiQueryWatchlistRawIntegrationTest extends ApiTestCase {
 
 		$result = $this->doListWatchlistRawRequest( $params );
 
-		$this->assertSame( [], $this->getItemsFromApiResponse( $result ) );
+		$this->assertEmpty( $this->getItemsFromApiResponse( $result ) );
 		$this->assertArrayNotHasKey( 'continue', $result[0] );
 	}
 
@@ -476,7 +477,7 @@ class ApiQueryWatchlistRawIntegrationTest extends ApiTestCase {
 			new TitleValue( 1, 'ApiQueryWatchlistRawIntegrationTestPage1' ),
 		] );
 
-		MediaWikiServices::getInstance()->getMainWANObjectCache()->clearProcessCache();
+		ObjectCache::getMainWANInstance()->clearProcessCache();
 		$result = $this->doListWatchlistRawRequest( [
 			'wrowner' => $otherUser->getName(),
 			'wrtoken' => '1234567890',
@@ -502,8 +503,7 @@ class ApiQueryWatchlistRawIntegrationTest extends ApiTestCase {
 		$otherUser->setOption( 'watchlisttoken', '1234567890' );
 		$otherUser->saveSettings();
 
-		$this->expectException( ApiUsageException::class );
-		$this->expectExceptionMessage( 'Incorrect watchlist token provided' );
+		$this->setExpectedException( ApiUsageException::class, 'Incorrect watchlist token provided' );
 
 		$this->doListWatchlistRawRequest( [
 			'wrowner' => $otherUser->getName(),
@@ -512,8 +512,7 @@ class ApiQueryWatchlistRawIntegrationTest extends ApiTestCase {
 	}
 
 	public function testOwnerAndTokenParams_userHasNoWatchlistToken() {
-		$this->expectException( ApiUsageException::class );
-		$this->expectExceptionMessage( 'Incorrect watchlist token provided' );
+		$this->setExpectedException( ApiUsageException::class, 'Incorrect watchlist token provided' );
 
 		$this->doListWatchlistRawRequest( [
 			'wrowner' => $this->getNotLoggedInTestUser()->getName(),
@@ -537,7 +536,7 @@ class ApiQueryWatchlistRawIntegrationTest extends ApiTestCase {
 		// $result[0]['query']['pages'] uses page ids as keys
 		$item = array_values( $result[0]['query']['pages'] )[0];
 
-		$this->assertSame( 0, $item['ns'] );
+		$this->assertEquals( 0, $item['ns'] );
 		$this->assertEquals( 'ApiQueryWatchlistRawIntegrationTestPage', $item['title'] );
 	}
 

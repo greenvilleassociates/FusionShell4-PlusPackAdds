@@ -46,7 +46,7 @@ class MemcLockManager extends QuorumLockManager {
 
 	/** @var MemcachedBagOStuff[] Map of (server name => MemcachedBagOStuff) */
 	protected $cacheServers = [];
-	/** @var MapCacheLRU Server status cache */
+	/** @var HashBagOStuff Server status cache */
 	protected $statusCache;
 
 	/**
@@ -68,11 +68,11 @@ class MemcLockManager extends QuorumLockManager {
 		$this->srvsByBucket = array_filter( $config['srvsByBucket'], 'is_array' );
 		$this->srvsByBucket = array_values( $this->srvsByBucket ); // consecutive
 
-		$memcConfig = $config['memcConfig'] ?? [];
-		$memcConfig += [ 'class' => MemcachedPhpBagOStuff::class ]; // default
+		$memcConfig = isset( $config['memcConfig'] ) ? $config['memcConfig'] : [];
+		$memcConfig += [ 'class' => 'MemcachedPhpBagOStuff' ]; // default
 
 		$class = $memcConfig['class'];
-		if ( !is_subclass_of( $class, MemcachedBagOStuff::class ) ) {
+		if ( !is_subclass_of( $class, 'MemcachedBagOStuff' ) ) {
 			throw new InvalidArgumentException( "$class is not of type MemcachedBagOStuff." );
 		}
 
@@ -81,7 +81,7 @@ class MemcLockManager extends QuorumLockManager {
 			$this->cacheServers[$name] = new $class( $params );
 		}
 
-		$this->statusCache = new MapCacheLRU( 100 );
+		$this->statusCache = new HashBagOStuff();
 	}
 
 	protected function getLocksOnServer( $lockSrv, array $pathsByType ) {
@@ -89,7 +89,7 @@ class MemcLockManager extends QuorumLockManager {
 
 		$memc = $this->getCache( $lockSrv );
 		// List of affected paths
-		$paths = array_merge( ...array_values( $pathsByType ) );
+		$paths = call_user_func_array( 'array_merge', array_values( $pathsByType ) );
 		$paths = array_unique( $paths );
 		// List of affected lock record keys
 		$keys = array_map( [ $this, 'recordKeyForPath' ], $paths );
@@ -148,7 +148,7 @@ class MemcLockManager extends QuorumLockManager {
 				if ( !$ok ) {
 					$status->fatal( 'lockmanager-fail-acquirelock', $path );
 				} else {
-					$this->logger->debug( __METHOD__ . ": acquired lock on key $locksKey." );
+					$this->logger->debug( __METHOD__ . ": acquired lock on key $locksKey.\n" );
 				}
 			}
 		}
@@ -164,7 +164,7 @@ class MemcLockManager extends QuorumLockManager {
 
 		$memc = $this->getCache( $lockSrv );
 		// List of affected paths
-		$paths = array_merge( ...array_values( $pathsByType ) );
+		$paths = call_user_func_array( 'array_merge', array_values( $pathsByType ) );
 		$paths = array_unique( $paths );
 		// List of affected lock record keys
 		$keys = array_map( [ $this, 'recordKeyForPath' ], $paths );
@@ -212,7 +212,7 @@ class MemcLockManager extends QuorumLockManager {
 				$ok = $memc->set( $locksKey, $locksHeld, self::MAX_LOCK_TTL );
 			}
 			if ( $ok ) {
-				$this->logger->debug( __METHOD__ . ": released lock on key $locksKey." );
+				$this->logger->debug( __METHOD__ . ": released lock on key $locksKey.\n" );
 			} else {
 				$status->fatal( 'lockmanager-fail-releaselock', $path );
 			}
@@ -252,13 +252,13 @@ class MemcLockManager extends QuorumLockManager {
 			throw new InvalidArgumentException( "Invalid cache server '$lockSrv'." );
 		}
 
-		$online = $this->statusCache->get( "online:$lockSrv", 30 );
-		if ( $online === null ) {
+		$online = $this->statusCache->get( "online:$lockSrv" );
+		if ( $online === false ) {
 			$online = $this->cacheServers[$lockSrv]->set( __CLASS__ . ':ping', 1, 1 );
 			if ( !$online ) { // server down?
 				$this->logger->warning( __METHOD__ . ": Could not contact $lockSrv." );
 			}
-			$this->statusCache->set( "online:$lockSrv", (int)$online );
+			$this->statusCache->set( "online:$lockSrv", (int)$online, 30 );
 		}
 
 		return $online ? $this->cacheServers[$lockSrv] : null;
@@ -345,7 +345,7 @@ class MemcLockManager extends QuorumLockManager {
 	/**
 	 * Make sure remaining locks get cleared for sanity
 	 */
-	public function __destruct() {
+	function __destruct() {
 		while ( count( $this->locksHeld ) ) {
 			foreach ( $this->locksHeld as $path => $locks ) {
 				$this->doUnlock( [ $path ], self::LOCK_EX );

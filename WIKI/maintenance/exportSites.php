@@ -9,7 +9,7 @@ require_once $basePath . '/maintenance/Maintenance.php';
  *
  * @since 1.25
  *
- * @license GPL-2.0-or-later
+ * @licence GNU GPL v2+
  * @author Daniel Kinzler
  */
 class ExportSites extends Maintenance {
@@ -17,7 +17,7 @@ class ExportSites extends Maintenance {
 	public function __construct() {
 		$this->addDescription( 'Exports site definitions the sites table to XML file' );
 
-		$this->addArg( 'file', 'A file to write the XML to (see docs/sitelist.md). ' .
+		$this->addArg( 'file', 'A file to write the XML to (see docs/sitelist.txt). ' .
 			'Use "php://stdout" to write to stdout.', true
 		);
 
@@ -37,7 +37,7 @@ class ExportSites extends Maintenance {
 		$handle = fopen( $file, 'w' );
 
 		if ( !$handle ) {
-			$this->fatalError( "Failed to open $file for writing.\n" );
+			$this->error( "Failed to open $file for writing.\n", 1 );
 		}
 
 		$exporter = new SiteExporter( $handle );
@@ -52,5 +52,5 @@ class ExportSites extends Maintenance {
 
 }
 
-$maintClass = ExportSites::class;
+$maintClass = 'ExportSites';
 require_once RUN_MAINTENANCE_IF_MAIN;

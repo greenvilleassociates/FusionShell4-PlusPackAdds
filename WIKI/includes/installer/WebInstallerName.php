@@ -16,10 +16,8 @@
  * http://www.gnu.org/copyleft/gpl.html
  *
  * @file
- * @ingroup Installer
+ * @ingroup Deployment
  */
-
-use MediaWiki\MediaWikiServices;
 
 class WebInstallerName extends WebInstallerPage {
 
@@ -28,8 +26,10 @@ class WebInstallerName extends WebInstallerPage {
 	 */
 	public function execute() {
 		$r = $this->parent->request;
-		if ( $r->wasPosted() && $this->submit() ) {
-			return 'continue';
+		if ( $r->wasPosted() ) {
+			if ( $this->submit() ) {
+				return 'continue';
+			}
 		}
 
 		$this->startForm();
@@ -76,7 +76,7 @@ class WebInstallerName extends WebInstallerPage {
 			$this->parent->getTextBox( [
 				'var' => 'wgMetaNamespace',
 				'label' => '', // @todo Needs a label?
-				'attribs' => [ 'class' => 'enabledByOther' ]
+				'attribs' => [ 'readonly' => 'readonly', 'class' => 'enabledByOther' ]
 			] ) .
 			$this->getFieldsetStart( 'config-admin-box' ) .
 			$this->parent->getTextBox( [
@@ -115,7 +115,7 @@ class WebInstallerName extends WebInstallerPage {
 				'value' => true,
 			] ) .
 			$this->getFieldsetEnd() .
-			$this->parent->getInfoBox( wfMessage( 'config-almost-done' )->plain() ) .
+			$this->parent->getInfoBox( wfMessage( 'config-almost-done' )->text() ) .
 			// getRadioSet() builds a set of labeled radio buttons.
 			// For grep: The following messages are used as the item labels:
 			// config-optional-continue, config-optional-skip
@@ -186,7 +186,8 @@ class WebInstallerName extends WebInstallerPage {
 		}
 
 		// Make sure it won't conflict with any existing namespaces
-		$nsIndex = MediaWikiServices::getInstance()->getContentLanguage()->getNsIndex( $name );
+		global $wgContLang;
+		$nsIndex = $wgContLang->getNsIndex( $name );
 		if ( $nsIndex !== false && $nsIndex !== NS_PROJECT ) {
 			$this->parent->showError( 'config-ns-conflict', $name );
 			$retVal = false;
@@ -222,7 +223,7 @@ class WebInstallerName extends WebInstallerPage {
 			$status = $upp->checkUserPasswordForGroups(
 				$user,
 				$pwd,
-				[ 'bureaucrat', 'sysop', 'interface-admin' ]  // per Installer::createSysop()
+				[ 'bureaucrat', 'sysop' ]  // per Installer::createSysop()
 			);
 			$valid = $status->isGood() ? true : $status->getMessage();
 		} else {

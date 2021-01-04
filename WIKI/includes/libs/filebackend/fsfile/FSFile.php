@@ -21,9 +21,6 @@
  * @ingroup FileBackend
  */
 
-use Wikimedia\AtEase\AtEase;
-use Wikimedia\Timestamp\ConvertibleTimestamp;
-
 /**
  * Class representing a non-directory file on the file system
  *
@@ -69,11 +66,7 @@ class FSFile {
 	 * @return int|bool
 	 */
 	public function getSize() {
-		AtEase::suppressWarnings();
-		$size = filesize( $this->path );
-		AtEase::restoreWarnings();
-
-		return $size;
+		return filesize( $this->path );
 	}
 
 	/**
@@ -82,11 +75,11 @@ class FSFile {
 	 * @return string|bool TS_MW timestamp or false on failure
 	 */
 	public function getTimestamp() {
-		AtEase::suppressWarnings();
+		MediaWiki\suppressWarnings();
 		$timestamp = filemtime( $this->path );
-		AtEase::restoreWarnings();
+		MediaWiki\restoreWarnings();
 		if ( $timestamp !== false ) {
-			$timestamp = ConvertibleTimestamp::convert( TS_MW, $timestamp );
+			$timestamp = wfTimestamp( TS_MW, $timestamp );
 		}
 
 		return $timestamp;
@@ -175,9 +168,9 @@ class FSFile {
 			return $this->sha1Base36;
 		}
 
-		AtEase::suppressWarnings();
+		MediaWiki\suppressWarnings();
 		$this->sha1Base36 = sha1_file( $this->path );
-		AtEase::restoreWarnings();
+		MediaWiki\restoreWarnings();
 
 		if ( $this->sha1Base36 !== false ) {
 			$this->sha1Base36 = Wikimedia\base_convert( $this->sha1Base36, 16, 36, 31 );

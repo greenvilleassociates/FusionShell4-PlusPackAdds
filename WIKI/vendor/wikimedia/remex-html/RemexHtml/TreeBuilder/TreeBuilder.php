@@ -1,7 +1,6 @@
 <?php
 
 namespace RemexHtml\TreeBuilder;
-
 use RemexHtml\HTMLData;
 use RemexHtml\PropGuard;
 use RemexHtml\Tokenizer\Attributes;
@@ -22,17 +21,15 @@ use RemexHtml\Tokenizer\Tokenizer;
  * https://www.w3.org/TR/2016/REC-html51-20161101/syntax.html
  */
 class TreeBuilder {
-	use PropGuard;
-
 	// Quirks
-	public const NO_QUIRKS = 0;
-	public const LIMITED_QUIRKS = 1;
-	public const QUIRKS = 2;
+	const NO_QUIRKS = 0;
+	const LIMITED_QUIRKS = 1;
+	const QUIRKS = 2;
 
 	// Insertion placement
-	public const BEFORE = 0;
-	public const UNDER = 1;
-	public const ROOT = 2;
+	const BEFORE = 0;
+	const UNDER = 1;
+	const ROOT = 2;
 
 	// Configuration
 	public $isIframeSrcdoc;
@@ -41,17 +38,9 @@ class TreeBuilder {
 	public $ignoreNulls;
 
 	// Objects
-
-	/** @var TreeHandler */
 	public $handler;
-
-	/** @var SimpleStack */
 	public $stack;
-
-	/** @var ActiveFormattingElements */
 	public $afe;
-
-	/** @var Tokenizer */
 	public $tokenizer;
 
 	// State
@@ -106,25 +95,6 @@ class TreeBuilder {
 		'tr' => true
 	];
 
-	/**
-	 * @param TreeHandler $handler The handler which receives tree mutation events
-	 * @param array $options Associative array of options. The options are:
-	 *   - isIframeSrcdoc: True if the document is an iframe srcdoc document.
-	 *     Default false.
-	 *   - scriptingFlag: True if the scripting flag is enabled. Default true.
-	 *     Setting this to false cause the contents of <noscript> elements to be
-	 *     processed as normal content. The scriptingFlag option in the
-	 *     Tokenizer should be set to the same value.
-	 *   - ignoreErrors: True to ignore errors. This improves performance.
-	 *     Default false.
-	 *   - ignoreNulls: True to ignore null characters in the input, instead of
-	 *     following the specified behaviour. Default false.
-	 *   - scopeCache: True to use an implementation of the stack of open elements
-	 *     which caches "in scope" predicates. False to use a simpler
-	 *     implementation. Default true. Setting this to false may improve
-	 *     performance for simple documents, although at the expense of O(N^2)
-	 *     instead of O(N) worst case time order.
-	 */
 	public function __construct( TreeHandler $handler, $options = [] ) {
 		$this->handler = $handler;
 		$this->afe = new ActiveFormattingElements;
@@ -148,15 +118,10 @@ class TreeBuilder {
 		}
 	}
 
-	/**
-	 * Notify TreeBuilder and later pipeline stages of the start of a document.
-	 * This is called by the Dispatcher when a startDocument event is
-	 * received.
-	 *
-	 * @param Tokenizer $tokenizer
-	 * @param string $namespace
-	 * @param string $name
-	 */
+	public function __set( $name, $value ) {
+		PropGuard::set( $this, $name, $value );
+	}
+
 	public function startDocument( Tokenizer $tokenizer, $namespace, $name ) {
 		$tokenizer->setEnableCdataCallback(
 			function () {
@@ -180,7 +145,6 @@ class TreeBuilder {
 
 	/**
 	 * Get the adjusted current node
-	 *
 	 * @return Element|null
 	 */
 	public function adjustedCurrentNode() {
@@ -192,13 +156,6 @@ class TreeBuilder {
 		}
 	}
 
-	/**
-	 * Find the appropriate place for inserting a node.
-	 *
-	 * @param Element|null $target The override target
-	 * @return array A list with the preposition in the first element, and the
-	 *   reference node in the second element.
-	 */
 	private function appropriatePlace( $target = null ) {
 		$stack = $this->stack;
 		if ( $target === null ) {
@@ -226,47 +183,17 @@ class TreeBuilder {
 		return [ self::UNDER, $node ];
 	}
 
-	/**
-	 * Insert characters at the appropriate place for inserting a node.
-	 *
-	 * @param string $text The string which contains the emitted characters
-	 * @param int $start The start of the range within $text to use
-	 * @param int $length The length of the range within $text to use
-	 * @param int $sourceStart The input position
-	 * @param int $sourceLength The input length
-	 */
 	public function insertCharacters( $text, $start, $length, $sourceStart, $sourceLength ) {
 		list( $prep, $ref ) = $this->appropriatePlace();
 		$this->handler->characters( $prep, $ref, $text, $start, $length,
 			$sourceStart, $sourceLength );
 	}
 
-	/**
-	 * Insert an element in the HTML namespace, at the appropriate place for inserting a node
-	 *
-	 * @param string $name The element name
-	 * @param Attributes $attrs The element attributes
-	 * @param bool $void The void (self-closing) element hint
-	 * @param int $sourceStart The input position
-	 * @param int $sourceLength The input length
-	 * @return Element
-	 */
 	public function insertElement( $name, Attributes $attrs, $void, $sourceStart, $sourceLength ) {
 		return $this->insertForeign( HTMLData::NS_HTML, $name, $attrs, $void,
 			$sourceStart, $sourceLength );
 	}
 
-	/**
-	 * Insert an element in any namespace, at the appropriate place for inserting a node.
-	 *
-	 * @param string $ns The namespace
-	 * @param string $name The element name
-	 * @param Attributes $attrs The element attributes
-	 * @param bool $void The void (self-closing) element hint
-	 * @param int $sourceStart The input position
-	 * @param int $sourceLength The input length
-	 * @return Element
-	 */
 	public function insertForeign( $ns, $name, Attributes $attrs, $void,
 		$sourceStart, $sourceLength
 	) {
@@ -283,10 +210,6 @@ class TreeBuilder {
 	/**
 	 * Pop the current node from the stack of open elements, and notify the
 	 * handler that we are done with that node.
-	 *
-	 * @param int $sourceStart
-	 * @param int $sourceLength
-	 * @return Element
 	 */
 	public function pop( $sourceStart, $sourceLength ) {
 		$element = $this->stack->pop();
@@ -294,72 +217,28 @@ class TreeBuilder {
 		return $element;
 	}
 
-	/**
-	 * Insert a doctype node
-	 *
-	 * @param string $name The doctype name
-	 * @param string $public The public ID
-	 * @param string $system The system ID
-	 * @param int $quirks The quirks mode. May be either self::NO_QUIRKS,
-	 *   self::LIMITED_QUIRKS or self::QUIRKS to indicate no-quirks mode,
-	 *   limited-quirks mode or quirks mode respectively.
-	 * @param int $sourceStart
-	 * @param int $sourceLength
-	 */
 	public function doctype( $name, $public, $system, $quirks, $sourceStart, $sourceLength ) {
 		$this->handler->doctype( $name, $public, $system, $quirks, $sourceStart, $sourceLength );
 		$this->quirks = $quirks;
 	}
 
-	/**
-	 * Insert a comment node
-	 *
-	 * @param array|null $place The place where the node is to be inserted.
-	 *   May be either a preposition/refNode pair or null. If it is null,
-	 *   the node will be inserted at the "appropriate place".
-	 * @param string $text The comment contents
-	 * @param int $sourceStart
-	 * @param int $sourceLength
-	 */
 	public function comment( $place, $text, $sourceStart, $sourceLength ) {
-		list( $prep, $ref ) = $place ?? $this->appropriatePlace();
+		list( $prep, $ref ) = $place !== null ? $place : $this->appropriatePlace();
 		$this->handler->comment( $prep, $ref, $text, $sourceStart, $sourceLength );
 	}
 
-	/**
-	 * Notify the handler of an error (if ignoreErrors is not set).
-	 *
-	 * @param string $text The error message
-	 * @param int $pos The input position
-	 */
 	public function error( $text, $pos ) {
 		if ( !$this->ignoreErrors ) {
 			$this->handler->error( $text, $pos );
 		}
 	}
 
-	/**
-	 * Add attributes to an existing element.
-	 *
-	 * @param Element $elt
-	 * @param Attributes $attrs
-	 * @param int $sourceStart
-	 * @param int $sourceLength
-	 */
 	public function mergeAttributes( Element $elt, Attributes $attrs, $sourceStart, $sourceLength ) {
 		if ( $attrs->count() && !$elt->isVirtual ) {
-			$this->handler->mergeAttributes( $elt, $attrs, $sourceStart );
+			$this->handler->mergeAttributes( $elt, $attrs, $sourceStart, $sourceLength );
 		}
 	}
 
-	/**
-	 * If the stack of open elements has a p element in button scope, then
-	 * close a p element.
-	 *
-	 * The above phrase appears many times in the spec.
-	 *
-	 * @param int $pos The source position
-	 */
 	public function closePInButtonScope( $pos ) {
 		if ( $this->stack->isInButtonScope( 'p' ) ) {
 			$this->generateImpliedEndTagsAndPop( 'p', $pos, 0 );
@@ -371,7 +250,6 @@ class TreeBuilder {
 	 * of allowed elements. Raise an error if any are found.
 	 *
 	 * @param array $allowed An array with the HTML element names in the key
-	 * @param int $pos
 	 */
 	public function checkUnclosed( $allowed, $pos ) {
 		if ( $this->ignoreErrors ) {
@@ -395,7 +273,6 @@ class TreeBuilder {
 	/**
 	 * Reconstruct the active formatting elements.
 	 * @author C. Scott Ananian, Tim Starling
-	 * @param int $sourceStart
 	 */
 	public function reconstructAFE( $sourceStart ) {
 		$entry = $this->afe->getTail();
@@ -418,8 +295,6 @@ class TreeBuilder {
 		$foundIt = false;
 		while ( $entry->prevAFE ) {
 			$entry = $entry->prevAFE;
-			// $entry is known not to be null here (but phan doesn't know that)
-			'@phan-var Marker|Element $entry'; /** @var Marker|Element $entry */
 			if ( $entry instanceof Marker || $entry->stackIndex !== null ) {
 				$foundIt = true;
 				break;
@@ -432,8 +307,6 @@ class TreeBuilder {
 		// of open elements.
 		if ( $foundIt ) {
 			$entry = $entry->nextAFE;
-			// $entry is known not to be null here (but phan doesn't know that)
-			'@phan-var Marker|Element $entry'; /** @var Marker|Element $entry */
 		}
 		do {
 			$newElement = $this->insertForeign( HTMLData::NS_HTML, $entry->name,
@@ -443,14 +316,18 @@ class TreeBuilder {
 		} while ( $entry );
 	}
 
+	private function trace( $msg ) {
+		// print "[AAA] $msg\n";
+	}
+
 	/**
 	 * Run the "adoption agency algorithm" (AAA) for the given subject
 	 * tag name.
 	 * @author C. Scott Ananian, Tim Starling
 	 *
 	 * @param string $subject The subject tag name.
-	 * @param int $sourceStart
-	 * @param int $sourceLength
+	 * @param integer $sourceStart
+	 * @param integer $sourceLength
 	 */
 	public function adoptionAgency( $subject, $sourceStart, $sourceLength ) {
 		$afe = $this->afe;
@@ -468,10 +345,13 @@ class TreeBuilder {
 			$this->pop( $sourceStart, $sourceLength );
 			return;
 		}
+		$this->trace( "AAA invoked on $subject" );
 
 		// Outer loop: If outer loop counter is greater than or
 		// equal to eight, then abort these steps. [2-4]
 		for ( $outer = 0; $outer < 8; $outer++ ) {
+			$this->trace( "Outer $outer" );
+			$this->trace( "AFE\n" . $afe->dump() . "STACK\n" . $stack->dump() );
 
 			// Let the formatting element be the last element in the list
 			// of active formatting elements that: is between the end of
@@ -523,7 +403,7 @@ class TreeBuilder {
 			$furthestBlockIndex = -1;
 			$stackLength = $stack->length();
 
-			for ( $i = $fmtEltIndex + 1; $i < $stackLength; $i++ ) {
+			for ( $i = $fmtEltIndex+1; $i < $stackLength; $i++ ) {
 				$item = $stack->item( $i );
 				if ( isset( HTMLData::$special[$item->namespace][$item->name] ) ) {
 					$furthestBlock = $item;
@@ -539,10 +419,13 @@ class TreeBuilder {
 			// formatting element from the list of active formatting
 			// elements. [10]
 			if ( !$furthestBlock ) {
+				$this->trace( "no furthest block" );
 				$this->popAllUpToElement( $fmtElt, $sourceStart, $sourceLength );
 				$afe->remove( $fmtElt );
 				return;
 			}
+
+			$this->trace( "furthestBlock = " . $furthestBlock->getDebugTag() );
 
 			// Let the common ancestor be the element immediately above the
 			// formatting element in the stack of open elements. [11]
@@ -575,6 +458,7 @@ class TreeBuilder {
 				if ( $node === $fmtElt ) {
 					break;
 				}
+				$this->trace( "inner $inner, {$node->getDebugTag()} is not fmtElt" );
 
 				// If the inner loop counter is greater than three and node
 				// is in the list of active formatting elements, then remove
@@ -656,6 +540,10 @@ class TreeBuilder {
 			// and insert the new element into the stack of open elements
 			// immediately below the position of the furthest block in that
 			// stack. [19]
+			$this->trace( "Removing " . $stack->length() . "-" . ( $furthestBlockIndex + 1 ) );
+			$this->trace( "Inserting the new element below $furthestBlockIndex" );
+			$this->trace( "Removing stack elements " .
+				implode( ', ', array_keys( $stackRemovals ) ) );
 
 			// Make a temporary stack with the elements we are going to push back in
 			$tempStack = [];
@@ -671,6 +559,7 @@ class TreeBuilder {
 				$elt = $stack->pop();
 				// Drop elements previously marked for removal
 				if ( isset( $stackRemovals[$index] ) ) {
+					$this->trace( "ending marked node {$elt->getDebugTag()}" );
 					$handler->endTag( $elt, $sourceStart, 0 );
 				} else {
 					$tempStack[] = $elt;
@@ -678,6 +567,7 @@ class TreeBuilder {
 			}
 			// Remove the formatting element
 			$elt = $stack->pop();
+			$this->trace( "ending formatting element {$elt->getDebugTag()}" );
 			$handler->endTag( $elt, $sourceStart, 0 );
 			// Reinsert
 			foreach ( array_reverse( $tempStack ) as $elt ) {
@@ -686,14 +576,6 @@ class TreeBuilder {
 		}
 	}
 
-	/**
-	 * Perform the steps required when "any other end tag" is encountered in
-	 * the "in body" insertion mode.
-	 *
-	 * @param string $name
-	 * @param int $sourceStart
-	 * @param int $sourceLength
-	 */
 	public function anyOtherEndTag( $name, $sourceStart, $sourceLength ) {
 		$stack = $this->stack;
 		for ( $index = $stack->length() - 1; $index >= 0; $index-- ) {
@@ -729,8 +611,8 @@ class TreeBuilder {
 	/**
 	 * Generate implied end tags, optionally with an element to exclude.
 	 *
-	 * @param string|false $name The name to exclude
-	 * @param int $pos The source position
+	 * @param string|null $name The name to exclude
+	 * @param integer $pos The source position
 	 */
 	public function generateImpliedEndTags( $name, $pos ) {
 		$stack = $this->stack;
@@ -748,7 +630,6 @@ class TreeBuilder {
 	 * Generate all implied end tags thoroughly. This was introduced in
 	 * HTML 5.1 in order to expand the set of elements which can be implicitly
 	 * closed by a </template>.
-	 * @param int $pos
 	 */
 	public function generateImpliedEndTagsThoroughly( $pos ) {
 		$stack = $this->stack;
@@ -767,8 +648,8 @@ class TreeBuilder {
 	 * the list.
 	 *
 	 * @param string $name The name to exclude
-	 * @param int $sourceStart
-	 * @param int $sourceLength
+	 * @param integer $sourceStart
+	 * @param integer $sourceLength
 	 */
 	public function generateImpliedEndTagsAndPop( $name, $sourceStart, $sourceLength ) {
 		$this->generateImpliedEndTags( $name, $sourceStart );
@@ -779,13 +660,6 @@ class TreeBuilder {
 		$this->popAllUpToName( $name, $sourceStart, $sourceLength );
 	}
 
-	/**
-	 * Pop elements from the stack until the specified element is popped.
-	 *
-	 * @param Element $elt
-	 * @param int $sourceStart
-	 * @param int $sourceLength
-	 */
 	public function popAllUpToElement( Element $elt, $sourceStart, $sourceLength ) {
 		while ( true ) {
 			$popped = $this->stack->pop();
@@ -800,14 +674,6 @@ class TreeBuilder {
 		}
 	}
 
-	/**
-	 * Pop elements from the stack until an element in the HTML namespace with
-	 * the specified name is popped.
-	 *
-	 * @param string $name
-	 * @param int $sourceStart
-	 * @param int $sourceLength
-	 */
 	public function popAllUpToName( $name, $sourceStart, $sourceLength ) {
 		while ( true ) {
 			$popped = $this->stack->pop();
@@ -822,14 +688,6 @@ class TreeBuilder {
 		}
 	}
 
-	/**
-	 * Pop elements from the stack until an element with one of the specified
-	 * names is popped.
-	 *
-	 * @param array $names An array with the allowed names in the keys
-	 * @param int $sourceStart
-	 * @param int $sourceLength
-	 */
 	public function popAllUpToNames( $names, $sourceStart, $sourceLength ) {
 		while ( true ) {
 			$popped = $this->stack->pop();
@@ -850,7 +708,7 @@ class TreeBuilder {
 	 * not popped, and a set of names is used instead of a single name.
 	 *
 	 * @param array $names
-	 * @param int $pos
+	 * @param integer $pos
 	 */
 	public function clearStackBack( $names, $pos ) {
 		$stack = $this->stack;
@@ -862,13 +720,6 @@ class TreeBuilder {
 		}
 	}
 
-	/**
-	 * Take the steps required when the spec says to "stop parsing". This
-	 * occurs when an end-of-file token is received, and is equivalent to
-	 * the endDocument() methods elsewhere.
-	 *
-	 * @param int $pos
-	 */
 	public function stopParsing( $pos ) {
 		$stack = $this->stack;
 		while ( $stack->current ) {
@@ -883,7 +734,6 @@ class TreeBuilder {
 		$this->headElement = null;
 		$this->formElement = null;
 		$this->tokenizer->setEnableCdataCallback( null );
-		// @phan-suppress-next-line PhanTypeMismatchProperty clearing ref
 		$this->tokenizer = null;
 	}
 }

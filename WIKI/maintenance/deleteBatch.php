@@ -28,8 +28,6 @@
  * @ingroup Maintenance
  */
 
-use MediaWiki\MediaWikiServices;
-
 require_once __DIR__ . '/Maintenance.php';
 
 /**
@@ -67,31 +65,33 @@ class DeleteBatch extends Maintenance {
 			$user = User::newFromName( $username );
 		}
 		if ( !$user ) {
-			$this->fatalError( "Invalid username" );
+			$this->error( "Invalid username", true );
 		}
 		$wgUser = $user;
 
-		if ( $this->hasArg( 0 ) ) {
-			$file = fopen( $this->getArg( 0 ), 'r' );
+		if ( $this->hasArg() ) {
+			$file = fopen( $this->getArg(), 'r' );
 		} else {
 			$file = $this->getStdin();
 		}
 
 		# Setup
 		if ( !$file ) {
-			$this->fatalError( "Unable to read file, exiting" );
+			$this->error( "Unable to read file, exiting", true );
 		}
 
-		$lbFactory = MediaWikiServices::getInstance()->getDBLoadBalancerFactory();
+		$dbw = $this->getDB( DB_MASTER );
 
 		# Handle each entry
+		// @codingStandardsIgnoreStart Ignore Generic.CodeAnalysis.ForLoopWithTestFunctionCall.NotAllowed
 		for ( $linenum = 1; !feof( $file ); $linenum++ ) {
+			// @codingStandardsIgnoreEnd
 			$line = trim( fgets( $file ) );
 			if ( $line == '' ) {
 				continue;
 			}
 			$title = Title::newFromText( $line );
-			if ( $title === null ) {
+			if ( is_null( $title ) ) {
 				$this->output( "Invalid title '$line' on line $linenum\n" );
 				continue;
 			}
@@ -102,27 +102,15 @@ class DeleteBatch extends Maintenance {
 
 			$this->output( $title->getPrefixedText() );
 			if ( $title->getNamespace() == NS_FILE ) {
-				$img = MediaWikiServices::getInstance()->getRepoGroup()->findFile(
-					$title, [ 'ignoreRedirect' => true ]
-				);
-				if ( $img && $img->isLocal() && !$img->deleteFile( $reason, $user ) ) {
+				$img = wfFindFile( $title, [ 'ignoreRedirect' => true ] );
+				if ( $img && $img->isLocal() && !$img->delete( $reason ) ) {
 					$this->output( " FAILED to delete associated file... " );
 				}
 			}
 			$page = WikiPage::factory( $title );
 			$error = '';
-			$status = $page->doDeleteArticleReal(
-				$reason,
-				$user,
-				false,
-				null,
-				$error,
-				null,
-				[],
-				'delete',
-				true
-			);
-			if ( $status->isOK() ) {
+			$success = $page->doDeleteArticle( $reason, false, 0, true, $error, $user );
+			if ( $success ) {
 				$this->output( " Deleted!\n" );
 			} else {
 				$this->output( " FAILED to delete article\n" );
@@ -131,10 +119,10 @@ class DeleteBatch extends Maintenance {
 			if ( $interval ) {
 				sleep( $interval );
 			}
-			$lbFactory->waitForReplication();
+			wfWaitForSlaves();
 		}
 	}
 }
 
-$maintClass = DeleteBatch::class;
+$maintClass = "DeleteBatch";
 require_once RUN_MAINTENANCE_IF_MAIN;

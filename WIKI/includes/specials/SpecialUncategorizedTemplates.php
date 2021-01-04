@@ -28,7 +28,7 @@
  *
  * @ingroup SpecialPage
  */
-class SpecialUncategorizedTemplates extends SpecialUncategorizedPages {
+class UncategorizedTemplatesPage extends UncategorizedPagesPage {
 	public function __construct( $name = 'Uncategorizedtemplates' ) {
 		parent::__construct( $name );
 		$this->requestedNamespace = NS_TEMPLATE;

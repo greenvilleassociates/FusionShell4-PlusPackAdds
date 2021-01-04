@@ -1,15 +1,13 @@
 {
 	"@metadata": {
 		"authors": [
-			"Beyronvan",
 			"Bonevarluri",
-			"Lorestani",
 			"Mogoeilor"
 		]
 	},
 	"citethispage": "جاگه",
-	"citethispage-link": "جاگٱ اؽ بٱلگٱ",
-	"tooltip-citethispage": "دونسمنیا چاْ تۉر د یاٛ بٱلگٱ جاگیر مۊئٱن",
+	"citethispage-link": "جاگه ای بلگه",
+	"tooltip-citethispage": "دونسمنیا چه جور دای بلگه جاگر بوئه",
 	"citethispage-change-submit": "جاگه",
 	"citethispage-change-target": "بلگه"
 }

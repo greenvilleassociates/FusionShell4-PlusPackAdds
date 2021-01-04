@@ -59,20 +59,6 @@ class WikiCategoryPage extends WikiPage {
 		$pageId = $this->getTitle()->getArticleID();
 		$pageProps = PageProps::getInstance()->getProperties( $this->getTitle(), 'hiddencat' );
 
-		return isset( $pageProps[$pageId] );
-	}
-
-	/**
-	 * Checks if a category is expected to be an unused category.
-	 *
-	 * @since 1.33
-	 *
-	 * @return bool
-	 */
-	public function isExpectedUnusedCategory() {
-		$pageId = $this->getTitle()->getArticleID();
-		$pageProps = PageProps::getInstance()->getProperties( $this->getTitle(), 'expectunusedcategory' );
-
-		return isset( $pageProps[$pageId] );
+		return isset( $pageProps[$pageId] ) ? true : false;
 	}
 }

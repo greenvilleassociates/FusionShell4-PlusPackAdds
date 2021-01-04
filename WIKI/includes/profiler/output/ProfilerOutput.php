@@ -16,13 +16,13 @@
  * http://www.gnu.org/copyleft/gpl.html
  *
  * @file
+ * @ingroup Profiler
  */
 
 /**
- * Base class for profiling output.
+ * Base class for profiling output
  *
- * @ingroup Profiler
- * @since 1.25
+ * Since 1.25
  */
 abstract class ProfilerOutput {
 	/** @var Profiler */
@@ -48,19 +48,7 @@ abstract class ProfilerOutput {
 	}
 
 	/**
-	 * May the log() try to write to standard output?
-	 * @return bool
-	 * @since 1.33
-	 */
-	public function logsToOutput() {
-		return false;
-	}
-
-	/**
-	 * Log MediaWiki-style profiling data.
-	 *
-	 * For classes that enable logsToOutput(), this must not
-	 * be called unless Profiler::setAllowOutput is enabled.
+	 * Log MediaWiki-style profiling data
 	 *
 	 * @param array $stats Result of Profiler::getFunctionStats()
 	 */

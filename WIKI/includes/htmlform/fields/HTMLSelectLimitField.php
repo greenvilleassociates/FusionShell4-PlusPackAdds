@@ -2,8 +2,6 @@
 
 /**
  * A limit dropdown, which accepts any valid number
- *
- * @stable to extend
  */
 class HTMLSelectLimitField extends HTMLSelectField {
 	/**

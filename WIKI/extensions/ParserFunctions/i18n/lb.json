@@ -1,7 +1,6 @@
 {
 	"@metadata": {
 		"authors": [
-			"Les Meloures",
 			"Robby",
 			"Soued031"
 		]
@@ -14,8 +13,8 @@
 	"pfunc_expr_stack_exhausted": "Expressiouns-Feeler: Stack iwwergelaf",
 	"pfunc_expr_unexpected_number": "Expressiouns-Feeler: Onerwarten Zuel",
 	"pfunc_expr_unrecognised_word": "Expressiouns-Feeler: Onerkantent Wuert \"$1\"",
-	"pfunc_expr_unexpected_operator": "Expressiounsfeeler: Onerwarten Operateur: $1",
-	"pfunc_expr_missing_operand": "Expressiounsfeeler: Et feelt en Operand fir $1",
+	"pfunc_expr_unexpected_operator": "Expression-Feeler: Onerwarten Operateur: $1",
+	"pfunc_expr_missing_operand": "Expression-Feeler: Et feelt en Operand fir $1",
 	"pfunc_expr_unexpected_closing_bracket": "Expressiouns-Feeler: Onerwarte Klammer déi zougemaach gëtt",
 	"pfunc_expr_unrecognised_punctuation": "Expressiouns-Feeler: D'Sazzeechen \"$1\" gouf net erkannt",
 	"pfunc_expr_unclosed_bracket": "Expressiouns-Feeler: Eckeg Klammer net zougemaach",

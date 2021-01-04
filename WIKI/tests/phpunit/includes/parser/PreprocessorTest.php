@@ -1,9 +1,16 @@
 <?php
 
-use MediaWiki\MediaWikiServices;
-
 /**
  * @covers Preprocessor
+ *
+ * @covers Preprocessor_DOM
+ * @covers PPDStack
+ * @covers PPDStackElement
+ * @covers PPDPart
+ * @covers PPFrame_DOM
+ * @covers PPTemplateFrame_DOM
+ * @covers PPCustomFrame_DOM
+ * @covers PPNode_DOM
  *
  * @covers Preprocessor_Hash
  * @covers PPDStack_Hash
@@ -17,7 +24,7 @@ use MediaWiki\MediaWikiServices;
  * @covers PPNode_Hash_Array
  * @covers PPNode_Hash_Attr
  */
-class PreprocessorTest extends MediaWikiIntegrationTestCase {
+class PreprocessorTest extends MediaWikiTestCase {
 	protected $mTitle = 'Page title';
 	protected $mPPNodeCount = 0;
 	/**
@@ -30,13 +37,14 @@ class PreprocessorTest extends MediaWikiIntegrationTestCase {
 	protected $mPreprocessors;
 
 	protected static $classNames = [
-		Preprocessor_Hash::class
+		'Preprocessor_DOM',
+		'Preprocessor_Hash'
 	];
 
-	protected function setUp() : void {
+	protected function setUp() {
+		global $wgContLang;
 		parent::setUp();
-		$this->mOptions = ParserOptions::newFromUserAndLang( new User,
-			MediaWikiServices::getInstance()->getContentLanguage() );
+		$this->mOptions = ParserOptions::newFromUserAndLang( new User, $wgContLang );
 
 		$this->mPreprocessors = [];
 		foreach ( self::$classNames as $className ) {
@@ -44,7 +52,7 @@ class PreprocessorTest extends MediaWikiIntegrationTestCase {
 		}
 	}
 
-	public function getStripList() {
+	function getStripList() {
 		return [ 'gallery', 'display map' /* Used by Maps, see r80025 CR */, '/foo' ];
 	}
 
@@ -60,7 +68,7 @@ class PreprocessorTest extends MediaWikiIntegrationTestCase {
 	}
 
 	public static function provideCases() {
-		// phpcs:disable Generic.Files.LineLength
+		// @codingStandardsIgnoreStart Ignore Generic.Files.LineLength.TooLong
 		return self::addClassArg( [
 			[ "Foo", "<root>Foo</root>" ],
 			[ "<!-- Foo -->", "<root><comment>&lt;!-- Foo --&gt;</comment></root>" ],
@@ -148,7 +156,7 @@ class PreprocessorTest extends MediaWikiIntegrationTestCase {
 			[ "{{Foo|} Bar=}}", "<root><template><title>Foo</title><part><name>} Bar</name>=<value></value></part></template></root>" ],
 			/* [ file_get_contents( __DIR__ . '/QuoteQuran.txt' ], file_get_contents( __DIR__ . '/QuoteQuranExpanded.txt' ) ], */
 		] );
-		// phpcs:enable
+		// @codingStandardsIgnoreEnd
 	}
 
 	/**
@@ -200,7 +208,7 @@ class PreprocessorTest extends MediaWikiIntegrationTestCase {
 	 * These are more complex test cases taken out of wiki articles.
 	 */
 	public static function provideFiles() {
-		// phpcs:disable Generic.Files.LineLength
+		// @codingStandardsIgnoreStart Ignore Generic.Files.LineLength.TooLong
 		return self::addClassArg( [
 			[ "QuoteQuran" ], # https://en.wikipedia.org/w/index.php?title=Template:QuoteQuran/sandbox&oldid=237348988 GFDL + CC BY-SA by Striver
 			[ "Factorial" ], # https://en.wikipedia.org/w/index.php?title=Template:Factorial&oldid=98548758 GFDL + CC BY-SA by Polonium
@@ -208,7 +216,7 @@ class PreprocessorTest extends MediaWikiIntegrationTestCase {
 			[ "Fundraising" ], # https://tl.wiktionary.org/w/index.php?title=MediaWiki:Sitenotice&oldid=5716 GFDL + CC BY-SA, copied there by Sky Harbor.
 			[ "NestedTemplates" ], # T29936
 		] );
-		// phpcs:enable
+		// @codingStandardsIgnoreEnd
 	}
 
 	/**
@@ -234,7 +242,7 @@ class PreprocessorTest extends MediaWikiIntegrationTestCase {
 	 * Tests from T30642 · https://phabricator.wikimedia.org/T30642
 	 */
 	public static function provideHeadings() {
-		// phpcs:disable Generic.Files.LineLength
+		// @codingStandardsIgnoreStart Ignore Generic.Files.LineLength.TooLong
 		return self::addClassArg( [
 			/* These should become headings: */
 			[ "== h ==<!--c1-->", "<root><h level=\"2\" i=\"1\">== h ==<comment>&lt;!--c1--&gt;</comment></h></root>" ],
@@ -273,7 +281,7 @@ class PreprocessorTest extends MediaWikiIntegrationTestCase {
 			[ "== h ==<!--c1--> x <!--c2--><!--c3-->  ", "<root>== h ==<comment>&lt;!--c1--&gt;</comment> x <comment>&lt;!--c2--&gt;</comment><comment>&lt;!--c3--&gt;</comment>  </root>" ],
 			[ "== h ==<!--c1--><!--c2--><!--c3--> x ", "<root>== h ==<comment>&lt;!--c1--&gt;</comment><comment>&lt;!--c2--&gt;</comment><comment>&lt;!--c3--&gt;</comment> x </root>" ],
 		] );
-		// phpcs:enable
+		// @codingStandardsIgnoreEnd
 	}
 
 	/**

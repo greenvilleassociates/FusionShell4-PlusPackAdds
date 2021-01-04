@@ -20,9 +20,8 @@
  * @file
  */
 
-use MediaWiki\Logger\LoggerFactory;
-use MediaWiki\MediaWikiServices;
 use Psr\Log\LoggerInterface;
+use MediaWiki\Logger\LoggerFactory;
 
 /**
  * Send information about this MediaWiki instance to MediaWiki.org.
@@ -36,7 +35,7 @@ class Pingback {
 	 *   payload. The schema lives on MetaWiki, at
 	 *   <https://meta.wikimedia.org/wiki/Schema:MediaWikiPingback>.
 	 */
-	private const SCHEMA_REV = 15781718;
+	const SCHEMA_REV = 15781718;
 
 	/** @var LoggerInterface */
 	protected $logger;
@@ -51,13 +50,13 @@ class Pingback {
 	protected $id;
 
 	/**
-	 * @param Config|null $config
-	 * @param LoggerInterface|null $logger
+	 * @param Config $config
+	 * @param LoggerInterface $logger
 	 */
 	public function __construct( Config $config = null, LoggerInterface $logger = null ) {
 		$this->config = $config ?: RequestContext::getMain()->getConfig();
 		$this->logger = $logger ?: LoggerFactory::getInstance( __CLASS__ );
-		$this->key = 'Pingback-' . MW_VERSION;
+		$this->key = 'Pingback-' . $this->config->get( 'Version' );
 	}
 
 	/**
@@ -69,42 +68,24 @@ class Pingback {
 	}
 
 	/**
-	 * Has a pingback been sent in the last month for this MediaWiki version?
+	 * Has a pingback already been sent for this MediaWiki version?
 	 * @return bool
 	 */
 	private function checkIfSent() {
 		$dbr = wfGetDB( DB_REPLICA );
-		$timestamp = $dbr->selectField(
-			'updatelog',
-			'ul_value',
-			[ 'ul_key' => $this->key ],
-			__METHOD__
-		);
-		if ( $timestamp === false ) {
-			return false;
-		}
-		// send heartbeat ping if last ping was over a month ago
-		if ( time() - (int)$timestamp > 60 * 60 * 24 * 30 ) {
-			return false;
-		}
-		return true;
+		$sent = $dbr->selectField(
+			'updatelog', '1', [ 'ul_key' => $this->key ], __METHOD__ );
+		return $sent !== false;
 	}
 
 	/**
 	 * Record the fact that we have sent a pingback for this MediaWiki version,
 	 * to ensure we don't submit data multiple times.
-	 * @return bool
 	 */
 	private function markSent() {
 		$dbw = wfGetDB( DB_MASTER );
-		$timestamp = time();
-		return $dbw->upsert(
-			'updatelog',
-			[ 'ul_key' => $this->key, 'ul_value' => $timestamp ],
-			'ul_key',
-			[ 'ul_value' => $timestamp ],
-			__METHOD__
-		);
+		return $dbw->insert(
+			'updatelog', [ 'ul_key' => $this->key ], __METHOD__, 'IGNORE' );
 	}
 
 	/**
@@ -144,7 +125,7 @@ class Pingback {
 	public function getSystemInfo() {
 		$event = [
 			'database'   => $this->config->get( 'DBtype' ),
-			'MediaWiki'  => MW_VERSION,
+			'MediaWiki'  => $this->config->get( 'Version' ),
 			'PHP'        => PHP_VERSION,
 			'OS'         => PHP_OS . ' ' . php_uname( 'r' ),
 			'arch'       => PHP_INT_SIZE === 8 ? 64 : 32,
@@ -188,7 +169,7 @@ class Pingback {
 	private function getOrCreatePingbackId() {
 		if ( !$this->id ) {
 			$id = wfGetDB( DB_REPLICA )->selectField(
-				'updatelog', 'ul_value', [ 'ul_key' => 'PingBack' ], __METHOD__ );
+				'updatelog', 'ul_value', [ 'ul_key' => 'PingBack' ] );
 
 			if ( $id == false ) {
 				$id = MWCryptRand::generateHex( 32 );
@@ -197,12 +178,12 @@ class Pingback {
 					'updatelog',
 					[ 'ul_key' => 'PingBack', 'ul_value' => $id ],
 					__METHOD__,
-					[ 'IGNORE' ]
+					'IGNORE'
 				);
 
 				if ( !$dbw->affectedRows() ) {
 					$id = $dbw->selectField(
-						'updatelog', 'ul_value', [ 'ul_key' => 'PingBack' ], __METHOD__ );
+						'updatelog', 'ul_value', [ 'ul_key' => 'PingBack' ] );
 				}
 			}
 
@@ -231,7 +212,7 @@ class Pingback {
 		$json = FormatJson::encode( $data );
 		$queryString = rawurlencode( str_replace( ' ', '\u0020', $json ) ) . ';';
 		$url = 'https://www.mediawiki.org/beacon/event?' . $queryString;
-		return MediaWikiServices::getInstance()->getHttpRequestFactory()->post( $url, [], __METHOD__ ) !== null;
+		return Http::post( $url ) !== false;
 	}
 
 	/**

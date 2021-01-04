@@ -7,13 +7,10 @@
  *
  * Minimum size limits are represented using a positive integer, while maximum
  * size limits are represented using a negative integer.
- *
- * @stable to extend
- *
  */
 class HTMLSizeFilterField extends HTMLIntField {
 	public function getSize() {
-		return $this->mParams['size'] ?? 9;
+		return isset( $this->mParams['size'] ) ? $this->mParams['size'] : 9;
 	}
 
 	public function getInputHTML( $value ) {
@@ -30,7 +27,7 @@ class HTMLSizeFilterField extends HTMLIntField {
 			$value >= 0,
 			$attribs
 		);
-		$html .= "\u{00A0}" . Xml::radioLabel(
+		$html .= '&#160;' . Xml::radioLabel(
 			$this->msg( 'maximum-size' )->text(),
 			$this->mName . '-mode',
 			'max',
@@ -38,36 +35,15 @@ class HTMLSizeFilterField extends HTMLIntField {
 			$value < 0,
 			$attribs
 		);
-		$html .= "\u{00A0}" . parent::getInputHTML( $value ? abs( $value ) : '' );
-		$html .= "\u{00A0}" . $this->msg( 'pagesize' )->parse();
+		$html .= '&#160;' . parent::getInputHTML( $value ? abs( $value ) : '' );
+		$html .= '&#160;' . $this->msg( 'pagesize' )->parse();
 
 		return $html;
 	}
 
-	/**
-	 * @inheritDoc
-	 * @stable to override
-	 */
-	protected function getInputWidget( $params ) {
-		$this->mParent->getOutput()->addModuleStyles( 'mediawiki.widgets.SizeFilterWidget.styles' );
-
-		// negative numbers represent "max", positive numbers represent "min"
-		$value = $params['value'];
-
-		$params['value'] = $value ? abs( $value ) : '';
-
-		return new MediaWiki\Widget\SizeFilterWidget( [
-			'selectMin' => $value >= 0,
-			'textinput' => $params,
-			'radioselectinput' => [
-				'name' => $this->mName . '-mode',
-				'disabled' => !empty( $this->mParams['disabled'] ),
-			],
-		] );
-	}
-
-	protected function getOOUIModules() {
-		return [ 'mediawiki.widgets.SizeFilterWidget' ];
+	// No OOUI yet
+	public function getInputOOUI( $value ) {
+		return false;
 	}
 
 	/**

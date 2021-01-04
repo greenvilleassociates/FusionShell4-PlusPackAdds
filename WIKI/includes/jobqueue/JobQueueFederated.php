@@ -73,11 +73,15 @@ class JobQueueFederated extends JobQueue {
 	 */
 	protected function __construct( array $params ) {
 		parent::__construct( $params );
-		$section = $params['sectionsByWiki'][$this->domain] ?? 'default';
+		$section = isset( $params['sectionsByWiki'][$this->wiki] )
+			? $params['sectionsByWiki'][$this->wiki]
+			: 'default';
 		if ( !isset( $params['partitionsBySection'][$section] ) ) {
 			throw new MWException( "No configuration for section '$section'." );
 		}
-		$this->maxPartitionsTry = $params['maxPartitionsTry'] ?? 2;
+		$this->maxPartitionsTry = isset( $params['maxPartitionsTry'] )
+			? $params['maxPartitionsTry']
+			: 2;
 		// Get the full partition map
 		$partitionMap = $params['partitionsBySection'][$section];
 		arsort( $partitionMap, SORT_NUMERIC );
@@ -88,6 +92,8 @@ class JobQueueFederated extends JobQueue {
 		) {
 			unset( $baseConfig[$o] ); // partition queue doesn't care about this
 		}
+		// The class handles all aggregator calls already
+		unset( $baseConfig['aggregator'] );
 		// Get the partition queue objects
 		foreach ( $partitionMap as $partition => $w ) {
 			if ( !isset( $params['configByPartition'][$partition] ) ) {
@@ -178,9 +184,11 @@ class JobQueueFederated extends JobQueue {
 		// Try to insert the jobs and update $partitionsTry on any failures.
 		// Retry to insert any remaning jobs again, ignoring the bad partitions.
 		$jobsLeft = $jobs;
+		// @codingStandardsIgnoreStart Generic.CodeAnalysis.ForLoopWithTestFunctionCall.NotAllowed
 		for ( $i = $this->maxPartitionsTry; $i > 0 && count( $jobsLeft ); --$i ) {
+			// @codingStandardsIgnoreEnd
 			try {
-				$partitionRing->getLiveLocationWeights();
+				$partitionRing->getLiveRing();
 			} catch ( UnexpectedValueException $e ) {
 				break; // all servers down; nothing to insert to
 			}
@@ -197,7 +205,7 @@ class JobQueueFederated extends JobQueue {
 	 * @param HashRing &$partitionRing
 	 * @param int $flags
 	 * @throws JobQueueError
-	 * @return IJobSpecification[] List of Job object that could not be inserted
+	 * @return array List of Job object that could not be inserted
 	 */
 	protected function tryJobInsertions( array $jobs, HashRing &$partitionRing, $flags ) {
 		$jobsLeft = [];
@@ -285,7 +293,7 @@ class JobQueueFederated extends JobQueue {
 				$job = false;
 			}
 			if ( $job ) {
-				$job->setMetadata( 'QueuePartition', $partition );
+				$job->metadata['QueuePartition'] = $partition;
 
 				return $job;
 			} else {
@@ -297,16 +305,15 @@ class JobQueueFederated extends JobQueue {
 		return false;
 	}
 
-	protected function doAck( RunnableJob $job ) {
-		$partition = $job->getMetadata( 'QueuePartition' );
-		if ( $partition === null ) {
+	protected function doAck( Job $job ) {
+		if ( !isset( $job->metadata['QueuePartition'] ) ) {
 			throw new MWException( "The given job has no defined partition name." );
 		}
 
-		$this->partitionQueues[$partition]->ack( $job );
+		$this->partitionQueues[$job->metadata['QueuePartition']]->ack( $job );
 	}
 
-	protected function doIsRootJobOldDuplicate( IJobSpecification $job ) {
+	protected function doIsRootJobOldDuplicate( Job $job ) {
 		$signature = $job->getRootJobParams()['rootJobSignature'];
 		$partition = $this->partitionRing->getLiveLocation( $signature );
 		try {
@@ -417,7 +424,7 @@ class JobQueueFederated extends JobQueue {
 	}
 
 	public function getCoalesceLocationInternal() {
-		return "JobQueueFederated:wiki:{$this->domain}" .
+		return "JobQueueFederated:wiki:{$this->wiki}" .
 			sha1( serialize( array_keys( $this->partitionQueues ) ) );
 	}
 

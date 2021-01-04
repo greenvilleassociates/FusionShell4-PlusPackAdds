@@ -32,19 +32,16 @@
  */
 
 class SpecialTrackingCategories extends SpecialPage {
-	public function __construct() {
+	function __construct() {
 		parent::__construct( 'TrackingCategories' );
 	}
 
-	public function execute( $par ) {
+	function execute( $par ) {
 		$this->setHeaders();
 		$this->outputHeader();
-		$this->addHelpLink( 'Help:Categories' );
 		$this->getOutput()->allowClickjacking();
-		$this->getOutput()->addModuleStyles( 'jquery.tablesorter.styles' );
-		$this->getOutput()->addModules( 'jquery.tablesorter' );
 		$this->getOutput()->addHTML(
-			Html::openElement( 'table', [ 'class' => 'mw-datatable sortable',
+			Html::openElement( 'table', [ 'class' => 'mw-datatable',
 				'id' => 'mw-trackingcategories-table' ] ) . "\n" .
 			"<thead><tr>
 			<th>" .
@@ -71,7 +68,7 @@ class SpecialTrackingCategories extends SpecialPage {
 		}
 		$batch->execute();
 
-		$this->getHookRunner()->onSpecialTrackingCategories__preprocess( $this, $categoryList );
+		Hooks::run( 'SpecialTrackingCategories::preprocess', [ $this, $categoryList ] );
 
 		$linkRenderer = $this->getLinkRenderer();
 
@@ -90,14 +87,14 @@ class SpecialTrackingCategories extends SpecialPage {
 					$catTitle->getText()
 				);
 
-				$this->getHookRunner()->onSpecialTrackingCategories__generateCatLink(
-					$this, $catTitle, $html );
+				Hooks::run( 'SpecialTrackingCategories::generateCatLink',
+					[ $this, $catTitle, &$html ] );
 
 				$allMsgs[] = $html;
 			}
 
 			# Extra message, when no category was found
-			if ( $allMsgs === [] ) {
+			if ( !count( $allMsgs ) ) {
 				$allMsgs[] = $this->msg( 'trackingcategories-disabled' )->parse();
 			}
 

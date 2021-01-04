@@ -1,7 +1,6 @@
 <?php
 
 namespace RemexHtml\TreeBuilder;
-
 use RemexHtml\HTMLData;
 use RemexHtml\Tokenizer\Attributes;
 use RemexHtml\Tokenizer\PlainAttributes;
@@ -14,14 +13,14 @@ class InBody extends InsertionMode {
 	/**
 	 * The tag names h1-h6, which are referred to at a couple of points.
 	 */
-	private static $headingNames = [ 'h1' => true, 'h2' => true, 'h3' => true, 'h4' => true,
+	static private $headingNames = [ 'h1' => true, 'h2' => true, 'h3' => true, 'h4' => true,
 		'h5' => true, 'h6' => true ];
 
 	/**
 	 * The tag names which can be closed by </body> or </html> without causing
 	 * an error.
 	 */
-	private static $implicitClose = [
+	static private $implicitClose = [
 		'dd' => true,
 		'dt' => true,
 		'li' => true,

@@ -20,8 +20,6 @@
  * @file
  */
 
-use MediaWiki\MediaWikiServices;
-
 /**
  * A query action to get image information from temporarily stashed files.
  *
@@ -55,8 +53,7 @@ class ApiQueryStashImageInfo extends ApiQueryImageInfo {
 		}
 
 		try {
-			$stash = MediaWikiServices::getInstance()->getRepoGroup()
-				->getLocalRepo()->getUploadStash( $this->getUser() );
+			$stash = RepoGroup::singleton()->getLocalRepo()->getUploadStash( $this->getUser() );
 
 			foreach ( $params['filekey'] as $filekey ) {
 				$file = $stash->getFile( $filekey );
@@ -73,36 +70,10 @@ class ApiQueryStashImageInfo extends ApiQueryImageInfo {
 		}
 	}
 
-	private static $propertyFilter = [
+	private $propertyFilter = [
 		'user', 'userid', 'comment', 'parsedcomment',
 		'mediatype', 'archivename', 'uploadwarning',
 	];
-
-	/**
-	 * Returns all possible parameters to siiprop
-	 *
-	 * @param array|null $filter List of properties to filter out
-	 * @return array
-	 */
-	public static function getPropertyNames( $filter = null ) {
-		if ( $filter === null ) {
-			$filter = self::$propertyFilter;
-		}
-		return parent::getPropertyNames( $filter );
-	}
-
-	/**
-	 * Returns messages for all possible parameters to siiprop
-	 *
-	 * @param array|null $filter List of properties to filter out
-	 * @return array
-	 */
-	public static function getPropertyMessages( $filter = null ) {
-		if ( $filter === null ) {
-			$filter = self::$propertyFilter;
-		}
-		return parent::getPropertyMessages( $filter );
-	}
 
 	public function getAllowedParams() {
 		return [
@@ -116,9 +87,9 @@ class ApiQueryStashImageInfo extends ApiQueryImageInfo {
 			'prop' => [
 				ApiBase::PARAM_ISMULTI => true,
 				ApiBase::PARAM_DFLT => 'timestamp|url',
-				ApiBase::PARAM_TYPE => self::getPropertyNames(),
+				ApiBase::PARAM_TYPE => self::getPropertyNames( $this->propertyFilter ),
 				ApiBase::PARAM_HELP_MSG => 'apihelp-query+imageinfo-param-prop',
-				ApiBase::PARAM_HELP_MSG_PER_VALUE => self::getPropertyMessages()
+				ApiBase::PARAM_HELP_MSG_PER_VALUE => self::getPropertyMessages( $this->propertyFilter )
 			],
 			'urlwidth' => [
 				ApiBase::PARAM_TYPE => 'integer',

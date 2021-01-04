@@ -1,4 +1,4 @@
-( function () {
+( function ( mw ) {
 	QUnit.module( 'mediawiki.api.messages', QUnit.newMwEnvironment( {
 		setup: function () {
 			this.server = this.sandbox.useFakeServer();
@@ -26,4 +26,4 @@
 			);
 		} );
 	} );
-}() );
+}( mediaWiki ) );

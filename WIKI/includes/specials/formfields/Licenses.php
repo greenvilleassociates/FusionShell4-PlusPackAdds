@@ -21,9 +21,8 @@
  * @ingroup SpecialPage
  * @author Ævar Arnfjörð Bjarmason <avarab@gmail.com>
  * @copyright Copyright © 2005, Ævar Arnfjörð Bjarmason
+ * @license http://www.gnu.org/copyleft/gpl.html GNU General Public License 2.0 or later
  */
-
-use MediaWiki\MediaWikiServices;
 
 /**
  * A License class for use on Special:Upload
@@ -33,14 +32,11 @@ class Licenses extends HTMLFormField {
 	protected $msg;
 
 	/** @var array */
-	protected $lines = [];
+	protected $licenses = [];
 
 	/** @var string */
 	protected $html;
-
-	/** @var string|null */
-	protected $selected;
-	/** #@- */
+	/**#@-*/
 
 	/**
 	 * @param array $params
@@ -48,49 +44,18 @@ class Licenses extends HTMLFormField {
 	public function __construct( $params ) {
 		parent::__construct( $params );
 
-		$this->msg = static::getMessageFromParams( $params );
+		$this->msg = empty( $params['licenses'] )
+			? wfMessage( 'licenses' )->inContentLanguage()->plain()
+			: $params['licenses'];
 		$this->selected = null;
 
-		$this->makeLines();
+		$this->makeLicenses();
 	}
 
 	/**
-	 * @param array $params
-	 * @return string
+	 * @private
 	 */
-	protected static function getMessageFromParams( $params ) {
-		if ( !empty( $params['licenses'] ) ) {
-			return $params['licenses'];
-		}
-
-		// If the licenses page is in $wgForceUIMsgAsContentMsg (which is the case
-		// on Commons), translations will be in the database, in subpages of this
-		// message (e.g. MediaWiki:Licenses/<lang>)
-		// If there is no such translation, the result will be '-' (the empty default
-		// in the i18n files), so we'll need to force it to look up the actual licenses
-		// in the default site language (= get the translation from MediaWiki:Licenses)
-		// Also see https://phabricator.wikimedia.org/T3495
-		$defaultMsg = wfMessage( 'licenses' )->inContentLanguage();
-		if ( !$defaultMsg->exists() || $defaultMsg->plain() === '-' ) {
-			$defaultMsg = wfMessage( 'licenses' )->inLanguage(
-				MediaWikiServices::getInstance()->getContentLanguage() );
-		}
-
-		return $defaultMsg->plain();
-	}
-
-	/**
-	 * @param string $line
-	 * @return License
-	 */
-	protected function buildLine( $line ) {
-		return new License( $line );
-	}
-
-	/**
-	 * @internal
-	 */
-	protected function makeLines() {
+	protected function makeLicenses() {
 		$levels = [];
 		$lines = explode( "\n", $this->msg );
 
@@ -101,8 +66,8 @@ class Licenses extends HTMLFormField {
 				list( $level, $line ) = $this->trimStars( $line );
 
 				if ( strpos( $line, '|' ) !== false ) {
-					$obj = $this->buildLine( $line );
-					$this->stackItem( $this->lines, $levels, $obj );
+					$obj = new License( $line );
+					$this->stackItem( $this->licenses, $levels, $obj );
 				} else {
 					if ( $level < count( $levels ) ) {
 						$levels = array_slice( $levels, 0, $level );
@@ -144,14 +109,11 @@ class Licenses extends HTMLFormField {
 	/**
 	 * @param array $tagset
 	 * @param int $depth
-	 * @return string
 	 */
 	protected function makeHtml( $tagset, $depth = 0 ) {
-		$html = '';
-
 		foreach ( $tagset as $key => $val ) {
 			if ( is_array( $val ) ) {
-				$html .= $this->outputOption(
+				$this->html .= $this->outputOption(
 					$key, '',
 					[
 						'disabled' => 'disabled',
@@ -159,17 +121,15 @@ class Licenses extends HTMLFormField {
 					],
 					$depth
 				);
-				$html .= $this->makeHtml( $val, $depth + 1 );
+				$this->makeHtml( $val, $depth + 1 );
 			} else {
-				$html .= $this->outputOption(
+				$this->html .= $this->outputOption(
 					$val->text, $val->template,
 					[ 'title' => '{{' . $val->template . '}}' ],
 					$depth
 				);
 			}
 		}
-
-		return $html;
 	}
 
 	/**
@@ -187,57 +147,43 @@ class Licenses extends HTMLFormField {
 			$attribs['selected'] = 'selected';
 		}
 
-		$val = str_repeat( /* &nbsp */ "\u{00A0}", $depth * 2 ) . $text;
+		$val = str_repeat( /* &nbsp */ "\xc2\xa0", $depth * 2 ) . $text;
 		return str_repeat( "\t", $depth ) . Xml::element( 'option', $attribs, $val ) . "\n";
 	}
 
-	/** #@- */
+	/**#@-*/
 
 	/**
-	 * Accessor for $this->lines
+	 *  Accessor for $this->licenses
 	 *
 	 * @return array
-	 */
-	public function getLines() {
-		return $this->lines;
-	}
-
-	/**
-	 * Accessor for $this->lines
-	 *
-	 * @return array
-	 *
-	 * @deprecated since 1.31 Use getLines() instead
 	 */
 	public function getLicenses() {
-		return $this->getLines();
+		return $this->licenses;
 	}
 
 	/**
-	 * @inheritDoc
+	 * Accessor for $this->html
+	 *
+	 * @param bool $value
+	 *
+	 * @return string
 	 */
 	public function getInputHTML( $value ) {
 		$this->selected = $value;
 
-		// add a default "no license selected" option
-		$default = $this->buildLine( '|nolicense' );
-		array_unshift( $this->lines, $default );
-
-		$html = $this->makeHtml( $this->getLines() );
+		$this->html = $this->outputOption( wfMessage( 'nolicense' )->text(), '',
+			(bool)$this->selected ? null : [ 'selected' => 'selected' ] );
+		$this->makeHtml( $this->getLicenses() );
 
 		$attribs = [
 			'name' => $this->mName,
 			'id' => $this->mID
 		];
 		if ( !empty( $this->mParams['disabled'] ) ) {
-			$attribs['disabled'] = 'disabled';
+			$attibs['disabled'] = 'disabled';
 		}
 
-		$html = Html::rawElement( 'select', $attribs, $html );
-
-		// remove default "no license selected" from lines again
-		array_shift( $this->lines );
-
-		return $html;
+		return Html::rawElement( 'select', $attribs, $this->html );
 	}
 }

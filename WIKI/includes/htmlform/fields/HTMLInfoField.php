@@ -2,12 +2,9 @@
 
 /**
  * An information field (text blob), not a proper input.
- * @stable to extend
  */
 class HTMLInfoField extends HTMLFormField {
 	/**
-	 * @stable to call
-	 *
 	 * @param array $info
 	 *   In adition to the usual HTMLFormField parameters, this can take the following fields:
 	 *   - default: the value (text) of the field. Unlike other form field types, HTMLInfoField can
@@ -22,30 +19,18 @@ class HTMLInfoField extends HTMLFormField {
 		parent::__construct( $info );
 	}
 
-	/**
-	 * @inheritDoc
-	 * @stable to override
-	 */
 	public function getDefault() {
 		$default = parent::getDefault();
 		if ( $default instanceof Closure ) {
-			$default = $default( $this->mParams );
+			$default = call_user_func( $default, $this->mParams );
 		}
 		return $default;
 	}
 
-	/**
-	 * @inheritDoc
-	 * @stable to override
-	 */
 	public function getInputHTML( $value ) {
 		return !empty( $this->mParams['raw'] ) ? $value : htmlspecialchars( $value );
 	}
 
-	/**
-	 * @inheritDoc
-	 * @stable to override
-	 */
 	public function getInputOOUI( $value ) {
 		if ( !empty( $this->mParams['raw'] ) ) {
 			$value = new OOUI\HtmlSnippet( $value );
@@ -56,10 +41,6 @@ class HTMLInfoField extends HTMLFormField {
 		] );
 	}
 
-	/**
-	 * @inheritDoc
-	 * @stable to override
-	 */
 	public function getTableRow( $value ) {
 		if ( !empty( $this->mParams['rawrow'] ) ) {
 			return $value;
@@ -69,7 +50,6 @@ class HTMLInfoField extends HTMLFormField {
 	}
 
 	/**
-	 * @stable to override
 	 * @param string $value
 	 * @return string
 	 * @since 1.20
@@ -83,7 +63,6 @@ class HTMLInfoField extends HTMLFormField {
 	}
 
 	/**
-	 * @stable to override
 	 * @param string $value
 	 * @return string
 	 * @since 1.20
@@ -96,29 +75,6 @@ class HTMLInfoField extends HTMLFormField {
 		return parent::getRaw( $value );
 	}
 
-	/**
-	 * @stable to override
-	 * @param mixed $value If not FieldLayout or subclass has been deprecated.
-	 * @return OOUI\FieldLayout
-	 * @since 1.32
-	 */
-	public function getOOUI( $value ) {
-		if ( !empty( $this->mParams['rawrow'] ) ) {
-			if ( !( $value instanceof OOUI\FieldLayout ) ) {
-				wfDeprecatedMsg( __METHOD__ . ": 'default' parameter as a string when using " .
-					"'rawrow' was deprecated in MediaWiki 1.32 (must be a FieldLayout or subclass)",
-					'1.32' );
-			}
-			return $value;
-		}
-
-		return parent::getOOUI( $value );
-	}
-
-	/**
-	 * @inheritDoc
-	 * @stable to override
-	 */
 	protected function needsLabel() {
 		return false;
 	}

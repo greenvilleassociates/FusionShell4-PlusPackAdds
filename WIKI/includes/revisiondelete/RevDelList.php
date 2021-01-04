@@ -20,21 +20,15 @@
  */
 
 use MediaWiki\MediaWikiServices;
-use MediaWiki\Revision\RevisionRecord;
 
 /**
  * Abstract base class for a list of deletable items. The list class
  * needs to be able to make a query from a set of identifiers to pull
  * relevant rows, to return RevDelItem subclasses wrapping them, and
  * to wrap bulk update operations.
- *
- * @property RevDelItem $current
- * @method RevDelItem next()
- * @method RevDelItem reset()
- * @method RevDelItem current()
  */
 abstract class RevDelList extends RevisionListBase {
-	public function __construct( IContextSource $context, Title $title, array $ids ) {
+	function __construct( IContextSource $context, Title $title, array $ids ) {
 		parent::__construct( $context, $title );
 		$this->ids = $ids;
 	}
@@ -116,7 +110,7 @@ abstract class RevDelList extends RevisionListBase {
 
 		$bitPars = $params['value'];
 		$comment = $params['comment'];
-		$perItemStatus = $params['perItemStatus'] ?? false;
+		$perItemStatus = isset( $params['perItemStatus'] ) ? $params['perItemStatus'] : false;
 
 		// CAS-style checks are done on the _deleted fields so the select
 		// does not need to use FOR UPDATE nor be in the atomic section
@@ -140,7 +134,7 @@ abstract class RevDelList extends RevisionListBase {
 		$missing = array_flip( $this->ids );
 		$this->clearFileOps();
 		$idsForLog = [];
-		$authorActors = [];
+		$authorIds = $authorIPs = [];
 
 		if ( $perItemStatus ) {
 			$status->itemStatuses = [];
@@ -199,7 +193,7 @@ abstract class RevDelList extends RevisionListBase {
 				$status->failCount++;
 				continue;
 			// Cannot just "hide from Sysops" without hiding any fields
-			} elseif ( $newBits == RevisionRecord::DELETED_RESTRICTED ) {
+			} elseif ( $newBits == Revision::DELETED_RESTRICTED ) {
 				$itemStatus->warning(
 					'revdelete-only-restricted', $item->formatDate(), $item->formatTime() );
 				$status->failCount++;
@@ -211,7 +205,7 @@ abstract class RevDelList extends RevisionListBase {
 
 			if ( $ok ) {
 				$idsForLog[] = $item->getId();
-				// If any item field was suppressed or unsuppressed
+				// If any item field was suppressed or unsupressed
 				if ( ( $oldBits | $newBits ) & $this->getSuppressBit() ) {
 					$logType = 'suppress';
 				}
@@ -222,7 +216,11 @@ abstract class RevDelList extends RevisionListBase {
 				$virtualOldBits |= $removedBits;
 
 				$status->successCount++;
-				$authorActors[] = $item->getAuthorActor();
+				if ( $item->getAuthorId() > 0 ) {
+					$authorIds[] = $item->getAuthorId();
+				} elseif ( IP::isIPAddress( $item->getAuthorName() ) ) {
+					$authorIPs[] = $item->getAuthorName();
+				}
 
 				// Save the old and new bits in $visibilityChangeMap for
 				// later use.
@@ -265,8 +263,6 @@ abstract class RevDelList extends RevisionListBase {
 		}
 
 		// Log it
-		$authorFields = [];
-		$authorFields['authorActors'] = $authorActors;
 		$this->updateLog(
 			$logType,
 			[
@@ -276,8 +272,10 @@ abstract class RevDelList extends RevisionListBase {
 				'oldBits' => $virtualOldBits,
 				'comment' => $comment,
 				'ids' => $idsForLog,
-				'tags' => $params['tags'] ?? [],
-			] + $authorFields
+				'authorIds' => $authorIds,
+				'authorIPs' => $authorIPs,
+				'tags' => isset( $params['tags'] ) ? $params['tags'] : [],
+			]
 		);
 
 		// Clear caches after commit
@@ -318,7 +316,7 @@ abstract class RevDelList extends RevisionListBase {
 	 * Reload the list data from the master DB. This can be done after setVisibility()
 	 * to allow $item->getHTML() to show the new data.
 	 */
-	public function reloadFromMaster() {
+	function reloadFromMaster() {
 		$dbw = wfGetDB( DB_MASTER );
 		$this->res = $this->doQuery( $dbw );
 	}
@@ -332,7 +330,8 @@ abstract class RevDelList extends RevisionListBase {
 	 *     title:           The target title
 	 *     ids:             The ID list
 	 *     comment:         The log comment
-	 *     authorActors:    The array of the actor IDs of the offenders
+	 *     authorsIds:      The array of the user IDs of the offenders
+	 *     authorsIPs:      The array of the IP/anon user offenders
 	 *     tags:            The array of change tags to apply to the log entry
 	 * @throws MWException
 	 */
@@ -351,17 +350,13 @@ abstract class RevDelList extends RevisionListBase {
 		$logEntry->setParameters( $logParams );
 		$logEntry->setPerformer( $this->getUser() );
 		// Allow for easy searching of deletion log items for revision/log items
-		$relations = [
+		$logEntry->setRelations( [
 			$field => $params['ids'],
-		];
-		if ( isset( $params['authorActors'] ) ) {
-			$relations += [
-				'target_author_actor' => $params['authorActors'],
-			];
-		}
-		$logEntry->setRelations( $relations );
+			'target_author_id' => $params['authorIds'],
+			'target_author_ip' => $params['authorIPs'],
+		] );
 		// Apply change tags to the log entry
-		$logEntry->addTags( $params['tags'] );
+		$logEntry->setTags( $params['tags'] );
 		$logId = $logEntry->insert();
 		$logEntry->publish( $logId );
 	}

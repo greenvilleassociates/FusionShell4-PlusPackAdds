@@ -30,10 +30,8 @@ define( 'MW_PARSER_TEST', true );
 
 require __DIR__ . '/../../maintenance/Maintenance.php';
 
-use MediaWiki\MediaWikiServices;
-
 class ParserTestsMaintenance extends Maintenance {
-	public function __construct() {
+	function __construct() {
 		parent::__construct();
 		$this->addDescription( 'Run parser tests' );
 
@@ -61,8 +59,7 @@ class ParserTestsMaintenance extends Maintenance {
 			'conjunction with --keep-uploads. Causes a real (non-mock) file backend to ' .
 			'be used.', false, true );
 		$this->addOption( 'run-disabled', 'run disabled tests' );
-		$this->addOption( 'disable-save-parse', 'Don\'t run the parser when ' .
-			'inserting articles into the database' );
+		$this->addOption( 'run-parsoid', 'run parsoid tests (normally disabled)' );
 		$this->addOption( 'dwdiff', 'Use dwdiff to display diff output' );
 		$this->addOption( 'mark-ws', 'Mark whitespace in diffs by replacing it with symbols' );
 		$this->addOption( 'norm', 'Apply a comma-separated list of normalization functions to ' .
@@ -148,8 +145,7 @@ class ParserTestsMaintenance extends Maintenance {
 
 		$recorderLB = false;
 		if ( $record || $compare ) {
-			$lbFactory = MediaWikiServices::getInstance()->getDBLoadBalancerFactory();
-			$recorderLB = $lbFactory->newMainLB();
+			$recorderLB = wfGetLBFactory()->newMainLB();
 			// This connection will have the wiki's table prefix, not parsertest_
 			$recorderDB = $recorderLB->getConnection( DB_MASTER );
 
@@ -180,7 +176,7 @@ class ParserTestsMaintenance extends Maintenance {
 			'regex' => $regex,
 			'keep-uploads' => $this->hasOption( 'keep-uploads' ),
 			'run-disabled' => $this->hasOption( 'run-disabled' ),
-			'disable-save-parse' => $this->hasOption( 'disable-save-parse' ),
+			'run-parsoid' => $this->hasOption( 'run-parsoid' ),
 			'use-tidy-config' => $this->hasOption( 'use-tidy-config' ),
 			'file-backend' => $this->getOption( 'file-backend' ),
 			'upload-dir' => $this->getOption( 'upload-dir' ),
@@ -196,5 +192,5 @@ class ParserTestsMaintenance extends Maintenance {
 	}
 }
 
-$maintClass = ParserTestsMaintenance::class;
+$maintClass = 'ParserTestsMaintenance';
 require_once RUN_MAINTENANCE_IF_MAIN;

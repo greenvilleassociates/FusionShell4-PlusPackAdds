@@ -65,7 +65,7 @@ class KafkaHandler extends AbstractProcessingHandler {
 	/**
 	 * @var array defaults for constructor options
 	 */
-	private const DEFAULT_OPTIONS = [
+	private static $defaultOptions = [
 		'alias' => [], // map from monolog channel to kafka topic
 		'swallowExceptions' => false, // swallow exceptions sending records
 		'logExceptions' => null, // A PSR3 logger to inform about errors
@@ -83,7 +83,7 @@ class KafkaHandler extends AbstractProcessingHandler {
 	) {
 		parent::__construct( $level, $bubble );
 		$this->produce = $produce;
-		$this->options = array_merge( self::DEFAULT_OPTIONS, $options );
+		$this->options = array_merge( self::$defaultOptions, $options );
 	}
 
 	/**
@@ -139,7 +139,6 @@ class KafkaHandler extends AbstractProcessingHandler {
 
 	/**
 	 * @inheritDoc
-	 * @phan-param array[] $batch
 	 */
 	public function handleBatch( array $batch ) {
 		$channels = [];
@@ -255,7 +254,11 @@ class KafkaHandler extends AbstractProcessingHandler {
 	 * @param array $records List of records to append
 	 */
 	protected function addMessages( $channel, array $records ) {
-		$topic = $this->options['alias'][$channel] ?? "monolog_$channel";
+		if ( isset( $this->options['alias'][$channel] ) ) {
+			$topic = $this->options['alias'][$channel];
+		} else {
+			$topic = "monolog_$channel";
+		}
 		$partition = $this->getRandomPartition( $topic );
 		if ( $partition !== null ) {
 			$this->produce->setMessages( $topic, $partition, $records );

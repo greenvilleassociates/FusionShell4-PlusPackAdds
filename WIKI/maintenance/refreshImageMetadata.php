@@ -29,7 +29,6 @@
 
 require_once __DIR__ . '/Maintenance.php';
 
-use MediaWiki\MediaWikiServices;
 use Wikimedia\Rdbms\IDatabase;
 use Wikimedia\Rdbms\IMaintainableDatabase;
 
@@ -45,7 +44,7 @@ class RefreshImageMetadata extends Maintenance {
 	 */
 	protected $dbw;
 
-	public function __construct() {
+	function __construct() {
 		parent::__construct();
 
 		$this->addDescription( 'Script to update image metadata records' );
@@ -107,12 +106,11 @@ class RefreshImageMetadata extends Maintenance {
 		$error = 0;
 
 		$dbw = $this->getDB( DB_MASTER );
-		$batchSize = $this->getBatchSize();
-		if ( $batchSize <= 0 ) {
-			$this->fatalError( "Batch size is too low...", 12 );
+		if ( $this->mBatchSize <= 0 ) {
+			$this->error( "Batch size is too low...", 12 );
 		}
 
-		$repo = MediaWikiServices::getInstance()->getRepoGroup()->getLocalRepo();
+		$repo = RepoGroup::singleton()->getLocalRepo();
 		$conds = $this->getConditions( $dbw );
 
 		// For the WHERE img_name > 'foo' condition that comes after doing a batch
@@ -122,21 +120,17 @@ class RefreshImageMetadata extends Maintenance {
 		}
 
 		$options = [
-			'LIMIT' => $batchSize,
+			'LIMIT' => $this->mBatchSize,
 			'ORDER BY' => 'img_name ASC',
 		];
 
-		$fileQuery = LocalFile::getQueryInfo();
-		$lbFactory = MediaWikiServices::getInstance()->getDBLoadBalancerFactory();
-
 		do {
 			$res = $dbw->select(
-				$fileQuery['tables'],
-				$fileQuery['fields'],
+				'image',
+				'*',
 				array_merge( $conds, $conds2 ),
 				__METHOD__,
-				$options,
-				$fileQuery['joins']
+				$options
 			);
 
 			if ( $res->numRows() > 0 ) {
@@ -196,8 +190,8 @@ class RefreshImageMetadata extends Maintenance {
 				}
 			}
 			$conds2 = [ 'img_name > ' . $dbw->addQuotes( $row->img_name ) ];
-			$lbFactory->waitForReplication();
-		} while ( $res->numRows() === $batchSize );
+			wfWaitForSlaves();
+		} while ( $res->numRows() === $this->mBatchSize );
 
 		$total = $upgraded + $leftAlone;
 		if ( $force ) {
@@ -215,7 +209,7 @@ class RefreshImageMetadata extends Maintenance {
 	 * @param IDatabase $dbw
 	 * @return array
 	 */
-	private function getConditions( $dbw ) {
+	function getConditions( $dbw ) {
 		$conds = [];
 
 		$end = $this->getOption( 'end', false );
@@ -247,7 +241,7 @@ class RefreshImageMetadata extends Maintenance {
 	 * @param bool $force
 	 * @param bool $brokenOnly
 	 */
-	private function setupParameters( $force, $brokenOnly ) {
+	function setupParameters( $force, $brokenOnly ) {
 		global $wgUpdateCompatibleMetadata;
 
 		if ( $brokenOnly ) {
@@ -257,10 +251,10 @@ class RefreshImageMetadata extends Maintenance {
 		}
 
 		if ( $brokenOnly && $force ) {
-			$this->fatalError( 'Cannot use --broken-only and --force together. ', 2 );
+			$this->error( 'Cannot use --broken-only and --force together. ', 2 );
 		}
 	}
 }
 
-$maintClass = RefreshImageMetadata::class;
+$maintClass = 'RefreshImageMetadata';
 require_once RUN_MAINTENANCE_IF_MAIN;

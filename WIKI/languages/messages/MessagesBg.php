@@ -217,5 +217,4 @@ $bookstoreList = [
 
 $linkTrail = '/^([a-zабвгдежзийклмнопрстуфхцчшщъыьэюя]+)(.*)$/sDu';
 
-$separatorTransformTable = [ ',' => "\u{00A0}", '.' => ',' ];
-$minimumGroupingDigits = 2;
+$separatorTransformTable = [ ',' => "\xc2\xa0", '.' => ',' ];

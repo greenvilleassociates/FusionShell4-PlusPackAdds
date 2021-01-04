@@ -35,30 +35,28 @@ class Undelete extends Maintenance {
 	public function execute() {
 		global $wgUser;
 
-		$username = $this->getOption( 'user', false );
+		$user = $this->getOption( 'user', false );
 		$reason = $this->getOption( 'reason', '' );
-		$pageName = $this->getArg( 0 );
+		$pageName = $this->getArg();
 
 		$title = Title::newFromText( $pageName );
 		if ( !$title ) {
-			$this->fatalError( "Invalid title" );
+			$this->error( "Invalid title", true );
 		}
-		if ( $username === false ) {
-			$user = User::newSystemUser( 'Command line script', [ 'steal' => true ] );
+		if ( $user === false ) {
+			$wgUser = User::newSystemUser( 'Command line script', [ 'steal' => true ] );
 		} else {
-			$user = User::newFromName( $username );
+			$wgUser = User::newFromName( $user );
 		}
-		if ( !$user ) {
-			$this->fatalError( "Invalid username" );
+		if ( !$wgUser ) {
+			$this->error( "Invalid username", true );
 		}
-		$wgUser = $user;
-
 		$archive = new PageArchive( $title, RequestContext::getMain()->getConfig() );
 		$this->output( "Undeleting " . $title->getPrefixedDBkey() . '...' );
-		$archive->undeleteAsUser( [], $user, $reason );
+		$archive->undelete( [], $reason );
 		$this->output( "done\n" );
 	}
 }
 
-$maintClass = Undelete::class;
+$maintClass = "Undelete";
 require_once RUN_MAINTENANCE_IF_MAIN;

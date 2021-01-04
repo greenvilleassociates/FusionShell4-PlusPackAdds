@@ -1,11 +1,6 @@
 <?php
 
-use MediaWiki\User\UserEditTracker;
-
-/**
- * @covers Autopromote
- */
-class AutopromoteTest extends MediaWikiIntegrationTestCase {
+class AutopromoteTest extends MediaWikiTestCase {
 	/**
 	 * T157718: Verify Autopromote does not perform edit count lookup if requirement is 0 or invalid
 	 *
@@ -21,23 +16,18 @@ class AutopromoteTest extends MediaWikiIntegrationTestCase {
 			]
 		] );
 
-		$user = $this->getTestUser()->getUser();
-		$userEditTrackerMock = $this->createNoOpMock(
-			UserEditTracker::class,
-			[ 'getUserEditCount' ]
-		);
+		/** @var PHPUnit_Framework_MockObject_MockObject|User $userMock */
+		$userMock = $this->getMock( 'User', [ 'getEditCount' ] );
 		if ( $requirement > 0 ) {
-			$userEditTrackerMock->expects( $this->once() )
-				->method( 'getUserEditCount' )
-				->with( $user )
+			$userMock->expects( $this->once() )
+				->method( 'getEditCount' )
 				->willReturn( $editCount );
 		} else {
-			$userEditTrackerMock->expects( $this->never() )
-				->method( 'getUserEditCount' );
+			$userMock->expects( $this->never() )
+				->method( 'getEditCount' );
 		}
-		$this->setService( 'UserEditTracker', $userEditTrackerMock );
 
-		$result = Autopromote::getAutopromoteGroups( $user );
+		$result = Autopromote::getAutopromoteGroups( $userMock );
 		if ( $editCount >= $requirement ) {
 			$this->assertContains(
 				'autoconfirmed',

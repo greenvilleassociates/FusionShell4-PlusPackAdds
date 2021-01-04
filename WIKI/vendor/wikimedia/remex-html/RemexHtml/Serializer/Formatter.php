@@ -1,6 +1,7 @@
 <?php
 
 namespace RemexHtml\Serializer;
+use RemexHtml\Tokenizer\Attributes;
 
 /**
  * The interface for classes that help Serializer to convert nodes to strings.
@@ -19,18 +20,18 @@ interface Formatter {
 	 * @param string|null $fragmentName
 	 * @return string
 	 */
-	public function startDocument( $fragmentNamespace, $fragmentName );
+	function startDocument( $fragmentNamespace, $fragmentName );
 
 	/**
 	 * Encode the given character substring
 	 *
 	 * @param SerializerNode $parent The parent of the text node (at creation time)
 	 * @param string $text
-	 * @param int $start The offset within $text
-	 * @param int $length The number of bytes within $text
+	 * @param integer $start The offset within $text
+	 * @param integer $length The number of bytes within $text
 	 * @return string
 	 */
-	public function characters( SerializerNode $parent, $text, $start, $length );
+	function characters( SerializerNode $parent, $text, $start, $length );
 
 	/**
 	 * Encode the given element
@@ -42,7 +43,7 @@ interface Formatter {
 	 *   tags.
 	 * @return string
 	 */
-	public function element( SerializerNode $parent, SerializerNode $node, $contents );
+	function element( SerializerNode $parent, SerializerNode $node, $contents );
 
 	/**
 	 * Encode a comment
@@ -50,7 +51,7 @@ interface Formatter {
 	 * @param string $text The inner text of the comment
 	 * @return string
 	 */
-	public function comment( SerializerNode $parent, $text );
+	function comment( SerializerNode $parent, $text );
 
 	/**
 	 * Encode a doctype. This event occurs when the source document has a doctype,
@@ -61,5 +62,5 @@ interface Formatter {
 	 * @param string $system The SYSTEM identifier
 	 * @return string
 	 */
-	public function doctype( $name, $public, $system );
+	function doctype( $name, $public, $system );
 }

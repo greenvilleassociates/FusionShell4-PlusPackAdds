@@ -42,8 +42,6 @@ use Wikimedia\Rdbms\IDatabase;
  *     $a = $cf->run();
  *     print implode( ',' , $a );
  * @endcode
- *
- * @deprecated since 1.31
  */
 class CategoryFinder {
 	/** @var int[] The original article IDs passed to the seed function */
@@ -58,9 +56,6 @@ class CategoryFinder {
 	/** @var array Array of article/category IDs */
 	protected $next = [];
 
-	/** @var int Max layer depth */
-	protected $maxdepth = -1;
-
 	/** @var array Array of DBKEY category names */
 	protected $targets = [];
 
@@ -73,26 +68,17 @@ class CategoryFinder {
 	/** @var IDatabase Read-DB replica DB */
 	protected $dbr;
 
-	public function __construct() {
-		wfDeprecated( __METHOD__, '1.31' );
-	}
-
 	/**
 	 * Initializes the instance. Do this prior to calling run().
 	 * @param array $articleIds Array of article IDs
 	 * @param array $categories FIXME
 	 * @param string $mode FIXME, default 'AND'.
-	 * @param int $maxdepth Maximum layer depth. Where:
-	 * 	-1 means deep recursion (default);
-	 * 	 0 means no-parents;
-	 * 	 1 means one parent layer, etc.
 	 * @todo FIXME: $categories/$mode
 	 */
-	public function seed( $articleIds, $categories, $mode = 'AND', $maxdepth = -1 ) {
+	public function seed( $articleIds, $categories, $mode = 'AND' ) {
 		$this->articles = $articleIds;
 		$this->next = $articleIds;
 		$this->mode = $mode;
-		$this->maxdepth = $maxdepth;
 
 		# Set the list of target categories; convert them to DBKEY form first
 		$this->targets = [];
@@ -112,17 +98,8 @@ class CategoryFinder {
 	 */
 	public function run() {
 		$this->dbr = wfGetDB( DB_REPLICA );
-
-		$i = 0;
-		$dig = true;
-		while ( count( $this->next ) && $dig ) {
+		while ( count( $this->next ) > 0 ) {
 			$this->scanNextLayer();
-
-			// Is there any depth limit?
-			if ( $this->maxdepth !== -1 ) {
-				$dig = $i < $this->maxdepth;
-				$i++;
-			}
 		}
 
 		# Now check if this applies to the individual articles
@@ -149,7 +126,7 @@ class CategoryFinder {
 	/**
 	 * This functions recurses through the parent representation, trying to match the conditions
 	 * @param int $id The article/category to check
-	 * @param array &$conds The array of categories to match
+	 * @param array $conds The array of categories to match
 	 * @param array $path Used to check for recursion loops
 	 * @return bool Does this match the conditions?
 	 */
@@ -213,18 +190,18 @@ class CategoryFinder {
 		$layer = [];
 		$res = $this->dbr->select(
 			/* FROM   */ 'categorylinks',
-			/* SELECT */ [ 'cl_to', 'cl_from' ],
+			/* SELECT */ '*',
 			/* WHERE  */ [ 'cl_from' => $this->next ],
 			__METHOD__ . '-1'
 		);
-		foreach ( $res as $row ) {
-			$k = $row->cl_to;
+		foreach ( $res as $o ) {
+			$k = $o->cl_to;
 
 			# Update parent tree
-			if ( !isset( $this->parents[$row->cl_from] ) ) {
-				$this->parents[$row->cl_from] = [];
+			if ( !isset( $this->parents[$o->cl_from] ) ) {
+				$this->parents[$o->cl_from] = [];
 			}
-			$this->parents[$row->cl_from][$k] = $row;
+			$this->parents[$o->cl_from][$k] = $o;
 
 			# Ignore those we already have
 			if ( in_array( $k, $this->deadend ) ) {
@@ -249,9 +226,9 @@ class CategoryFinder {
 				/* WHERE  */ [ 'page_namespace' => NS_CATEGORY, 'page_title' => $layer ],
 				__METHOD__ . '-2'
 			);
-			foreach ( $res as $row ) {
-				$id = $row->page_id;
-				$name = $row->page_title;
+			foreach ( $res as $o ) {
+				$id = $o->page_id;
+				$name = $o->page_title;
 				$this->name2id[$name] = $id;
 				$this->next[] = $id;
 				unset( $layer[$name] );

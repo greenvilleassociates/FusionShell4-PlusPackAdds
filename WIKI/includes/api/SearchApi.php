@@ -1,5 +1,4 @@
 <?php
-
 use MediaWiki\MediaWikiServices;
 
 /**
@@ -77,7 +76,7 @@ trait SearchApi {
 			if ( $alternatives[0] === null ) {
 				$alternatives[0] = self::$BACKEND_NULL_PARAM;
 			}
-			$params['backend'] = [
+			$this->allowedParams['backend'] = [
 				ApiBase::PARAM_DFLT => $searchConfig->getSearchType(),
 				ApiBase::PARAM_TYPE => $alternatives,
 			];
@@ -99,7 +98,6 @@ trait SearchApi {
 	 *
 	 * @return array array containing available additional api param definitions.
 	 *  Empty if profiles are not supported by the searchEngine implementation.
-	 * @suppress PhanTypeMismatchDimFetch
 	 */
 	private function buildProfileApiParam() {
 		$configs = $this->getSearchProfileParams();
@@ -120,7 +118,6 @@ trait SearchApi {
 				if ( isset( $profile['desc-message'] ) ) {
 					$helpMessages[$profile['name']] = $profile['desc-message'];
 				}
-
 				if ( !empty( $profile['default'] ) ) {
 					$defaultProfile = $profile['name'];
 				}
@@ -143,7 +140,8 @@ trait SearchApi {
 	 * will be set:
 	 *  - backend: which search backend to use
 	 *  - limit: mandatory
-	 *  - offset: optional
+	 *  - offset: optional, if set limit will be incremented by
+	 *    one ( to support the continue parameter )
 	 *  - namespace: mandatory
 	 *  - search engine profiles defined by SearchApi::getSearchProfileParams()
 	 * @param string[]|null $params API request params (must be sanitized by
@@ -152,14 +150,22 @@ trait SearchApi {
 	 */
 	public function buildSearchEngine( array $params = null ) {
 		if ( $params != null ) {
-			$type = $params['backend'] ?? null;
+			$type = isset( $params['backend'] ) ? $params['backend'] : null;
 			if ( $type === self::$BACKEND_NULL_PARAM ) {
 				$type = null;
 			}
 			$searchEngine = MediaWikiServices::getInstance()->getSearchEngineFactory()->create( $type );
 			$limit = $params['limit'];
 			$searchEngine->setNamespaces( $params['namespace'] );
-			$offset = $params['offset'] ?? null;
+			$offset = null;
+			if ( isset( $params['offset'] ) ) {
+				// If the API supports offset then it probably
+				// wants to fetch limit+1 so it can check if
+				// more results are available to properly set
+				// the continue param
+				$offset = $params['offset'];
+				$limit += 1;
+			}
 			$searchEngine->setLimitOffset( $limit, $offset );
 
 			// Initialize requested search profiles.

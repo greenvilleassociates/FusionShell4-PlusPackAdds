@@ -22,27 +22,25 @@
  * @author Rob Church <robchur@gmail.com>
  */
 
-use MediaWiki\MediaWikiServices;
-
 /**
  * Special page lists pages without language links
  *
  * @ingroup SpecialPage
  */
-class SpecialWithoutInterwiki extends PageQueryPage {
+class WithoutInterwikiPage extends PageQueryPage {
 	private $prefix = '';
 
-	public function __construct( $name = 'Withoutinterwiki' ) {
+	function __construct( $name = 'Withoutinterwiki' ) {
 		parent::__construct( $name );
 	}
 
-	public function execute( $par ) {
+	function execute( $par ) {
 		$this->prefix = Title::capitalize(
 			$this->getRequest()->getVal( 'prefix', $par ), NS_MAIN );
 		parent::execute( $par );
 	}
 
-	protected function getPageHeader() {
+	function getPageHeader() {
 		# Do not show useless input form if special page is cached
 		if ( $this->isCached() ) {
 			return '';
@@ -67,33 +65,33 @@ class SpecialWithoutInterwiki extends PageQueryPage {
 			->displayForm( false );
 	}
 
-	protected function sortDescending() {
+	function sortDescending() {
 		return false;
 	}
 
-	protected function getOrderFields() {
+	function getOrderFields() {
 		return [ 'page_namespace', 'page_title' ];
 	}
 
-	public function isExpensive() {
+	function isExpensive() {
 		return true;
 	}
 
-	public function isSyndicated() {
+	function isSyndicated() {
 		return false;
 	}
 
-	public function getQueryInfo() {
+	function getQueryInfo() {
 		$query = [
 			'tables' => [ 'page', 'langlinks' ],
 			'fields' => [
 				'namespace' => 'page_namespace',
 				'title' => 'page_title',
+				'value' => 'page_title'
 			],
 			'conds' => [
 				'll_title IS NULL',
-				'page_namespace' => MediaWikiServices::getInstance()->getNamespaceInfo()->
-					getContentNamespaces(),
+				'page_namespace' => MWNamespace::getContentNamespaces(),
 				'page_is_redirect' => 0
 			],
 			'join_conds' => [ 'langlinks' => [ 'LEFT JOIN', 'll_from = page_id' ] ]

@@ -1,10 +1,5 @@
 <?php
 
-/**
- * @group Language
- * @covers LanguageGan
- * @covers GanConverter
- */
 class LanguageGanTest extends LanguageClassesTestCase {
 	/**
 	 * @dataProvider provideAutoConvertToAllVariants

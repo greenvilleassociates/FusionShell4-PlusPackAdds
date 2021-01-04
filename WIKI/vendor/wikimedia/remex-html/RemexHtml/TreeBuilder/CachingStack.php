@@ -1,8 +1,8 @@
 <?php
 
 namespace RemexHtml\TreeBuilder;
-
 use RemexHtml\HTMLData;
+use RemexHtml\Tokenizer\Attributes;
 
 /**
  * An implementation of the "stack of open elements" which includes a cache of
@@ -10,15 +10,15 @@ use RemexHtml\HTMLData;
  * worst-case performance at the expense of somewhat slower updates.
  */
 class CachingStack extends Stack {
-	private const SCOPE_DEFAULT = 0;
-	private const SCOPE_LIST = 1;
-	private const SCOPE_BUTTON = 2;
-	private const SCOPE_TABLE = 3;
-	private const SCOPE_SELECT = 4;
+	const SCOPE_DEFAULT = 0;
+	const SCOPE_LIST = 1;
+	const SCOPE_BUTTON = 2;
+	const SCOPE_TABLE = 3;
+	const SCOPE_SELECT = 4;
 
-	private static $allScopes = [ self::SCOPE_DEFAULT, self::SCOPE_LIST, self::SCOPE_BUTTON,
+	private static $tableScopes = [ self::SCOPE_DEFAULT, self::SCOPE_LIST, self::SCOPE_BUTTON,
 		self::SCOPE_TABLE, self::SCOPE_SELECT ];
-	private static $nonTableScopes = [ self::SCOPE_DEFAULT, self::SCOPE_LIST, self::SCOPE_BUTTON,
+	private static $regularScopes = [ self::SCOPE_DEFAULT, self::SCOPE_LIST, self::SCOPE_BUTTON,
 		self::SCOPE_SELECT ];
 	private static $listScopes = [ self::SCOPE_LIST, self::SCOPE_SELECT ];
 	private static $buttonScopes = [ self::SCOPE_BUTTON, self::SCOPE_SELECT ];
@@ -50,7 +50,7 @@ class CachingStack extends Stack {
 	 * involves pulling an item out of the AFE list and checking if it is in
 	 * scope.
 	 */
-	private static $predicateMap = [
+	static private $predicateMap = [
 		'a' => self::SCOPE_DEFAULT,
 		'address' => self::SCOPE_DEFAULT,
 		'applet' => self::SCOPE_DEFAULT,
@@ -127,13 +127,13 @@ class CachingStack extends Stack {
 	 * A cache of the elements which are currently in a given scope.
 	 * The first key is the scope ID, the second key is the element name, and the
 	 * value is the first Element in a singly-linked list of Element objects,
-	 * linked by $element->nextEltInScope.
+	 * linked by $element->nextScope.
 	 *
 	 * @todo Benchmark time and memory compared to an array stack instead of an
 	 * SLL. The SLL here is maybe not quite so well justified as some other
 	 * SLLs in RemexHtml.
 	 *
-	 * @var array<int,array<string,Element>>
+	 * @var Element[int][string]
 	 */
 	private $scopes = [
 		self::SCOPE_DEFAULT => [],
@@ -146,10 +146,9 @@ class CachingStack extends Stack {
 	/**
 	 * This is the part of the scope cache which stores scope lists for objects
 	 * which are not currently in scope. The first key is the scope ID, the
-	 * second key is the stack index, the third key is the element name,
-	 * and the value is the Element object.
+	 * second key is the stack index, the third key is the element name.
 	 *
-	 * @var array<int,array<int,array<string,Element>>>
+	 * @var Element[int][int][string]
 	 */
 	private $scopeStacks = [
 		self::SCOPE_DEFAULT => [],
@@ -166,21 +165,16 @@ class CachingStack extends Stack {
 	private $templateCount;
 
 	/**
-	 * For a given namespace and element name, get the list of scopes
-	 * for which a new scope should be created and the old one needs to
-	 * be pushed onto the scope stack.
-	 *
-	 * @param string $ns
-	 * @param string $name
-	 * @return int[]
+	 * Get the list of scopes that are broken for a given namespace and
+	 * element name.
 	 */
-	private function getScopeTypesToStack( $ns, $name ) {
+	private function getBrokenScopes( $ns, $name ) {
 		if ( $ns === HTMLData::NS_HTML ) {
 			switch ( $name ) {
 			case 'html':
 			case 'table':
 			case 'template':
-				return self::$allScopes;
+				return self::$tableScopes;
 
 			case 'applet':
 			case 'caption':
@@ -188,7 +182,7 @@ class CachingStack extends Stack {
 			case 'th':
 			case 'marquee':
 			case 'object':
-				return self::$nonTableScopes;
+				return self::$regularScopes;
 
 			case 'ol':
 			case 'ul':
@@ -206,13 +200,13 @@ class CachingStack extends Stack {
 			}
 		} elseif ( $ns === HTMLData::NS_MATHML ) {
 			if ( isset( self::$mathBreakers[$name] ) ) {
-				return self::$nonTableScopes;
+				return self::$regularScopes;
 			} else {
 				return self::$selectOnly;
 			}
 		} elseif ( $ns === HTMLData::NS_SVG ) {
 			if ( isset( self::$svgBreakers[$name] ) ) {
-				return self::$nonTableScopes;
+				return self::$regularScopes;
 			} else {
 				return self::$selectOnly;
 			}
@@ -231,14 +225,14 @@ class CachingStack extends Stack {
 		// Update the scope cache
 		$ns = $elt->namespace;
 		$name = $elt->name;
-		foreach ( $this->getScopeTypesToStack( $ns, $name ) as $type ) {
-			$this->scopeStacks[$type][] = $this->scopes[$type];
-			$this->scopes[$type] = [];
+		foreach ( $this->getBrokenScopes( $ns, $name ) as $scope ) {
+			$this->scopeStacks[$scope][] = $this->scopes[$scope];
+			$this->scopes[$scope] = [];
 		}
 		if ( $ns === HTMLData::NS_HTML && isset( self::$predicateMap[$name] ) ) {
-			$type = self::$predicateMap[$name];
-			$scope =& $this->scopes[$type];
-			$elt->nextEltInScope = $scope[$name] ?? null;
+			$scopeId = self::$predicateMap[$name];
+			$scope =& $this->scopes[$scopeId];
+			$elt->nextScope = isset( $scope[$name] ) ? $scope[$name] : null;
 			$scope[$name] = $elt;
 			unset( $scope );
 		}
@@ -251,7 +245,7 @@ class CachingStack extends Stack {
 	public function pop() {
 		$n = count( $this->elements );
 		if ( !$n ) {
-			throw new TreeBuilderError( __METHOD__ . ': stack empty' );
+			throw new TreeBuilderError( __METHOD__.': stack empty' );
 		}
 		// Update the stack store, index cache and current node
 		$elt = array_pop( $this->elements );
@@ -263,10 +257,10 @@ class CachingStack extends Stack {
 		// Update the scope cache
 		if ( $ns === HTMLData::NS_HTML && isset( self::$predicateMap[$name] ) ) {
 			$scope = self::$predicateMap[$name];
-			$this->scopes[$scope][$name] = $elt->nextEltInScope;
-			$elt->nextEltInScope = null;
+			$this->scopes[$scope][$name] = $elt->nextScope;
+			$elt->nextScope = null;
 		}
-		foreach ( $this->getScopeTypesToStack( $ns, $name ) as $scope ) {
+		foreach ( $this->getBrokenScopes( $ns, $name ) as $scope ) {
 			$this->scopes[$scope] = array_pop( $this->scopeStacks[$scope] );
 		}
 		// Update the template count
@@ -282,32 +276,32 @@ class CachingStack extends Stack {
 		// simplifies the scope cache update, and eliminates the template count
 		// update
 		if ( $oldElt->name !== $elt->name || $oldElt->namespace !== $elt->namespace ) {
-			throw new TreeBuilderError( __METHOD__ . ' can only be called for elements of the same name' );
+			throw new TreeBuilderError( __METHOD__.' can only be called for elements of the same name' );
 		}
 		$ns = $elt->namespace;
 		$name = $elt->name;
 		// Find the old element in its scope list and replace it
 		if ( $ns === HTMLData::NS_HTML && isset( self::$predicateMap[$name] ) ) {
-			$type = self::$predicateMap[$name];
-			$scopeElt = $this->scopes[$type][$name];
+			$scopeId = self::$predicateMap[$name];
+			$scopeElt = $this->scopes[$scopeId][$name];
 			if ( $scopeElt === $oldElt ) {
-				$this->scopes[$type][$name] = $elt;
-				$elt->nextEltInScope = $scopeElt->nextEltInScope;
-				$scopeElt->nextEltInScope = null;
+				$this->scopes[$scopeId][$name] = $elt;
+				$elt->nextScope = $scopeElt->nextScope;
+				$scopeElt->nextScope = null;
 			} else {
-				$nextElt = $scopeElt->nextEltInScope;
+				$nextElt = $scopeElt->nextScope;
 				while ( $nextElt ) {
 					if ( $nextElt === $oldElt ) {
-						$scopeElt->nextEltInScope = $elt;
-						$elt->nextEltInScope = $nextElt->nextEltInScope;
-						$nextElt->nextEltInScope = null;
+						$scopeElt->nextScope = $elt;
+						$elt->nextScope = $nextElt->nextScope;
+						$scopeElt->nextScope = null;
 						break;
 					}
-					$scopeElt = $scopeElt->nextEltInScope;
-					$nextElt = $scopeElt->nextEltInScope;
+					$scopeElt = $scopeElt->nextScope;
+					$nextElt = $scopeElt->nextScope;
 				}
 				if ( !$nextElt ) {
-					throw new TreeBuilderError( __METHOD__ . ': cannot find old element in scope cache' );
+					throw new TreeBuilderError( __METHOD__.': cannot find old element in scope cache' );
 				}
 			}
 		}
@@ -354,7 +348,7 @@ class CachingStack extends Stack {
 				if ( $scopeMember === $elt ) {
 					return true;
 				}
-				$scopeMember = $scopeMember->nextEltInScope;
+				$scopeMember = $scopeMember->nextScope;
 			}
 		}
 		return false;
@@ -418,11 +412,9 @@ class CachingStack extends Stack {
 			$this->scopeDump( self::SCOPE_SELECT, 'In select scope' ) . "\n";
 	}
 
-	private function scopeDump( $type, $scopeName ) {
-		if ( count( $this->scopes[$type] ) ) {
-			return "$scopeName: " . implode( ', ', array_keys( $this->scopes[$type] ) ) . "\n";
-		} else {
-			return '';
+	private function scopeDump( $scopeId, $scopeName ) {
+		if ( count( $this->scopes[$scopeId] ) ) {
+			return "$scopeName: " . implode( ', ', array_keys( $this->scopes[$scopeId] ) ) . "\n";
 		}
 	}
 }

@@ -20,12 +20,10 @@
  * @ingroup Media
  * @author Ævar Arnfjörð Bjarmason <avarab@gmail.com>
  * @copyright Copyright © 2005, Ævar Arnfjörð Bjarmason, 2009 Brent Garber, 2010 Brian Wolff
- * @license GPL-2.0-or-later
+ * @license http://www.gnu.org/copyleft/gpl.html GNU General Public License
  * @see http://exif.org/Exif2-2.PDF The Exif 2.2 specification
  * @file
  */
-
-use MediaWiki\HookContainer\ProtectedHookAccessorTrait;
 use MediaWiki\MediaWikiServices;
 use Wikimedia\Timestamp\TimestampException;
 
@@ -51,8 +49,6 @@ use Wikimedia\Timestamp\TimestampException;
  *   internal methods are private
  */
 class FormatMetadata extends ContextSource {
-	use ProtectedHookAccessorTrait;
-
 	/**
 	 * Only output a single language for multi-language fields
 	 * @var bool
@@ -274,13 +270,8 @@ class FormatMetadata extends ContextSource {
 
 					// TODO: YCbCrCoefficients  #p27 (see annex E)
 					case 'ExifVersion':
-					// PHP likes to be the odd one out with casing of FlashPixVersion;
-					// https://www.exif.org/Exif2-2.PDF#page=32 and
-					// https://www.digitalgalen.net/Documents/External/XMP/XMPSpecificationPart2.pdf#page=51
-					// both use FlashpixVersion. However, since at least 2002, PHP has used FlashPixVersion at
-					// https://github.com/php/php-src/blame/master/ext/exif/exif.c#L725
-					case 'FlashPixVersion':
-						$val = (int)$val / 100;
+					case 'FlashpixVersion':
+						$val = "$val" / 100;
 						break;
 
 					case 'ColorSpace':
@@ -499,16 +490,8 @@ class FormatMetadata extends ContextSource {
 
 					case 'CustomRendered':
 						switch ( $val ) {
-							case 0: /* normal */
-							case 1: /* custom */
-								/* The following are unofficial Apple additions */
-							case 2: /* HDR (no original saved) */
-							case 3: /* HDR (original saved) */
-							case 4: /* Original (for HDR) */
-								/* Yes 5 is not present ;) */
-							case 6: /* Panorama */
-							case 7: /* Portrait HDR */
-							case 8: /* Portrait */
+							case 0:
+							case 1:
 								$val = $this->exifMsg( $tag, $val );
 								break;
 							default:
@@ -757,13 +740,8 @@ class FormatMetadata extends ContextSource {
 
 					case 'Software':
 						if ( is_array( $val ) ) {
-							if ( count( $val ) > 1 ) {
-								// if its a software, version array.
-								$val = $this->msg( 'exif-software-version-value', $val[0], $val[1] )->text();
-							} else {
-								// https://phabricator.wikimedia.org/T178130
-								$val = $this->exifMsg( $tag, '', $val[0] );
-							}
+							// if its a software, version array.
+							$val = $this->msg( 'exif-software-version-value', $val[0], $val[1] )->text();
 						} else {
 							$val = $this->exifMsg( $tag, '', $val );
 						}
@@ -804,8 +782,8 @@ class FormatMetadata extends ContextSource {
 							}
 						}
 						if ( is_numeric( $val ) ) {
-							$fNumber = 2 ** ( $val / 2 );
-							if ( is_finite( $fNumber ) ) {
+							$fNumber = pow( 2, $val / 2 );
+							if ( $fNumber !== false ) {
 								$val = $this->msg( 'exif-maxaperturevalue-value',
 									$this->formatNum( $val ),
 									$this->formatNum( $fNumber, 2 )
@@ -954,6 +932,7 @@ class FormatMetadata extends ContextSource {
 					case 'Event':
 					case 'OrginisationInImage':
 					case 'PersonInImage':
+
 						$val = htmlspecialchars( $val );
 						break;
 
@@ -986,10 +965,12 @@ class FormatMetadata extends ContextSource {
 						break;
 
 					case 'LanguageCode':
-						$lang = MediaWikiServices::getInstance()
-							->getLanguageNameUtils()
-							->getLanguageName( strtolower( $val ), $this->getLanguage()->getCode() );
-						$val = htmlspecialchars( $lang ?: $val );
+						$lang = Language::fetchLanguageName( strtolower( $val ), $this->getLanguage()->getCode() );
+						if ( $lang ) {
+							$val = htmlspecialchars( $lang );
+						} else {
+							$val = htmlspecialchars( $val );
+						}
 						break;
 
 					default:
@@ -1021,12 +1002,13 @@ class FormatMetadata extends ContextSource {
 	public static function flattenArrayContentLang( $vals, $type = 'ul',
 		$noHtml = false, $context = false
 	) {
+		global $wgContLang;
 		$obj = new FormatMetadata;
 		if ( $context ) {
 			$obj->setContext( $context );
 		}
 		$context = new DerivativeContext( $obj->getContext() );
-		$context->setLanguage( MediaWikiServices::getInstance()->getContentLanguage() );
+		$context->setLanguage( $wgContLang );
 		$obj->setContext( $context );
 
 		return $obj->flattenArrayReal( $vals, $type, $noHtml );
@@ -1058,10 +1040,12 @@ class FormatMetadata extends ContextSource {
 			unset( $vals['_type'] );
 		}
 
-		if ( count( $vals ) === 1 && $type !== 'lang' && isset( $vals[0] ) ) {
+		if ( !is_array( $vals ) ) {
+			return $vals; // do nothing if not an array;
+		} elseif ( count( $vals ) === 1 && $type !== 'lang' ) {
 			return $vals[0];
 		} elseif ( count( $vals ) === 0 ) {
-			wfDebug( __METHOD__ . " metadata array with 0 elements!" );
+			wfDebug( __METHOD__ . " metadata array with 0 elements!\n" );
 
 			return ""; // paranoia. This should never happen
 		} else {
@@ -1071,7 +1055,7 @@ class FormatMetadata extends ContextSource {
 			 */
 			switch ( $type ) {
 				case 'lang':
-					// Display default, followed by ContentLanguage,
+					// Display default, followed by ContLang,
 					// followed by the rest in no particular
 					// order.
 
@@ -1194,12 +1178,11 @@ class FormatMetadata extends ContextSource {
 		}
 
 		$lowLang = strtolower( $lang );
-		$languageNameUtils = MediaWikiServices::getInstance()->getLanguageNameUtils();
-		$langName = $languageNameUtils->getLanguageName( $lowLang );
+		$langName = Language::fetchLanguageName( $lowLang );
 		if ( $langName === '' ) {
 			// try just the base language name. (aka en-US -> en ).
-			$langPrefix = explode( '-', $lowLang, 2 )[0];
-			$langName = $languageNameUtils->getLanguageName( $langPrefix );
+			list( $langPrefix ) = explode( '-', $lowLang, 2 );
+			$langName = Language::fetchLanguageName( $langPrefix );
 			if ( $langName === '' ) {
 				// give up.
 				$langName = $lang;
@@ -1228,21 +1211,19 @@ class FormatMetadata extends ContextSource {
 	 * Convenience function for getFormattedData()
 	 *
 	 * @param string $tag The tag name to pass on
-	 * @param string|int $val The value of the tag
-	 * @param string|null $arg An argument to pass ($1)
-	 * @param string|null $arg2 A 2nd argument to pass ($2)
+	 * @param string $val The value of the tag
+	 * @param string $arg An argument to pass ($1)
+	 * @param string $arg2 A 2nd argument to pass ($2)
 	 * @return string The text content of "exif-$tag-$val" message in lower case
 	 */
 	private function exifMsg( $tag, $val, $arg = null, $arg2 = null ) {
+		global $wgContLang;
+
 		if ( $val === '' ) {
 			$val = 'value';
 		}
 
-		return $this->msg(
-			MediaWikiServices::getInstance()->getContentLanguage()->lc( "exif-$tag-$val" ),
-			$arg,
-			$arg2
-		)->text();
+		return $this->msg( $wgContLang->lc( "exif-$tag-$val" ), $arg, $arg2 )->text();
 	}
 
 	/**
@@ -1414,16 +1395,11 @@ class FormatMetadata extends ContextSource {
 	 * Format a coordinate value, convert numbers from floating point
 	 * into degree minute second representation.
 	 *
-	 * @param float|string $coord Expected to be a number or numeric string in degrees
-	 * @param string $type "latitude" or "longitude"
-	 * @return string
+	 * @param int $coord Degrees, minutes and seconds
+	 * @param string $type Latitude or longitude (for if its a NWS or E)
+	 * @return mixed A floating point number or whatever we were fed
 	 */
-	private function formatCoords( $coord, string $type ) {
-		if ( !is_numeric( $coord ) ) {
-			wfDebugLog( 'exif', __METHOD__ . ": \"$coord\" is not a number" );
-			return (string)$coord;
-		}
-
+	private function formatCoords( $coord, $type ) {
 		$ref = '';
 		if ( $coord < 0 ) {
 			$nCoord = -$coord;
@@ -1433,7 +1409,7 @@ class FormatMetadata extends ContextSource {
 				$ref = 'W';
 			}
 		} else {
-			$nCoord = (float)$coord;
+			$nCoord = $coord;
 			if ( $type === 'latitude' ) {
 				$ref = 'N';
 			} elseif ( $type === 'longitude' ) {
@@ -1442,14 +1418,13 @@ class FormatMetadata extends ContextSource {
 		}
 
 		$deg = floor( $nCoord );
-		$min = floor( ( $nCoord - $deg ) * 60 );
-		$sec = round( ( ( $nCoord - $deg ) * 60 - $min ) * 60, 2 );
+		$min = floor( ( $nCoord - $deg ) * 60.0 );
+		$sec = round( ( ( $nCoord - $deg ) - $min / 60 ) * 3600, 2 );
 
 		$deg = $this->formatNum( $deg );
 		$min = $this->formatNum( $min );
 		$sec = $this->formatNum( $sec );
 
-		// Note the default message "$1° $2′ $3″ $4" ignores the 5th parameter
 		return $this->msg( 'exif-coordinate-format', $deg, $min, $sec, $ref, $coord )->text();
 	}
 
@@ -1624,7 +1599,7 @@ class FormatMetadata extends ContextSource {
 		$cachedValue = $cache->get( $cacheKey );
 		if (
 			$cachedValue
-			&& $this->getHookRunner()->onValidateExtendedMetadataCache( $cachedValue['timestamp'], $file )
+			&& Hooks::run( 'ValidateExtendedMetadataCache', [ $cachedValue['timestamp'], $file ] )
 		) {
 			$extendedMetadata = $cachedValue['data'];
 		} else {
@@ -1708,13 +1683,13 @@ class FormatMetadata extends ContextSource {
 	protected function getExtendedMetadataFromHook( File $file, array $extendedMetadata,
 		&$maxCacheTime
 	) {
-		$this->getHookRunner()->onGetExtendedMetadata(
-			$extendedMetadata,
+		Hooks::run( 'GetExtendedMetadata', [
+			&$extendedMetadata,
 			$file,
 			$this->getContext(),
 			$this->singleLang,
-			$maxCacheTime
-		);
+			&$maxCacheTime
+		] );
 
 		$visible = array_flip( self::getVisibleFields() );
 		foreach ( $extendedMetadata as $key => $value ) {
@@ -1786,9 +1761,9 @@ class FormatMetadata extends ContextSource {
 			}
 			return $newValue;
 		} else { // _type is 'ul' or 'ol' or missing in which case it defaults to 'ul'
-			$v = reset( $value );
-			if ( key( $value ) === '_type' ) {
-				$v = next( $value );
+			list( $k, $v ) = each( $value );
+			if ( $k === '_type' ) {
+				$v = current( $value );
 			}
 			return $v;
 		}
@@ -1879,9 +1854,9 @@ class FormatMetadata extends ContextSource {
 		// drop all characters which are not valid in an XML tag name
 		// a bunch of non-ASCII letters would be valid but probably won't
 		// be used so we take the easy way
-		$key = preg_replace( '/[^a-zA-z0-9_:.\-]/', '', $key );
+		$key = preg_replace( '/[^a-zA-z0-9_:.-]/', '', $key );
 		// drop characters which are invalid at the first position
-		$key = preg_replace( '/^[\d\-.]+/', '', $key );
+		$key = preg_replace( '/^[\d-.]+/', '', $key );
 
 		if ( $key == '' ) {
 			$key = '_';
@@ -1902,9 +1877,8 @@ class FormatMetadata extends ContextSource {
 	 * @since 1.23
 	 */
 	protected function getPriorityLanguages() {
-		$priorityLanguages = MediaWikiServices::getInstance()
-			->getLanguageFallback()
-			->getAllIncludingSiteLanguage( $this->getLanguage()->getCode() );
+		$priorityLanguages =
+			Language::getFallbacksIncludingSiteLanguage( $this->getLanguage()->getCode() );
 		$priorityLanguages = array_merge(
 			(array)$this->getLanguage()->getCode(),
 			$priorityLanguages[0],

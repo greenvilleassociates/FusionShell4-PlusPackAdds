@@ -46,8 +46,7 @@ class FixTimestamps extends Maintenance {
 		$offset = $this->getArg( 0 ) * 3600;
 		$start = $this->getArg( 1 );
 		$end = $this->getArg( 2 );
-		// maximum normal clock offset
-		$grace = 60;
+		$grace = 60; // maximum normal clock offset
 
 		# Find bounding revision IDs
 		$dbw = $this->getDB( DB_MASTER );
@@ -56,8 +55,8 @@ class FixTimestamps extends Maintenance {
 			"WHERE rev_timestamp BETWEEN '{$start}' AND '{$end}'", __METHOD__ );
 		$row = $dbw->fetchObject( $res );
 
-		if ( $row->minrev === null ) {
-			$this->fatalError( "No revisions in search period." );
+		if ( is_null( $row->minrev ) ) {
+			$this->error( "No revisions in search period.", true );
 		}
 
 		$minRev = $row->minrev;
@@ -100,14 +99,14 @@ class FixTimestamps extends Maintenance {
 
 		$numBadRevs = count( $badRevs );
 		if ( $numBadRevs > $numGoodRevs ) {
-			$this->fatalError(
+			$this->error(
 				"The majority of revisions in the search interval are marked as bad.
 
 		Are you sure the offset ($offset) has the right sign? Positive means the clock
 		was incorrectly set forward, negative means the clock was incorrectly set back.
 
 		If the offset is right, then increase the search interval until there are enough
-		good revisions to provide a majority reference." );
+		good revisions to provide a majority reference.", true );
 		} elseif ( $numBadRevs == 0 ) {
 			$this->output( "No bad revisions found.\n" );
 			exit( 0 );
@@ -126,5 +125,5 @@ class FixTimestamps extends Maintenance {
 	}
 }
 
-$maintClass = FixTimestamps::class;
+$maintClass = "FixTimestamps";
 require_once RUN_MAINTENANCE_IF_MAIN;

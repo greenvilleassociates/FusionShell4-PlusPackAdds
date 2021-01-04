@@ -48,7 +48,7 @@ class FixDoubleRedirects extends Maintenance {
 		if ( $this->hasOption( 'title' ) ) {
 			$title = Title::newFromText( $this->getOption( 'title' ) );
 			if ( !$title || !$title->isRedirect() ) {
-				$this->fatalError( $title->getPrefixedText() . " is not a redirect!\n" );
+				$this->error( $title->getPrefixedText() . " is not a redirect!\n", true );
 			}
 		} else {
 			$title = null;
@@ -72,8 +72,7 @@ class FixDoubleRedirects extends Maintenance {
 			'rd_from = pa.page_id',
 			'rd_namespace = pb.page_namespace',
 			'rd_title = pb.page_title',
-			// T42352
-			'rd_interwiki IS NULL OR rd_interwiki = ' . $dbr->addQuotes( '' ),
+			'rd_interwiki IS NULL OR rd_interwiki = ' . $dbr->addQuotes( '' ), // T42352
 			'pb.page_is_redirect' => 1,
 		];
 
@@ -137,5 +136,5 @@ class FixDoubleRedirects extends Maintenance {
 	}
 }
 
-$maintClass = FixDoubleRedirects::class;
+$maintClass = "FixDoubleRedirects";
 require_once RUN_MAINTENANCE_IF_MAIN;

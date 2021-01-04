@@ -24,7 +24,6 @@
 namespace MediaWiki\Session;
 
 use Language;
-use Message;
 
 /**
  * This exists to make IDEs happy, so they don't see the
@@ -52,10 +51,4 @@ interface SessionProviderInterface {
 	 */
 	public function whyNoSession();
 
-	/**
-	 * Returns true if this provider is safe against csrf attacks, or false otherwise
-	 *
-	 * @return bool
-	 */
-	public function safeAgainstCsrf();
 }

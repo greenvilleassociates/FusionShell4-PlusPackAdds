@@ -20,8 +20,8 @@
 
 namespace MediaWiki\Logger\Monolog;
 
-use AvroIOBinaryEncoder;
 use AvroIODatumWriter;
+use AvroIOBinaryEncoder;
 use AvroIOTypeException;
 use AvroSchema;
 use AvroStringIO;
@@ -39,7 +39,7 @@ class AvroFormatter implements FormatterInterface {
 	/**
 	 * @var Magic byte to encode schema revision id.
 	 */
-	private const MAGIC = 0x0;
+	const MAGIC = 0x0;
 	/**
 	 * @var array Map from schema name to schema definition
 	 */
@@ -127,10 +127,7 @@ class AvroFormatter implements FormatterInterface {
 		if ( !isset( $this->schemas[$channel] ) ) {
 			return null;
 		}
-		if (
-			!isset( $this->schemas[$channel]['revision'] )
-			&& !isset( $this->schemas[$channel]['schema'] )
-		) {
+		if ( !isset( $this->schemas[$channel]['revision'], $this->schemas[$channel]['schema'] ) ) {
 			return null;
 		}
 

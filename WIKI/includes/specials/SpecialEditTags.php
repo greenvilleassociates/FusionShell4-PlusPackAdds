@@ -19,8 +19,6 @@
  * @ingroup SpecialPage
  */
 
-use MediaWiki\Permissions\PermissionManager;
-
 /**
  * Special page for adding and removing change tags to individual revisions.
  * A lot of this is copied out of SpecialRevisiondelete.
@@ -53,18 +51,8 @@ class SpecialEditTags extends UnlistedSpecialPage {
 	/** @var string */
 	private $reason;
 
-	/** @var PermissionManager */
-	private $permissionManager;
-
-	/**
-	 * @inheritDoc
-	 *
-	 * @param PermissionManager $permissionManager
-	 */
-	public function __construct( PermissionManager $permissionManager ) {
+	public function __construct() {
 		parent::__construct( 'EditTags', 'changetags' );
-
-		$this->permissionManager = $permissionManager;
 	}
 
 	public function doesWrites() {
@@ -79,20 +67,22 @@ class SpecialEditTags extends UnlistedSpecialPage {
 		$user = $this->getUser();
 		$request = $this->getRequest();
 
+		// Check blocks
+		if ( $user->isBlocked() ) {
+			throw new UserBlockedError( $user->getBlock() );
+		}
+
 		$this->setHeaders();
 		$this->outputHeader();
 
-		$output->addModules( [ 'mediawiki.special.edittags' ] );
-		$output->addModuleStyles( [
-			'mediawiki.interface.helpers.styles',
-			'mediawiki.special'
-		] );
+		$this->getOutput()->addModules( [ 'mediawiki.special.edittags',
+			'mediawiki.special.edittags.styles' ] );
 
 		$this->submitClicked = $request->wasPosted() && $request->getBool( 'wpSubmit' );
 
 		// Handle our many different possible input types
 		$ids = $request->getVal( 'ids' );
-		if ( $ids !== null ) {
+		if ( !is_null( $ids ) ) {
 			// Allow CSV from the form hidden field, or a single ID for show/hide links
 			$this->ids = explode( ',', $ids );
 		} else {
@@ -129,25 +119,14 @@ class SpecialEditTags extends UnlistedSpecialPage {
 			$this->ids
 		);
 
-		$this->isAllowed = $this->permissionManager->userHasRight( $user, 'changetags' );
+		$this->isAllowed = $user->isAllowed( 'changetags' );
 
 		$this->reason = $request->getVal( 'wpReason' );
 		// We need a target page!
-		if ( $this->targetObj === null ) {
+		if ( is_null( $this->targetObj ) ) {
 			$output->addWikiMsg( 'undelete-header' );
 			return;
 		}
-
-		// Check blocks
-		if ( $this->permissionManager->isBlockedFrom( $user, $this->targetObj ) ) {
-			throw new UserBlockedError(
-				$user->getBlock(),
-				$user,
-				$this->getLanguage(),
-				$request->getIP()
-			);
-		}
-
 		// Give a link to the logs/hist for this page
 		$this->showConvenienceLinks();
 
@@ -187,7 +166,7 @@ class SpecialEditTags extends UnlistedSpecialPage {
 				[],
 				[
 					'page' => $this->targetObj->getPrefixedText(),
-					'wpfilters' => [ 'tag' ],
+					'hide_tag_log' => '0',
 				]
 			);
 			if ( !$this->targetObj->isSpecialPage() ) {
@@ -214,7 +193,7 @@ class SpecialEditTags extends UnlistedSpecialPage {
 	 * @return ChangeTagsList
 	 */
 	protected function getList() {
-		if ( $this->revList === null ) {
+		if ( is_null( $this->revList ) ) {
 			$this->revList = ChangeTagsList::factory( $this->typeName, $this->getContext(),
 				$this->targetObj, $this->ids );
 		}
@@ -227,6 +206,8 @@ class SpecialEditTags extends UnlistedSpecialPage {
 	 * the user to modify the tags applied to those items.
 	 */
 	protected function showForm() {
+		$userAllowed = true;
+
 		$out = $this->getOutput();
 		// Messages: tags-edit-revision-selected, tags-edit-logentry-selected
 		$out->wrapWikiMsg( "<strong>$1</strong>", [
@@ -241,11 +222,10 @@ class SpecialEditTags extends UnlistedSpecialPage {
 		$numRevisions = 0;
 		// Live revisions...
 		$list = $this->getList();
+		// @codingStandardsIgnoreStart Generic.CodeAnalysis.ForLoopWithTestFunctionCall.NotAllowed
 		for ( $list->reset(); $list->current(); $list->next() ) {
+			// @codingStandardsIgnoreEnd
 			$item = $list->current();
-			if ( !$item->canView() ) {
-				throw new ErrorPageError( 'permissionserrors', 'tags-update-no-permission' );
-			}
 			$numRevisions++;
 			$out->addHTML( $item->getHTML() );
 		}
@@ -272,13 +252,12 @@ class SpecialEditTags extends UnlistedSpecialPage {
 						Xml::label( $this->msg( 'tags-edit-reason' )->text(), 'wpReason' ) .
 					'</td>' .
 					'<td class="mw-input">' .
-						Xml::input( 'wpReason', 60, $this->reason, [
-							'id' => 'wpReason',
-							// HTML maxlength uses "UTF-16 code units", which means that characters outside BMP
-							// (e.g. emojis) count for two each. This limit is overridden in JS to instead count
-							// Unicode codepoints.
-							'maxlength' => CommentStore::COMMENT_CHARACTER_LIMIT,
-						] ) .
+						Xml::input(
+							'wpReason',
+							60,
+							$this->reason,
+							[ 'id' => 'wpReason', 'maxlength' => 100 ]
+						) .
 					'</td>' .
 				"</tr><tr>\n" .
 					'<td></td>' .
@@ -331,7 +310,9 @@ class SpecialEditTags extends UnlistedSpecialPage {
 			// Otherwise, use a multi-select field for adding tags, and a list of
 			// checkboxes for removing them
 
+			// @codingStandardsIgnoreStart Generic.CodeAnalysis.ForLoopWithTestFunctionCall.NotAllowed
 			for ( $list->reset(); $list->current(); $list->next() ) {
+				// @codingStandardsIgnoreEnd
 				$currentTags = $list->current()->getTags();
 				if ( $currentTags ) {
 					$tags = array_merge( $tags, explode( ',', $currentTags ) );
@@ -395,6 +376,7 @@ class SpecialEditTags extends UnlistedSpecialPage {
 
 	/**
 	 * UI entry point for form submission.
+	 * @throws PermissionsError
 	 * @return bool
 	 */
 	protected function submit() {
@@ -408,11 +390,11 @@ class SpecialEditTags extends UnlistedSpecialPage {
 
 		// Evaluate incoming request data
 		$tagList = $request->getArray( 'wpTagList' );
-		if ( $tagList === null ) {
+		if ( is_null( $tagList ) ) {
 			$tagList = [];
 		}
 		$existingTags = $request->getVal( 'wpExistingTags' );
-		if ( $existingTags === null || $existingTags === '' ) {
+		if ( is_null( $existingTags ) || $existingTags === '' ) {
 			$existingTags = [];
 		} else {
 			$existingTags = explode( ',', $existingTags );
@@ -469,8 +451,9 @@ class SpecialEditTags extends UnlistedSpecialPage {
 	 */
 	protected function failure( $status ) {
 		$this->getOutput()->setPageTitle( $this->msg( 'actionfailed' ) );
-		$this->getOutput()->wrapWikiTextAsInterface(
-			'errorbox', $status->getWikiText( 'tags-edit-failure', false, $this->getLanguage() )
+		$this->getOutput()->addWikiText( '<div class="errorbox">' .
+			$status->getWikiText( 'tags-edit-failure' ) .
+			'</div>'
 		);
 		$this->showForm();
 	}

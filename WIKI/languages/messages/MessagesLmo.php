@@ -23,7 +23,7 @@
  * @author Sprüngli
  */
 
-$fallback = 'pms, eml, lij, vec, it';
+$fallback = 'it';
 
 $namespaceNames = [
 	NS_SPECIAL          => 'Special',

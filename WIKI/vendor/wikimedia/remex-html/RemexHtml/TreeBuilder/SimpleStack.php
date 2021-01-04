@@ -1,6 +1,5 @@
 <?php
 namespace RemexHtml\TreeBuilder;
-
 use RemexHtml\HTMLData;
 
 /**
@@ -15,7 +14,7 @@ class SimpleStack extends Stack {
 	 * A 2-d array giving the element types which break a scope region for the
 	 * default scope, i.e. the one for phrases of the form "has an X element
 	 * in scope".
-	 * @var array<string,array<string,bool>>
+	 * @var bool[string][string]
 	 */
 	private static $defaultScope = [
 		HTMLData::NS_HTML => [
@@ -46,7 +45,7 @@ class SimpleStack extends Stack {
 
 	/**
 	 * The element types which break the table scope.
-	 * @var array<string,array<string,bool>>
+	 * @var bool[string][string]
 	 */
 	private static $tableScope = [
 		HTMLData::NS_HTML => [
@@ -58,13 +57,13 @@ class SimpleStack extends Stack {
 
 	/**
 	 * The element types which break the list scope. This is lazy-initialised.
-	 * @var array<string,array<string,bool>>
+	 * @var bool[string][string]
 	 */
 	private static $listScope;
 
 	/**
 	 * The element types which break the button scope. This is lazy-initialised.
-	 * @var array<string,array<string,bool>>
+	 * @var bool[string][string]
 	 */
 	private static $buttonScope;
 

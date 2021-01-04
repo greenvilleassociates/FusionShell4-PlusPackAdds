@@ -1,6 +1,8 @@
 <?php
 
 /**
+ * Tests for the SiteList class.
+ *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
  * the Free Software Foundation; either version 2 of the License, or
@@ -26,7 +28,7 @@
  *
  * @author Jeroen De Dauw < jeroendedauw@gmail.com >
  */
-class SiteListTest extends MediaWikiIntegrationTestCase {
+class SiteListTest extends MediaWikiTestCase {
 
 	/**
 	 * Returns instances of SiteList implementing objects.
@@ -97,7 +99,7 @@ class SiteListTest extends MediaWikiIntegrationTestCase {
 		 * @var Site $site
 		 */
 		foreach ( $sites as $site ) {
-			if ( is_int( $site->getInternalId() ) ) {
+			if ( is_integer( $site->getInternalId() ) ) {
 				$this->assertEquals( $site, $sites->getSiteByInternalId( $site->getInternalId() ) );
 			}
 		}
@@ -153,7 +155,7 @@ class SiteListTest extends MediaWikiIntegrationTestCase {
 		 * @var Site $site
 		 */
 		foreach ( $sites as $site ) {
-			if ( is_int( $site->getInternalId() ) ) {
+			if ( is_integer( $site->getInternalId() ) ) {
 				$this->assertTrue( $site, $sites->hasInternalId( $site->getInternalId() ) );
 			}
 		}
@@ -188,7 +190,7 @@ class SiteListTest extends MediaWikiIntegrationTestCase {
 	public function testGetGlobalIdentifiers( SiteList $sites ) {
 		$identifiers = $sites->getGlobalIdentifiers();
 
-		$this->assertIsArray( $identifiers );
+		$this->assertTrue( is_array( $identifiers ) );
 
 		$expected = [];
 

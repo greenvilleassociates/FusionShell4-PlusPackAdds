@@ -20,9 +20,8 @@
  * @file
  */
 
-use MediaWiki\Auth\AuthenticationResponse;
 use MediaWiki\Auth\AuthManager;
-use MediaWiki\MediaWikiServices;
+use MediaWiki\Auth\AuthenticationResponse;
 
 /**
  * Link an account with AuthManager
@@ -68,8 +67,8 @@ class ApiLinkAccount extends ApiBase {
 			}
 		}
 
-		$manager = MediaWikiServices::getInstance()->getAuthManager();
-		$helper = new ApiAuthManagerHelper( $this, $manager );
+		$helper = new ApiAuthManagerHelper( $this );
+		$manager = AuthManager::singleton();
 
 		// Check security-sensitive operation status
 		$helper->securitySensitiveOperation( 'LinkAccounts' );

@@ -1,7 +1,6 @@
 <?php
 
 namespace RemexHtml\TreeBuilder;
-
 use RemexHtml\HTMLData;
 use RemexHtml\Tokenizer\Attributes;
 
@@ -15,7 +14,7 @@ class InForeignContent extends InsertionMode {
 	/**
 	 * The list of tag names which unconditionally generate a parse error when
 	 * seen in foreign content.
-	 * @var array<string,bool>
+	 * @var bool[string]
 	 */
 	private static $notAllowed = [
 		'b' => true,
@@ -183,7 +182,9 @@ class InForeignContent extends InsertionMode {
 			$attrs = new ForeignAttributes( $attrs, 'math' );
 		} elseif ( $acnNs === HTMLData::NS_SVG ) {
 			$attrs = new ForeignAttributes( $attrs, 'svg' );
-			$name = self::$svgElementCase[$name] ?? $name;
+			if ( isset( self::$svgElementCase[$name] ) ) {
+				$name = self::$svgElementCase[$name];
+			}
 		} else {
 			$attrs = new ForeignAttributes( $attrs, 'other' );
 		}

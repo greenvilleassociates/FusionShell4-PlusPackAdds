@@ -16,7 +16,7 @@
  * http://www.gnu.org/copyleft/gpl.html
  *
  * @file
- * @ingroup Installer
+ * @ingroup Deployment
  */
 
 abstract class WebInstallerDocument extends WebInstallerPage {
@@ -29,10 +29,9 @@ abstract class WebInstallerDocument extends WebInstallerPage {
 	public function execute() {
 		$text = $this->getFileContents();
 		$text = InstallDocFormatter::format( $text );
-		$this->parent->output->addWikiTextAsInterface( $text );
+		$this->parent->output->addWikiText( $text );
 		$this->startForm();
 		$this->endForm( false );
-		return '';
 	}
 
 	/**

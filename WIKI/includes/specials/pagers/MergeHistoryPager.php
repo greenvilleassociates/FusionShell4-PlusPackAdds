@@ -19,8 +19,6 @@
  * @ingroup Pager
  */
 
-use MediaWiki\MediaWikiServices;
-
 /**
  * @ingroup Pager
  */
@@ -32,15 +30,10 @@ class MergeHistoryPager extends ReverseChronologicalPager {
 	/** @var array */
 	public $mConds;
 
-	/** @var int */
-	private $articleID;
-
-	/** @var int */
-	private $maxTimestamp;
-
-	public function __construct( SpecialMergeHistory $form, $conds, Title $source, Title $dest ) {
+	function __construct( SpecialMergeHistory $form, $conds, Title $source, Title $dest ) {
 		$this->mForm = $form;
 		$this->mConds = $conds;
+		$this->title = $source;
 		$this->articleID = $source->getArticleID();
 
 		$dbr = wfGetDB( DB_REPLICA );
@@ -55,7 +48,7 @@ class MergeHistoryPager extends ReverseChronologicalPager {
 		parent::__construct( $form->getContext() );
 	}
 
-	protected function getStartBody() {
+	function getStartBody() {
 		# Do a link batch query
 		$this->mResult->seek( 0 );
 		$batch = new LinkBatch();
@@ -83,29 +76,26 @@ class MergeHistoryPager extends ReverseChronologicalPager {
 		return '';
 	}
 
-	public function formatRow( $row ) {
+	function formatRow( $row ) {
 		return $this->mForm->formatRevisionRow( $row );
 	}
 
-	public function getQueryInfo() {
+	function getQueryInfo() {
 		$conds = $this->mConds;
 		$conds['rev_page'] = $this->articleID;
 		$conds[] = "rev_timestamp < " . $this->mDb->addQuotes( $this->maxTimestamp );
 
-		// TODO inject a RevisionStore into SpecialMergeHistory and pass it to
-		// the MergeHistoryPager constructor
-		$revQuery = MediaWikiServices::getInstance()
-			->getRevisionStore()
-			->getQueryInfo( [ 'page', 'user' ] );
 		return [
-			'tables' => $revQuery['tables'],
-			'fields' => $revQuery['fields'],
+			'tables' => [ 'revision', 'page', 'user' ],
+			'fields' => array_merge( Revision::selectFields(), Revision::selectUserFields() ),
 			'conds' => $conds,
-			'join_conds' => $revQuery['joins']
+			'join_conds' => [
+				'page' => Revision::pageJoinCond(),
+				'user' => Revision::userJoinCond() ]
 		];
 	}
 
-	public function getIndexField() {
+	function getIndexField() {
 		return 'rev_timestamp';
 	}
 }

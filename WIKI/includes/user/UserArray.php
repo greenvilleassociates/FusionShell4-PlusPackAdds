@@ -20,40 +20,40 @@
  * @file
  */
 
-use Wikimedia\Rdbms\IResultWrapper;
+use Wikimedia\Rdbms\ResultWrapper;
 
 abstract class UserArray implements Iterator {
 	/**
-	 * @param IResultWrapper $res
+	 * @param ResultWrapper $res
 	 * @return UserArrayFromResult
 	 */
-	public static function newFromResult( $res ) {
+	static function newFromResult( $res ) {
 		$userArray = null;
-		if ( !Hooks::runner()->onUserArrayFromResult( $userArray, $res ) ) {
+		if ( !Hooks::run( 'UserArrayFromResult', [ &$userArray, $res ] ) ) {
 			return null;
 		}
-		return $userArray ?? new UserArrayFromResult( $res );
+		if ( $userArray === null ) {
+			$userArray = self::newFromResult_internal( $res );
+		}
+		return $userArray;
 	}
 
 	/**
 	 * @param array $ids
 	 * @return UserArrayFromResult|ArrayIterator
 	 */
-	public static function newFromIDs( $ids ) {
+	static function newFromIDs( $ids ) {
 		$ids = array_map( 'intval', (array)$ids ); // paranoia
 		if ( !$ids ) {
 			// Database::select() doesn't like empty arrays
 			return new ArrayIterator( [] );
 		}
 		$dbr = wfGetDB( DB_REPLICA );
-		$userQuery = User::getQueryInfo();
 		$res = $dbr->select(
-			$userQuery['tables'],
-			$userQuery['fields'],
+			'user',
+			User::selectFields(),
 			[ 'user_id' => array_unique( $ids ) ],
-			__METHOD__,
-			[],
-			$userQuery['joins']
+			__METHOD__
 		);
 		return self::newFromResult( $res );
 	}
@@ -63,22 +63,27 @@ abstract class UserArray implements Iterator {
 	 * @param array $names
 	 * @return UserArrayFromResult|ArrayIterator
 	 */
-	public static function newFromNames( $names ) {
+	static function newFromNames( $names ) {
 		$names = array_map( 'strval', (array)$names ); // paranoia
 		if ( !$names ) {
 			// Database::select() doesn't like empty arrays
 			return new ArrayIterator( [] );
 		}
 		$dbr = wfGetDB( DB_REPLICA );
-		$userQuery = User::getQueryInfo();
 		$res = $dbr->select(
-			$userQuery['tables'],
-			$userQuery['fields'],
+			'user',
+			User::selectFields(),
 			[ 'user_name' => array_unique( $names ) ],
-			__METHOD__,
-			[],
-			$userQuery['joins']
+			__METHOD__
 		);
 		return self::newFromResult( $res );
+	}
+
+	/**
+	 * @param ResultWrapper $res
+	 * @return UserArrayFromResult
+	 */
+	protected static function newFromResult_internal( $res ) {
+		return new UserArrayFromResult( $res );
 	}
 }

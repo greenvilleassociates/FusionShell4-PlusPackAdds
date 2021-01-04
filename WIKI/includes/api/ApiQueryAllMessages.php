@@ -1,5 +1,9 @@
 <?php
 /**
+ *
+ *
+ * Created on Dec 1, 2007
+ *
  * Copyright © 2006 Yuri Astrakhan "<Firstname><Lastname>@gmail.com"
  *
  * This program is free software; you can redistribute it and/or modify
@@ -20,8 +24,6 @@
  * @file
  */
 
-use MediaWiki\MediaWikiServices;
-
 /**
  * A query action to return messages from site message cache
  *
@@ -35,19 +37,19 @@ class ApiQueryAllMessages extends ApiQueryBase {
 
 	public function execute() {
 		$params = $this->extractRequestParams();
-		$services = MediaWikiServices::getInstance();
-		if ( $params['lang'] === null ) {
+
+		if ( is_null( $params['lang'] ) ) {
 			$langObj = $this->getLanguage();
-		} elseif ( !$services->getLanguageNameUtils()->isValidCode( $params['lang'] ) ) {
+		} elseif ( !Language::isValidCode( $params['lang'] ) ) {
 			$this->dieWithError(
 				[ 'apierror-invalidlang', $this->encodeParamName( 'lang' ) ], 'invalidlang'
 			);
 		} else {
-			$langObj = $services->getLanguageFactory()->getLanguage( $params['lang'] );
+			$langObj = Language::factory( $params['lang'] );
 		}
 
 		if ( $params['enableparser'] ) {
-			if ( $params['title'] !== null ) {
+			if ( !is_null( $params['title'] ) ) {
 				$title = Title::newFromText( $params['title'] );
 				if ( !$title || $title->isExternal() ) {
 					$this->dieWithError( [ 'apierror-invalidtitle', wfEscapeWikiText( $params['title'] ) ] );
@@ -61,8 +63,7 @@ class ApiQueryAllMessages extends ApiQueryBase {
 
 		// Determine which messages should we print
 		if ( in_array( '*', $params['messages'] ) ) {
-			$message_names = $services->getLocalisationCache()
-				->getSubitemList( $langObj->getCode(), 'messages' );
+			$message_names = Language::getMessageKeysFor( $langObj->getCode() );
 			if ( $params['includelocal'] ) {
 				$message_names = array_unique( array_merge(
 					$message_names,
@@ -70,8 +71,7 @@ class ApiQueryAllMessages extends ApiQueryBase {
 					// MediaWiki:msgkey page. We might theoretically miss messages that have no
 					// MediaWiki:msgkey page but do have a MediaWiki:msgkey/lang page, but that's
 					// just a stupid case.
-					$services->getMessageCache()
-						->getAllMessageKeys( $this->getConfig()->get( 'LanguageCode' ) )
+					MessageCache::singleton()->getAllMessageKeys( $this->getConfig()->get( 'LanguageCode' ) )
 				) );
 			}
 			sort( $message_names );
@@ -114,21 +114,23 @@ class ApiQueryAllMessages extends ApiQueryBase {
 		// Whether we have any sort of message customisation filtering
 		$customiseFilterEnabled = $params['customised'] !== 'all';
 		if ( $customiseFilterEnabled ) {
+			global $wgContLang;
+
 			$customisedMessages = AllMessagesTablePager::getCustomisedStatuses(
 				array_map(
 					[ $langObj, 'ucfirst' ],
 					$messages_target
 				),
 				$langObj->getCode(),
-				!$langObj->equals( MediaWikiServices::getInstance()->getContentLanguage() )
+				!$langObj->equals( $wgContLang )
 			);
 
 			$customised = $params['customised'] === 'modified';
 		}
 
 		// Get all requested messages and print the result
-		$skip = $params['from'] !== null;
-		$useto = $params['to'] !== null;
+		$skip = !is_null( $params['from'] );
+		$useto = !is_null( $params['to'] );
 		$result = $this->getResult();
 		foreach ( $messages_target as $message ) {
 			// Skip all messages up to $params['from']
@@ -196,7 +198,7 @@ class ApiQueryAllMessages extends ApiQueryBase {
 	}
 
 	public function getCacheMode( $params ) {
-		if ( $params['lang'] === null ) {
+		if ( is_null( $params['lang'] ) ) {
 			// Language not specified, will be fetched from preferences
 			return 'anon-public-user-private';
 		} elseif ( $params['enableparser'] ) {

@@ -1,47 +1,54 @@
 <?php
-
-use SebastianBergmann\FileIterator\Facade;
-
 /**
  * The tests here verify the structure of the code.  This is for outright bugs,
  * not just style issues.
  */
 
-class StructureTest extends MediaWikiIntegrationTestCase {
+class StructureTest extends MediaWikiTestCase {
 	/**
 	 * Verify all files that appear to be tests have file names ending in
 	 * Test.  If the file names do not end in Test, they will not be run.
 	 * @group medium
 	 */
 	public function testUnitTestFileNamesEndWithTest() {
-		// realpath() also normalizes directory separator on windows for prefix compares
-		$rootPath = realpath( __DIR__ . '/..' );
-		$suitesPath = realpath( __DIR__ . '/../suites/' );
-		$testClassRegex = '/^(final )?class .* extends [\S]*(TestCase|TestBase)\\b/m';
+		if ( wfIsWindows() ) {
+			$this->markTestSkipped( 'This test does not work on Windows' );
+		}
+		$rootPath = escapeshellarg( __DIR__ . '/..' );
+		$testClassRegex = implode( '|', [
+			'ApiFormatTestBase',
+			'ApiTestCase',
+			'ApiQueryTestBase',
+			'ApiQueryContinueTestBase',
+			'MediaWikiLangTestCase',
+			'MediaWikiMediaTestCase',
+			'MediaWikiTestCase',
+			'ResourceLoaderTestCase',
+			'PHPUnit_Framework_TestCase',
+			'DumpTestCase',
+		] );
+		$testClassRegex = "^class .* extends ($testClassRegex)";
+		$finder = "find $rootPath -name '*.php' '!' -name '*Test.php'" .
+			" | xargs grep -El '$testClassRegex|function suite\('";
 
-		$results = $this->recurseFiles( $rootPath );
+		$results = null;
+		$exitCode = null;
+		exec( $finder, $results, $exitCode );
+
+		$this->assertEquals(
+			0,
+			$exitCode,
+			'Verify find/grep command succeeds.'
+		);
 
 		$results = array_filter(
 			$results,
-			function ( $filename ) use ( $testClassRegex, $suitesPath ) {
-				// Remove testUnitTestFileNamesEndWithTest false positives
-				if ( strpos( $filename, $suitesPath ) === 0
-					|| substr( $filename, -8 ) === 'Test.php'
-				) {
-					return false;
-				}
-				$contents = file_get_contents( $filename );
-				return preg_match( $testClassRegex, $contents );
-			}
+			[ $this, 'filterSuites' ]
 		);
-		$strip = strlen( $rootPath ) + 1;
+		$strip = strlen( $rootPath ) - 1;
 		foreach ( $results as $k => $v ) {
 			$results[$k] = substr( $v, $strip );
 		}
-
-		// Normalize indexes to make failure output less confusing
-		$results = array_values( $results );
-
 		$this->assertEquals(
 			[],
 			$results,
@@ -49,7 +56,12 @@ class StructureTest extends MediaWikiIntegrationTestCase {
 		);
 	}
 
-	private function recurseFiles( $dir ) {
-		return ( new Facade() )->getFilesAsArray( $dir, [ '.php' ] );
+	/**
+	 * Filter to remove testUnitTestFileNamesEndWithTest false positives.
+	 * @param string $filename
+	 * @return bool
+	 */
+	public function filterSuites( $filename ) {
+		return strpos( $filename, __DIR__ . '/../suites/' ) !== 0;
 	}
 }

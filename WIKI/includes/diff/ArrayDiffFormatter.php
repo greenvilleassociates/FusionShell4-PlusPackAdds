@@ -26,7 +26,6 @@
 
 /**
  * A pseudo-formatter that just passes along the Diff::$edits array
- * @newable
  * @ingroup DifferenceEngine
  */
 class ArrayDiffFormatter extends DiffFormatter {
@@ -35,7 +34,6 @@ class ArrayDiffFormatter extends DiffFormatter {
 	 * @param Diff $diff A Diff object.
 	 *
 	 * @return array[] List of associative arrays, each describing a difference.
-	 * @suppress PhanParamSignatureMismatch
 	 */
 	public function format( $diff ) {
 		$oldline = 1;
@@ -73,8 +71,8 @@ class ArrayDiffFormatter extends DiffFormatter {
 					}
 					break;
 				case 'copy':
-					$oldline += $edit->norig();
-					$newline += $edit->norig();
+					$oldline += count( $edit->getOrig() );
+					$newline += count( $edit->getOrig() );
 			}
 		}
 

@@ -1,23 +1,23 @@
 <?php
 
-class MWDebugTest extends MediaWikiIntegrationTestCase {
+class MWDebugTest extends MediaWikiTestCase {
 
-	protected function setUp() : void {
+	protected function setUp() {
 		parent::setUp();
 		/** Clear log before each test */
 		MWDebug::clearLog();
 	}
 
-	public static function setUpBeforeClass() : void {
+	public static function setUpBeforeClass() {
 		parent::setUpBeforeClass();
 		MWDebug::init();
-		Wikimedia\suppressWarnings();
+		MediaWiki\suppressWarnings();
 	}
 
-	public static function tearDownAfterClass() : void {
+	public static function tearDownAfterClass() {
 		parent::tearDownAfterClass();
 		MWDebug::deinit();
-		Wikimedia\restoreWarnings();
+		MediaWiki\restoreWarnings();
 	}
 
 	/**
@@ -58,7 +58,8 @@ class MWDebugTest extends MediaWikiIntegrationTestCase {
 		MWDebug::deprecated( 'wfOldFunction', '1.0', 'component' );
 
 		// assertCount() not available on WMF integration server
-		$this->assertCount( 1, MWDebug::getLog(),
+		$this->assertEquals( 1,
+			count( MWDebug::getLog() ),
 			"Only one deprecated warning per function should be kept"
 		);
 	}
@@ -74,7 +75,8 @@ class MWDebugTest extends MediaWikiIntegrationTestCase {
 		MWDebug::deprecated( 'wfOldFunction', '1.0', 'component' );
 
 		// assertCount() not available on WMF integration server
-		$this->assertCount( 3, MWDebug::getLog(),
+		$this->assertEquals( 3,
+			count( MWDebug::getLog() ),
 			"Only one deprecated warning per function should be kept"
 		);
 	}
@@ -91,11 +93,13 @@ class MWDebugTest extends MediaWikiIntegrationTestCase {
 		$context = new RequestContext();
 		$context->setRequest( $request );
 
-		$result = new ApiResult( false );
+		$apiMain = new ApiMain( $context );
+
+		$result = new ApiResult( $apiMain );
 
 		MWDebug::appendDebugInfoToApiResult( $context, $result );
 
-		$this->assertInstanceOf( ApiResult::class, $result );
+		$this->assertInstanceOf( 'ApiResult', $result );
 		$data = $result->getResultData();
 
 		$expectedKeys = [ 'mwVersion', 'phpEngine', 'phpVersion', 'gitRevision', 'gitBranch',
@@ -106,10 +110,10 @@ class MWDebugTest extends MediaWikiIntegrationTestCase {
 			$this->assertArrayHasKey( $expectedKey, $data['debuginfo'], "debuginfo has $expectedKey" );
 		}
 
-		$xml = ApiFormatXml::recXmlPrint( 'help', $data, null );
+		$xml = ApiFormatXml::recXmlPrint( 'help', $data );
 
 		// exception not thrown
-		$this->assertIsString( $xml );
+		$this->assertInternalType( 'string', $xml );
 	}
 
 	/**
@@ -119,7 +123,7 @@ class MWDebugTest extends MediaWikiIntegrationTestCase {
 	 * @return FauxRequest
 	 */
 	private function newApiRequest( array $params, $requestUrl ) {
-		$request = $this->getMockBuilder( FauxRequest::class )
+		$request = $this->getMockBuilder( 'FauxRequest' )
 			->setMethods( [ 'getRequestURL' ] )
 			->setConstructorArgs( [
 				$params

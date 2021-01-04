@@ -16,7 +16,7 @@
  * http://www.gnu.org/copyleft/gpl.html
  *
  * @file
- * @ingroup Installer
+ * @ingroup Deployment
  */
 
 class WebInstallerRestart extends WebInstallerPage {
@@ -36,7 +36,7 @@ class WebInstallerRestart extends WebInstallerPage {
 		}
 
 		$this->startForm();
-		$s = Html::warningBox( wfMessage( 'config-help-restart' )->plain(), 'config-warning-box' );
+		$s = $this->parent->getWarningBox( wfMessage( 'config-help-restart' )->plain() );
 		$this->addHTML( $s );
 		$this->endForm( 'restart' );
 

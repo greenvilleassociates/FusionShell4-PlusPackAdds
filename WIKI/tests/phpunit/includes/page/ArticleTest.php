@@ -1,6 +1,6 @@
 <?php
 
-class ArticleTest extends \MediaWikiIntegrationTestCase {
+class ArticleTest extends MediaWikiTestCase {
 
 	/**
 	 * @var Title
@@ -12,14 +12,14 @@ class ArticleTest extends \MediaWikiIntegrationTestCase {
 	private $article;
 
 	/** creates a title object and its article object */
-	protected function setUp() : void {
+	protected function setUp() {
 		parent::setUp();
 		$this->title = Title::makeTitle( NS_MAIN, 'SomePage' );
 		$this->article = new Article( $this->title );
 	}
 
 	/** cleanup title object and its article object */
-	protected function tearDown() : void {
+	protected function tearDown() {
 		parent::tearDown();
 		$this->title = null;
 		$this->article = null;
@@ -29,8 +29,7 @@ class ArticleTest extends \MediaWikiIntegrationTestCase {
 	 * @covers Article::__get
 	 */
 	public function testImplementsGetMagic() {
-		$this->filterDeprecated( '/Accessing Article::\$mLatest/' );
-		$this->assertFalse( $this->article->mLatest, "Article __get magic" );
+		$this->assertEquals( false, $this->article->mLatest, "Article __get magic" );
 	}
 
 	/**
@@ -38,8 +37,6 @@ class ArticleTest extends \MediaWikiIntegrationTestCase {
 	 * @covers Article::__set
 	 */
 	public function testImplementsSetMagic() {
-		$this->filterDeprecated( '/Accessing Article::\$mLatest/' );
-		$this->filterDeprecated( '/Setting Article::\$mLatest/' );
 		$this->article->mLatest = 2;
 		$this->assertEquals( 2, $this->article->mLatest, "Article __set magic" );
 	}
@@ -49,21 +46,34 @@ class ArticleTest extends \MediaWikiIntegrationTestCase {
 	 * @covers Article::__set
 	 */
 	public function testGetOrSetOnNewProperty() {
-		$this->filterDeprecated(
-			'/Accessing Article::\$ext_someNewProperty/'
-		);
-		$this->filterDeprecated(
-			'/Setting Article::\$ext_someNewProperty/'
-		);
 		$this->article->ext_someNewProperty = 12;
 		$this->assertEquals( 12, $this->article->ext_someNewProperty,
 			"Article get/set magic on new field" );
-		$this->assertEquals( 12, $this->article->getPage()->ext_someNewProperty,
-			"Article get/set magic on new field" );
+
 		$this->article->ext_someNewProperty = -8;
 		$this->assertEquals( -8, $this->article->ext_someNewProperty,
 			"Article get/set magic on update to new field" );
-		$this->assertEquals( -8, $this->article->getPage()->ext_someNewProperty,
-			"Article get/set magic on new field" );
+	}
+
+	/**
+	 * Checks for the existence of the backwards compatibility static functions
+	 * (forwarders to WikiPage class)
+	 *
+	 * @covers Article::selectFields
+	 * @covers Article::onArticleCreate
+	 * @covers Article::onArticleDelete
+	 * @covers Article::onArticleEdit
+	 */
+	public function testStaticFunctions() {
+		$this->hideDeprecated( 'Article::selectFields' );
+
+		$this->assertEquals( WikiPage::selectFields(), Article::selectFields(),
+			"Article static functions" );
+		$this->assertEquals( true, is_callable( "Article::onArticleCreate" ),
+			"Article static functions" );
+		$this->assertEquals( true, is_callable( "Article::onArticleDelete" ),
+			"Article static functions" );
+		$this->assertEquals( true, is_callable( "ImagePage::onArticleEdit" ),
+			"Article static functions" );
 	}
 }

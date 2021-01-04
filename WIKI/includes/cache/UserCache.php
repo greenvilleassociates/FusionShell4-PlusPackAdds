@@ -52,11 +52,13 @@ class UserCache {
 	 */
 	public function getProp( $userId, $prop ) {
 		if ( !isset( $this->cache[$userId][$prop] ) ) {
-			wfDebug( __METHOD__ . ": querying DB for prop '$prop' for user ID '$userId'." );
+			wfDebug( __METHOD__ . ": querying DB for prop '$prop' for user ID '$userId'.\n" );
 			$this->doQuery( [ $userId ] ); // cache miss
 		}
 
-		return $this->cache[$userId][$prop] ?? false; // user does not exist?
+		return isset( $this->cache[$userId][$prop] )
+			? $this->cache[$userId][$prop]
+			: false; // user does not exist?
 	}
 
 	/**
@@ -98,25 +100,21 @@ class UserCache {
 		// Lookup basic info for users not yet loaded...
 		if ( count( $usersToQuery ) ) {
 			$dbr = wfGetDB( DB_REPLICA );
-			$tables = [ 'user', 'actor' ];
+			$table = [ 'user' ];
 			$conds = [ 'user_id' => $usersToQuery ];
-			$fields = [ 'user_name', 'user_real_name', 'user_registration', 'user_id', 'actor_id' ];
-			$joinConds = [
-				'actor' => [ 'JOIN', 'actor_user = user_id' ],
-			];
+			$fields = [ 'user_name', 'user_real_name', 'user_registration', 'user_id' ];
 
 			$comment = __METHOD__;
 			if ( strval( $caller ) !== '' ) {
 				$comment .= "/$caller";
 			}
 
-			$res = $dbr->select( $tables, $fields, $conds, $comment, [], $joinConds );
+			$res = $dbr->select( $table, $fields, $conds, $comment );
 			foreach ( $res as $row ) { // load each user into cache
 				$userId = (int)$row->user_id;
 				$this->cache[$userId]['name'] = $row->user_name;
 				$this->cache[$userId]['real_name'] = $row->user_real_name;
 				$this->cache[$userId]['registration'] = $row->user_registration;
-				$this->cache[$userId]['actor'] = $row->actor_id;
 				$usersToCheck[$userId] = $row->user_name;
 			}
 		}

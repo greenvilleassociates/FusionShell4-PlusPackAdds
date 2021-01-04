@@ -1,15 +1,14 @@
 /**
  * This plugin provides a way to build a wiki-text editing user interface around a textarea.
  *
- * @example To initialize without any modules,
- * overqualified `div#edittoolbar` to avoid MediaWiki's heading to id automatism:
+ * @example To initialize without any modules:
  *     $( 'div#edittoolbar' ).wikiEditor();
  *
  * @example To initialize with one or more modules, or to add modules after it's already been initialized:
  *     $( 'textarea#wpTextbox1' ).wikiEditor( 'addModule', 'toolbar', { ... config ... } );
  *
  */
-( function () {
+( function ( $, mw ) {
 
 	var hasOwn = Object.prototype.hasOwnProperty,
 
@@ -17,8 +16,7 @@
 		 * Array of language codes.
 		 */
 		fallbackChain = ( function () {
-			// eslint-disable-next-line no-jquery/no-class-state
-			var isRTL = $( document.body ).hasClass( 'rtl' ),
+			var isRTL = $( 'body' ).hasClass( 'rtl' ),
 				chain = mw.language.getFallbackLanguageChain();
 
 			// Do not fallback to 'en'
@@ -41,10 +39,7 @@
 		 * module name. The existence of a module in this object only indicates the module is available. To check if a
 		 * module is in use by a specific context check the context.modules object.
 		 */
-		modules: {
-			toolbar: require( './jquery.wikiEditor.toolbar.js' ),
-			dialogs: require( './jquery.wikiEditor.dialogs.js' )
-		},
+		modules: {},
 
 		/**
 		 * A context can be extended, such as adding iframe support, on a per-wikiEditor instance basis.
@@ -60,10 +55,68 @@
 		instances: [],
 
 		/**
+		 * For each browser name, an array of conditions that must be met are supplied in [operation, value]-form where
+		 * operation is a string containing a JavaScript compatible binary operator and value is either a number to be
+		 * compared with $.browser.versionNumber or a string to be compared with $.browser.version. If a browser is not
+		 * specifically mentioned, we just assume things will work.
+		 */
+		browsers: {
+			// Left-to-right languages
+			ltr: {
+				msie: [ [ '>=', 9 ] ],
+				firefox: [ [ '>=', 4 ] ],
+				opera: [ [ '>=', '10.5' ] ],
+				safari: [ [ '>=', 5 ] ],
+				chrome: [ [ '>=', 5 ] ],
+				netscape: [ [ '>=', 9 ] ],
+				blackberry: false,
+				ipod: [ [ '>=', 6 ] ],
+				iphone: [ [ '>=', 6 ] ]
+			},
+			// Right-to-left languages
+			rtl: {
+				msie: [ [ '>=', 9 ] ],
+				firefox: [ [ '>=', 4 ] ],
+				opera: [ [ '>=', '10.5' ] ],
+				safari: [ [ '>=', 5 ] ],
+				chrome: [ [ '>=', 5 ] ],
+				netscape: [ [ '>=', 9 ] ],
+				blackberry: false,
+				ipod: [ [ '>=', 6 ] ],
+				iphone: [ [ '>=', 6 ] ]
+			}
+		},
+
+		/**
 		 * Path to images - this is a bit messy, and it would need to change if this code (and images) gets moved into the
 		 * core - or anywhere for that matter...
 		 */
 		imgPath: mw.config.get( 'wgExtensionAssetsPath' ) + '/WikiEditor/modules/images/',
+
+		/**
+		 * Checks the current browser against the browsers object to determine if the browser has been black-listed or not.
+		 * Because these rules are often very complex, the object contains configurable operators and can check against
+		 * either the browser version number or string. This process also involves checking if the current browser is among
+		 * those which we have configured as compatible or not. If the browser was not configured as compatible we just go on
+		 * assuming things will work - the argument here is to prevent the need to update the code when a new browser comes
+		 * to market. The assumption here is that any new browser will be built on an existing engine or be otherwise so
+		 * similar to another existing browser that things actually do work as expected. The merits of this argument, which
+		 * is essentially to blacklist rather than whitelist are debatable, but at this point we've decided it's the more
+		 * "open-web" way to go.
+		 *
+		 * @param {Object} module Module object, defaults to $.wikiEditor
+		 * @return {boolean}
+		 */
+		isSupported: function ( module ) {
+			// Fallback to the wikiEditor browser map if no special map is provided in the module
+			var mod = module && 'browsers' in module ? module : $.wikiEditor;
+			// Check for and make use of cached value and early opportunities to bail
+			if ( typeof mod.supported === 'undefined' ) {
+				// Run a browser support test and then cache and return the result
+				mod.supported = $.client.test( mod.browsers );
+			}
+			return mod.supported;
+		},
 
 		/**
 		 * Checks if a module has a specific requirement
@@ -86,10 +139,6 @@
 
 		/**
 		 * Provides a way to extract messages from objects. Wraps a mw.message( ... ).text() call.
-		 *
-		 * FIXME: This is a security nightmare. Only use is for the help toolbar panel. Inline the
-		 *        special need instead?
-		 * FIXME: Also, this is ludicrously complex. Just use mw.message().text() directly.
 		 *
 		 * @param {Object} object Object to extract messages from
 		 * @param {string} property String of name of property which contains the message. This should be the base name of the
@@ -116,46 +165,7 @@
 				if ( Array.isArray( p ) && p.length >= 2 ) {
 					return mw.message.apply( mw.message, p ).text();
 				} else {
-					// eslint-disable-next-line mediawiki/msg-doc
 					return mw.message( p ).text();
-				}
-			} else {
-				return '';
-			}
-		},
-
-		/**
-		 * Provides a way to extract messages from objects. Wraps a mw.message( ... ).escaped() call.
-		 *
-		 * FIXME: This is ludicrously complex. Just use mw.message().escaped() directly.
-		 *
-		 * @param {Object} object Object to extract messages from
-		 * @param {string} property String of name of property which contains the message. This should be the base name of the
-		 * property, which means that in the case of the object { this: 'that', fooMsg: 'bar' }, passing property as 'this'
-		 * would return the raw text 'that', while passing property as 'foo' would return the internationalized message
-		 * with the key 'bar'. This is then escaped.
-		 * @return {string}
-		 */
-		autoSafeMsg: function ( object, property ) {
-			var i, p;
-			// Accept array of possible properties, of which the first one found will be used
-			if ( typeof property === 'object' ) {
-				for ( i in property ) {
-					if ( property[ i ] in object || property[ i ] + 'Msg' in object ) {
-						property = property[ i ];
-						break;
-					}
-				}
-			}
-			if ( property in object ) {
-				return object[ property ];
-			} else if ( property + 'Msg' in object ) {
-				p = object[ property + 'Msg' ];
-				if ( Array.isArray( p ) && p.length >= 2 ) {
-					return mw.message.apply( mw.message, p ).escaped();
-				} else {
-					// eslint-disable-next-line mediawiki/msg-doc
-					return mw.message( p ).escaped();
 				}
 			} else {
 				return '';
@@ -189,31 +199,47 @@
 		 *
 		 * @param {Object} icon Icon object from e.g. toolbar config
 		 * @param {string} path Default icon path, defaults to $.wikiEditor.imgPath
-		 * @return {Object}
+		 * @return {string}
 		 */
 		autoIcon: function ( icon, path ) {
+			var src = $.wikiEditor.autoLang( icon );
+			path = path || $.wikiEditor.imgPath;
+			// Prepend path if src is not absolute
+			if ( src.substr( 0, 7 ) !== 'http://' && src.substr( 0, 8 ) !== 'https://' && src[ 0 ] !== '/' ) {
+				src = path + src;
+			}
+			return src + '?' + mw.loader.getVersion( 'jquery.wikiEditor' );
+		},
+
+		/**
+		 * Get the sprite offset for a language if available, icon for a language if available, or the default offset or icon,
+		 * in that order of preference.
+		 *
+		 * @param {Object} icon Icon object, see autoIcon()
+		 * @param {Object} offset Offset object
+		 * @param {string} path Icon path, see autoIcon()
+		 * @return {Object}
+		 */
+		autoIconOrOffset: function ( icon, offset, path ) {
 			var i, key, src;
 
 			path = path || $.wikiEditor.imgPath;
 
 			for ( i = 0; i < fallbackChain.length; i++ ) {
 				key = fallbackChain[ i ];
+				if ( offset && hasOwn.call( offset, key ) ) {
+					return offset[ key ];
+				}
 				if ( icon && hasOwn.call( icon, key ) ) {
 					src = icon[ key ];
-
-					// Return a data URL immediately
-					if ( src.substr( 0, 5 ) === 'data:' ) {
-						return src;
-					}
-
 					// Prepend path if src is not absolute
 					if ( src.substr( 0, 7 ) !== 'http://' && src.substr( 0, 8 ) !== 'https://' && src[ 0 ] !== '/' ) {
 						src = path + src;
 					}
-					return src;
+					return src + '?' + mw.loader.getVersion( 'jquery.wikiEditor' );
 				}
 			}
-			return icon;
+			return offset || icon;
 		}
 	};
 
@@ -223,8 +249,16 @@
 	 * @return {jQuery}
 	 */
 	$.fn.wikiEditor = function () {
-		var context, hasFocus, cursorPos,
-			args, modules, module, extension, call;
+		var context, profile, hasFocus, cursorPos,
+			args, modules, module, e, call;
+
+		// Skip any further work when running in browsers that are unsupported
+		if ( !$.wikiEditor.isSupported() ) {
+			return $( this );
+		}
+
+		// Save browser profile for detailed tests.
+		profile = $.client.profile();
 
 		/* Initialization */
 
@@ -238,8 +272,6 @@
 			context = {
 				// Reference to the textarea element which the wikiEditor is being built around
 				$textarea: $( this ),
-				// Reference to the focused element before the dialog opens, so it can be restored once it closes
-				$focusedElem: null,
 				// Container for any number of mutually exclusive views that are accessible by tabs
 				views: {},
 				// Container for any number of module-specific data - only including data for modules in use on this context
@@ -277,8 +309,10 @@
 						modules = data;
 					}
 					for ( module in modules ) {
-						// Check for the existence of an available module with a matching name and a create function
-						if ( typeof module === 'string' && typeof $.wikiEditor.modules[ module ] !== 'undefined' ) {
+						// Check for the existence of an available / supported module with a matching name and a create function
+						if ( typeof module === 'string' && typeof $.wikiEditor.modules[ module ] !== 'undefined' &&
+								$.wikiEditor.isSupported( $.wikiEditor.modules[ module ] )
+						) {
 							// Extend the context's core API with this module's own API calls
 							if ( 'api' in $.wikiEditor.modules[ module ] ) {
 								for ( call in $.wikiEditor.modules[ module ].api ) {
@@ -289,10 +323,7 @@
 								}
 							}
 							// Activate the module on this context
-							if ( 'fn' in $.wikiEditor.modules[ module ] &&
-								'create' in $.wikiEditor.modules[ module ].fn &&
-								typeof context.modules[ module ] === 'undefined'
-							) {
+							if ( 'fn' in $.wikiEditor.modules[ module ] && 'create' in $.wikiEditor.modules[ module ].fn ) {
 								// Add a place for the module to put it's own stuff
 								context.modules[ module ] = {};
 								// Tell the module to create itself on the context
@@ -381,7 +412,7 @@
 					context.$buttons.show();
 					return $( '<button>' )
 						.text( $.wikiEditor.autoMsg( options, 'caption' ) )
-						.on( 'click', options.action )
+						.click( options.action )
 						.appendTo( context.$buttons );
 				},
 
@@ -403,27 +434,22 @@
 							.attr( 'rel', 'wikiEditor-ui-view-' + options.name )
 							.addClass( context.view === options.name ? 'current' : null )
 							.append( $( '<a>' )
-								.attr( 'tabindex', 0 )
-								.on( 'mousedown', function () {
+								.attr( 'href', '#' )
+								.mousedown( function () {
 									// No dragging!
 									return false;
 								} )
-								.on( 'click keydown', function ( event ) {
-									if (
-										event.type === 'click' ||
-										event.type === 'keydown' && event.key === 'Enter'
-									) {
-										context.$ui.find( '.wikiEditor-ui-view' ).hide();
-										context.$ui.find( '.' + $( this ).parent().attr( 'rel' ) ).show();
-										context.$tabs.find( 'div' ).removeClass( 'current' );
-										$( this ).parent().addClass( 'current' );
-										$( this ).trigger( 'blur' );
-										if ( 'init' in options && typeof options.init === 'function' ) {
-											options.init( context );
-										}
-										event.preventDefault();
-										return false;
+								.click( function ( event ) {
+									context.$ui.find( '.wikiEditor-ui-view' ).hide();
+									context.$ui.find( '.' + $( this ).parent().attr( 'rel' ) ).show();
+									context.$tabs.find( 'div' ).removeClass( 'current' );
+									$( this ).parent().addClass( 'current' );
+									$( this ).blur();
+									if ( 'init' in options && typeof options.init === 'function' ) {
+										options.init( context );
 									}
+									event.preventDefault();
+									return false;
 								} )
 								.text( $.wikiEditor.autoMsg( options, 'title' ) )
 							)
@@ -443,25 +469,47 @@
 				},
 
 				/**
-				 * Save text selection
+				 * Save scrollTop and cursor position for old IE (<=10)
+				 * Related to old IE 8 issues that are no longer reproducible
 				 */
-				saveSelection: function () {
-					context.$focusedElem = $( ':focus' );
-					context.$textarea.trigger( 'focus' );
-					context.savedSelection = context.$textarea.textSelection( 'getCaretPosition', { startAndEnd: true } );
+				saveCursorAndScrollTop: function () {
+					// Deprecated, do nothing
 				},
 
 				/**
-				 * Restore text selection
+				 * Restore scrollTo and cursor position for IE (<=10)
+				 * Related to old IE 8 issues that are no longer reproducible
+				 */
+				restoreCursorAndScrollTop: function () {
+					var IHateIE8;
+					if ( profile.name === 'msie' && document.selection && document.selection.createRange ) {
+						IHateIE8 = context.$textarea.data( 'IHateIE8' );
+						if ( IHateIE8 ) {
+							context.$textarea.scrollTop( IHateIE8.scrollTop );
+							context.$textarea.textSelection( 'setSelection', { start: IHateIE8.pos[ 0 ], end: IHateIE8.pos[ 1 ] } );
+							context.$textarea.data( 'IHateIE8', null );
+						}
+					}
+				},
+
+				/**
+				 * Save text selection for old IE (<=10)
+				 */
+				saveSelection: function () {
+					if ( profile.name === 'msie' && document.selection && document.selection.createRange ) {
+						context.$textarea.focus();
+						context.savedSelection = document.selection.createRange();
+					}
+				},
+
+				/**
+				 * Restore text selection for old IE (<=10)
 				 */
 				restoreSelection: function () {
-					if ( context.savedSelection ) {
-						context.$textarea.trigger( 'focus' );
-						context.$textarea.textSelection( 'setSelection', { start: context.savedSelection[ 0 ], end: context.savedSelection[ 1 ] } );
+					if ( profile.name === 'msie' && context.savedSelection !== null ) {
+						context.$textarea.focus();
+						context.savedSelection.select();
 						context.savedSelection = null;
-					}
-					if ( context.$focusedElem ) {
-						context.$focusedElem.trigger( 'focus' );
 					}
 				}
 			};
@@ -499,7 +547,7 @@
 			context.$textarea.prop( 'scrollTop', $( '#wpScrolltop' ).val() );
 			// Restore focus and cursor if needed
 			if ( hasFocus ) {
-				context.$textarea.trigger( 'focus' );
+				context.$textarea.focus();
 				context.$textarea.textSelection( 'setSelection', { start: cursorPos[ 0 ], end: cursorPos[ 1 ] } );
 			}
 
@@ -528,7 +576,7 @@
 			// Setup the initial view
 			context.view = 'wikitext';
 			// Trigger the "resize" event anytime the window is resized
-			$( window ).on( 'resize', function ( event ) {
+			$( window ).resize( function ( event ) {
 				context.fn.trigger( 'resize', event );
 			} );
 		}
@@ -546,15 +594,16 @@
 				modules[ args[ 1 ] ] = '';
 			}
 			for ( module in modules ) {
-				if ( module in $.wikiEditor.modules ) {
+				// Only allow modules which are supported (and thus actually being turned on) affect the decision to extend
+				if ( module in $.wikiEditor.modules && $.wikiEditor.isSupported( $.wikiEditor.modules[ module ] ) ) {
 					// Activate all required core extensions on context
-					for ( extension in $.wikiEditor.extensions ) {
+					for ( e in $.wikiEditor.extensions ) {
 						if (
-							$.wikiEditor.isRequired( $.wikiEditor.modules[ module ], extension ) &&
-							context.extensions.indexOf( extension ) === -1
+							$.wikiEditor.isRequired( $.wikiEditor.modules[ module ], e ) &&
+							$.inArray( e, context.extensions ) === -1
 						) {
-							context.extensions[ context.extensions.length ] = extension;
-							$.wikiEditor.extensions[ extension ]( context );
+							context.extensions[ context.extensions.length ] = e;
+							$.wikiEditor.extensions[ e ]( context );
 						}
 					}
 					break;
@@ -576,4 +625,4 @@
 
 	};
 
-}() );
+}( jQuery, mediaWiki ) );

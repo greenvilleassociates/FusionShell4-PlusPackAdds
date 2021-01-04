@@ -45,10 +45,9 @@ class MappedIterator extends FilterIterator {
 	 * the base iterator (post-callback) and will return true if that value should be
 	 * included in iteration of the MappedIterator (otherwise it will be filtered out).
 	 *
-	 * @param Iterator|array $iter
+	 * @param Iterator|Array $iter
 	 * @param callable $vCallback Value transformation callback
 	 * @param array $options Options map (includes "accept") (since 1.22)
-	 * @phan-param array{accept?:callable} $options
 	 * @throws UnexpectedValueException
 	 */
 	public function __construct( $iter, $vCallback, array $options = [] ) {
@@ -61,7 +60,7 @@ class MappedIterator extends FilterIterator {
 		}
 		parent::__construct( $baseIterator );
 		$this->vCallback = $vCallback;
-		$this->aCallback = $options['accept'] ?? null;
+		$this->aCallback = isset( $options['accept'] ) ? $options['accept'] : null;
 	}
 
 	public function next() {

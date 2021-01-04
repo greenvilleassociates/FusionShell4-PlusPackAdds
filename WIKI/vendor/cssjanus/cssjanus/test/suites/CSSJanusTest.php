@@ -21,7 +21,6 @@ class CSSJanusTest extends PHPUnit_Framework_TestCase {
 				$input = $case[0];
 				$noop = !isset($case[1]);
 				$output = $noop ? $input : $case[1];
-				$roundtrip = isset($test['roundtrip']) ? $test['roundtrip'] : !$noop;
 
 				$cases[] = array(
 					$input,
@@ -30,7 +29,7 @@ class CSSJanusTest extends PHPUnit_Framework_TestCase {
 					$name,
 				);
 
-				if ($roundtrip) {
+				if (!$noop) {
 					// Round trip
 					$cases[] = array(
 						$output,
@@ -59,7 +58,7 @@ class CSSJanusTest extends PHPUnit_Framework_TestCase {
 	protected static function getSpec() {
 		static $json;
 		if ($json == null) {
-			$version = '1.3.2';
+			$version = '1.2.0';
 			$dir = dirname(__DIR__);
 			$file = "$dir/data-v$version.json";
 			if (!is_readable($file)) {

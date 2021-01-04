@@ -26,26 +26,22 @@
  * @ingroup Media
  */
 use MediaWiki\MediaWikiServices;
-use MediaWiki\Shell\Shell;
 
 /**
  * Handler for images that need to be transformed
- *
- * @stable to extend
  *
  * @since 1.24
  * @ingroup Media
  */
 abstract class TransformationalImageHandler extends ImageHandler {
 	/**
-	 * @stable to override
 	 * @param File $image
 	 * @param array &$params Transform parameters. Entries with the keys 'width'
 	 * and 'height' are the respective screen width and height, while the keys
 	 * 'physicalWidth' and 'physicalHeight' indicate the thumbnail dimensions.
 	 * @return bool
 	 */
-	public function normaliseParams( $image, &$params ) {
+	function normaliseParams( $image, &$params ) {
 		if ( !parent::normaliseParams( $image, $params ) ) {
 			return false;
 		}
@@ -99,7 +95,6 @@ abstract class TransformationalImageHandler extends ImageHandler {
 	 *
 	 * This sets up various parameters, and then calls a helper method
 	 * based on $this->getScalerType in order to scale the image.
-	 * @stable to override
 	 *
 	 * @param File $image
 	 * @param string $dstPath
@@ -108,7 +103,7 @@ abstract class TransformationalImageHandler extends ImageHandler {
 	 * @param int $flags
 	 * @return MediaTransformError|ThumbnailImage|TransformParameterError
 	 */
-	public function doTransform( $image, $dstPath, $dstUrl, $params, $flags = 0 ) {
+	function doTransform( $image, $dstPath, $dstUrl, $params, $flags = 0 ) {
 		if ( !$this->normaliseParams( $image, $params ) ) {
 			return new TransformParameterError( $params );
 		}
@@ -132,7 +127,7 @@ abstract class TransformationalImageHandler extends ImageHandler {
 			'mimeType' => $image->getMimeType(),
 			'dstPath' => $dstPath,
 			'dstUrl' => $dstUrl,
-			'interlace' => $params['interlace'] ?? false,
+			'interlace' => isset( $params['interlace'] ) ? $params['interlace'] : false,
 		];
 
 		if ( isset( $params['quality'] ) && $params['quality'] === 'low' ) {
@@ -154,7 +149,7 @@ abstract class TransformationalImageHandler extends ImageHandler {
 		}
 
 		wfDebug( __METHOD__ . ": creating {$scalerParams['physicalDimensions']} " .
-			"thumbnail at $dstPath using scaler $scalerName" );
+			"thumbnail at $dstPath using scaler $scalerName\n" );
 
 		if ( !$image->mustRender() &&
 			$scalerParams['physicalWidth'] == $scalerParams['srcWidth']
@@ -162,7 +157,7 @@ abstract class TransformationalImageHandler extends ImageHandler {
 			&& !isset( $scalerParams['quality'] )
 		) {
 			# normaliseParams (or the user) wants us to return the unscaled image
-			wfDebug( __METHOD__ . ": returning unscaled image" );
+			wfDebug( __METHOD__ . ": returning unscaled image\n" );
 
 			return $this->getClientScalingThumbnailImage( $image, $scalerParams );
 		}
@@ -179,7 +174,7 @@ abstract class TransformationalImageHandler extends ImageHandler {
 		}
 
 		if ( $flags & self::TRANSFORM_LATER ) {
-			wfDebug( __METHOD__ . ": Transforming later per flags." );
+			wfDebug( __METHOD__ . ": Transforming later per flags.\n" );
 			$newParams = [
 				'width' => $scalerParams['clientWidth'],
 				'height' => $scalerParams['clientHeight']
@@ -196,7 +191,7 @@ abstract class TransformationalImageHandler extends ImageHandler {
 		# Try to make a target path for the thumbnail
 		if ( !wfMkdirParents( dirname( $dstPath ), null, __METHOD__ ) ) {
 			wfDebug( __METHOD__ . ": Unable to create thumbnail destination " .
-				"directory, falling back to client scaling" );
+				"directory, falling back to client scaling\n" );
 
 			return $this->getClientScalingThumbnailImage( $image, $scalerParams );
 		}
@@ -228,14 +223,14 @@ abstract class TransformationalImageHandler extends ImageHandler {
 		# Try a hook. Called "Bitmap" for historical reasons.
 		/** @var MediaTransformOutput $mto */
 		$mto = null;
-		Hooks::runner()->onBitmapHandlerTransform( $this, $image, $scalerParams, $mto );
-		if ( $mto !== null ) {
-			wfDebug( __METHOD__ . ": Hook to BitmapHandlerTransform created an mto" );
+		Hooks::run( 'BitmapHandlerTransform', [ $this, $image, &$scalerParams, &$mto ] );
+		if ( !is_null( $mto ) ) {
+			wfDebug( __METHOD__ . ": Hook to BitmapHandlerTransform created an mto\n" );
 			$scaler = 'hookaborted';
 		}
 
 		// $scaler will return a MediaTransformError on failure, or false on success.
-		// If the scaler is successful, it will have created a thumbnail at the destination
+		// If the scaler is succesful, it will have created a thumbnail at the destination
 		// path.
 		if ( is_array( $scaler ) && is_callable( $scaler ) ) {
 			// Allow subclasses to specify their own rendering methods.
@@ -328,7 +323,6 @@ abstract class TransformationalImageHandler extends ImageHandler {
 	 * Get a ThumbnailImage that respresents an image that will be scaled
 	 * client side
 	 *
-	 * @stable to override
 	 * @param File $image File associated with this thumbnail
 	 * @param array $scalerParams Array with scaler params
 	 * @return ThumbnailImage
@@ -349,7 +343,6 @@ abstract class TransformationalImageHandler extends ImageHandler {
 	 *
 	 * This is a stub method. The real method is in BitmapHander.
 	 *
-	 * @stable to override
 	 * @param File $image File associated with this thumbnail
 	 * @param array $params Array with scaler params
 	 *
@@ -364,7 +357,6 @@ abstract class TransformationalImageHandler extends ImageHandler {
 	 *
 	 * This is a stub method. The real method is in BitmapHander.
 	 *
-	 * @stable to override
 	 * @param File $image File associated with this thumbnail
 	 * @param array $params Array with scaler params
 	 *
@@ -379,7 +371,6 @@ abstract class TransformationalImageHandler extends ImageHandler {
 	 *
 	 * This is a stub method. The real method is in BitmapHander.
 	 *
-	 * @stable to override
 	 * @param File $image File associated with this thumbnail
 	 * @param array $params Array with scaler params
 	 *
@@ -421,7 +412,7 @@ abstract class TransformationalImageHandler extends ImageHandler {
 	 * @param string $s
 	 * @return string
 	 */
-	protected function escapeMagickProperty( $s ) {
+	function escapeMagickProperty( $s ) {
 		// Double the backslashes
 		$s = str_replace( '\\', '\\\\', $s );
 		// Double the percents
@@ -451,7 +442,7 @@ abstract class TransformationalImageHandler extends ImageHandler {
 	 * @throws MWException
 	 * @return string
 	 */
-	protected function escapeMagickInput( $path, $scene = false ) {
+	function escapeMagickInput( $path, $scene = false ) {
 		# Die on initial metacharacters (caller should prepend path)
 		$firstChar = substr( $path, 0, 1 );
 		if ( $firstChar === '~' || $firstChar === '@' ) {
@@ -471,7 +462,7 @@ abstract class TransformationalImageHandler extends ImageHandler {
 	 * @param bool|string $scene The scene specification, or false if there is none
 	 * @return string
 	 */
-	protected function escapeMagickOutput( $path, $scene = false ) {
+	function escapeMagickOutput( $path, $scene = false ) {
 		$path = str_replace( '%', '%%', $path );
 
 		return $this->escapeMagickPath( $path, $scene );
@@ -521,20 +512,20 @@ abstract class TransformationalImageHandler extends ImageHandler {
 		$cache = MediaWikiServices::getInstance()->getLocalServerObjectCache();
 		$method = __METHOD__;
 		return $cache->getWithSetCallback(
-			$cache->makeGlobalKey( 'imagemagick-version' ),
+			'imagemagick-version',
 			$cache::TTL_HOUR,
 			function () use ( $method ) {
 				global $wgImageMagickConvertCommand;
 
-				$cmd = Shell::escape( $wgImageMagickConvertCommand ) . ' -version';
-				wfDebug( $method . ": Running convert -version" );
+				$cmd = wfEscapeShellArg( $wgImageMagickConvertCommand ) . ' -version';
+				wfDebug( $method . ": Running convert -version\n" );
 				$retval = '';
 				$return = wfShellExecWithStderr( $cmd, $retval );
 				$x = preg_match(
 					'/Version: ImageMagick ([0-9]*\.[0-9]*\.[0-9]*)/', $return, $matches
 				);
 				if ( $x != 1 ) {
-					wfDebug( $method . ": ImageMagick version check failed" );
+					wfDebug( $method . ": ImageMagick version check failed\n" );
 					return false;
 				}
 
@@ -547,7 +538,6 @@ abstract class TransformationalImageHandler extends ImageHandler {
 	 * Returns whether the current scaler supports rotation.
 	 *
 	 * @since 1.24 No longer static
-	 * @stable to override
 	 * @return bool
 	 */
 	public function canRotate() {
@@ -558,7 +548,6 @@ abstract class TransformationalImageHandler extends ImageHandler {
 	 * Should we automatically rotate an image based on exif
 	 *
 	 * @since 1.24 No longer static
-	 * @stable to override
 	 * @see $wgEnableAutoRotation
 	 * @return bool Whether auto rotation is enabled
 	 */
@@ -571,7 +560,6 @@ abstract class TransformationalImageHandler extends ImageHandler {
 	 *
 	 * This is a stub. See BitmapHandler::rotate.
 	 *
-	 * @stable to override
 	 * @param File $file
 	 * @param array $params Rotate parameters.
 	 *   'rotation' clockwise rotation in degrees, allowed are multiples of 90
@@ -587,7 +575,6 @@ abstract class TransformationalImageHandler extends ImageHandler {
 	 * Returns whether the file needs to be rendered. Returns true if the
 	 * file requires rotation and we are able to rotate it.
 	 *
-	 * @stable to override
 	 * @param File $file
 	 * @return bool
 	 */
@@ -600,7 +587,6 @@ abstract class TransformationalImageHandler extends ImageHandler {
 	 *
 	 * Runs the 'BitmapHandlerCheckImageArea' hook.
 	 *
-	 * @stable to override
 	 * @param File $file
 	 * @param array &$params
 	 * @return bool
@@ -611,10 +597,12 @@ abstract class TransformationalImageHandler extends ImageHandler {
 
 		# For historical reasons, hook starts with BitmapHandler
 		$checkImageAreaHookResult = null;
-		Hooks::runner()->onBitmapHandlerCheckImageArea(
-			$file, $params, $checkImageAreaHookResult );
+		Hooks::run(
+			'BitmapHandlerCheckImageArea',
+			[ $file, &$params, &$checkImageAreaHookResult ]
+		);
 
-		if ( $checkImageAreaHookResult !== null ) {
+		if ( !is_null( $checkImageAreaHookResult ) ) {
 			// was set by hook, so return that value
 			return (bool)$checkImageAreaHookResult;
 		}

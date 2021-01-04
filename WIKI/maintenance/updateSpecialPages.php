@@ -24,8 +24,6 @@
 
 require_once __DIR__ . '/Maintenance.php';
 
-use MediaWiki\MediaWikiServices;
-
 /**
  * Maintenance script to update cached special pages.
  *
@@ -42,16 +40,15 @@ class UpdateSpecialPages extends Maintenance {
 	}
 
 	public function execute() {
-		global $wgQueryCacheLimit;
+		global $wgQueryCacheLimit, $wgDisableQueryPageUpdate;
 
 		$dbw = $this->getDB( DB_MASTER );
 
 		$this->doSpecialPageCacheUpdates( $dbw );
 
-		$disabledQueryPages = QueryPage::getDisabledQueryPages( $this->getConfig() );
 		foreach ( QueryPage::getPages() as $page ) {
-			list( , $special ) = $page;
-			$limit = $page[2] ?? null;
+			list( $class, $special ) = $page;
+			$limit = isset( $page[2] ) ? $page[2] : null;
 
 			# --list : just show the name of pages
 			if ( $this->hasOption( 'list' ) ) {
@@ -60,14 +57,13 @@ class UpdateSpecialPages extends Maintenance {
 			}
 
 			if ( !$this->hasOption( 'override' )
-				&& isset( $disabledQueryPages[$special] )
+				&& $wgDisableQueryPageUpdate && in_array( $special, $wgDisableQueryPageUpdate )
 			) {
 				$this->output( sprintf( "%-30s [QueryPage] disabled\n", $special ) );
 				continue;
 			}
 
-			$specialObj = MediaWikiServices::getInstance()->getSpecialPageFactory()->
-				getPage( $special );
+			$specialObj = SpecialPageFactory::getPage( $special );
 			if ( !$specialObj ) {
 				$this->output( "No such special page: $special\n" );
 				exit;
@@ -76,7 +72,7 @@ class UpdateSpecialPages extends Maintenance {
 				$queryPage = $specialObj;
 			} else {
 				$class = get_class( $specialObj );
-				$this->fatalError( "$class is not an instance of QueryPage.\n" );
+				$this->error( "$class is not an instance of QueryPage.\n", 1 );
 				die;
 			}
 
@@ -85,7 +81,7 @@ class UpdateSpecialPages extends Maintenance {
 				if ( $queryPage->isExpensive() ) {
 					$t1 = microtime( true );
 					# Do the query
-					$num = $queryPage->recache( $limit ?? $wgQueryCacheLimit );
+					$num = $queryPage->recache( $limit === null ? $wgQueryCacheLimit : $limit );
 					$t2 = microtime( true );
 					if ( $num === false ) {
 						$this->output( "FAILED: database error\n" );
@@ -105,7 +101,16 @@ class UpdateSpecialPages extends Maintenance {
 						$this->output( sprintf( "%.2fs\n", $seconds ) );
 					}
 					# Reopen any connections that have closed
-					$this->reopenAndWaitForReplicas();
+					if ( !wfGetLB()->pingAll() ) {
+						$this->output( "\n" );
+						do {
+							$this->error( "Connection failed, reconnecting in 10 seconds..." );
+							sleep( 10 );
+						} while ( !wfGetLB()->pingAll() );
+						$this->output( "Reconnected\n\n" );
+					}
+					# Wait for the replica DB to catch up
+					wfWaitForSlaves();
 				} else {
 					$this->output( "cheap, skipped\n" );
 				}
@@ -114,27 +119,6 @@ class UpdateSpecialPages extends Maintenance {
 				}
 			}
 		}
-	}
-
-	/**
-	 * Re-open any closed db connection, and wait for replicas
-	 *
-	 * Queries that take a really long time, might cause the
-	 * mysql connection to "go away"
-	 */
-	private function reopenAndWaitForReplicas() {
-		$lbFactory = MediaWikiServices::getInstance()->getDBLoadBalancerFactory();
-		$lb = $lbFactory->getMainLB();
-		if ( !$lb->pingAll() ) {
-			$this->output( "\n" );
-			do {
-				$this->error( "Connection failed, reconnecting in 10 seconds..." );
-				sleep( 10 );
-			} while ( !$lb->pingAll() );
-			$this->output( "Reconnected\n\n" );
-		}
-		// Wait for the replica DB to catch up
-		$lbFactory->waitForReplication();
 	}
 
 	public function doSpecialPageCacheUpdates( $dbw ) {
@@ -170,11 +154,11 @@ class UpdateSpecialPages extends Maintenance {
 				}
 				$this->output( sprintf( "%.2fs\n", $seconds ) );
 				# Wait for the replica DB to catch up
-				$this->reopenAndWaitForReplicas();
+				wfWaitForSlaves();
 			}
 		}
 	}
 }
 
-$maintClass = UpdateSpecialPages::class;
+$maintClass = "UpdateSpecialPages";
 require_once RUN_MAINTENANCE_IF_MAIN;

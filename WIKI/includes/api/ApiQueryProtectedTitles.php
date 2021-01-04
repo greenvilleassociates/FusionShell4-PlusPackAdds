@@ -1,5 +1,9 @@
 <?php
 /**
+ *
+ *
+ * Created on Feb 13, 2009
+ *
  * Copyright © 2009 Roan Kattouw "<Firstname>.<Lastname>@gmail.com"
  *
  * This program is free software; you can redistribute it and/or modify
@@ -40,7 +44,7 @@ class ApiQueryProtectedTitles extends ApiQueryGeneratorBase {
 	}
 
 	/**
-	 * @param ApiPageSet|null $resultPageSet
+	 * @param ApiPageSet $resultPageSet
 	 * @return void
 	 */
 	private function run( $resultPageSet = null ) {
@@ -55,8 +59,8 @@ class ApiQueryProtectedTitles extends ApiQueryGeneratorBase {
 		$this->addFieldsIf( 'pt_create_perm', isset( $prop['level'] ) );
 
 		if ( isset( $prop['comment'] ) || isset( $prop['parsedcomment'] ) ) {
-			$commentStore = CommentStore::getStore();
-			$commentQuery = $commentStore->getJoin( 'pt_reason' );
+			$commentStore = new CommentStore( 'pt_reason' );
+			$commentQuery = $commentStore->getJoin();
 			$this->addTables( $commentQuery['tables'] );
 			$this->addFields( $commentQuery['fields'] );
 			$this->addJoinConds( $commentQuery['joins'] );
@@ -70,7 +74,7 @@ class ApiQueryProtectedTitles extends ApiQueryGeneratorBase {
 		$this->addWhereRange( 'pt_namespace', $params['dir'], null, null );
 		$this->addWhereRange( 'pt_title', $params['dir'], null, null );
 
-		if ( $params['continue'] !== null ) {
+		if ( !is_null( $params['continue'] ) ) {
 			$cont = explode( '|', $params['continue'] );
 			$this->dieContinueUsageIf( count( $cont ) != 3 );
 			$op = ( $params['dir'] === 'newer' ? '>' : '<' );
@@ -98,10 +102,6 @@ class ApiQueryProtectedTitles extends ApiQueryGeneratorBase {
 		$this->addOption( 'LIMIT', $params['limit'] + 1 );
 		$res = $this->select( __METHOD__ );
 
-		if ( $resultPageSet === null ) {
-			$this->executeGenderCacheFromResultWrapper( $res, __METHOD__, 'pt' );
-		}
-
 		$count = 0;
 		$result = $this->getResult();
 
@@ -118,14 +118,14 @@ class ApiQueryProtectedTitles extends ApiQueryGeneratorBase {
 			}
 
 			$title = Title::makeTitle( $row->pt_namespace, $row->pt_title );
-			if ( $resultPageSet === null ) {
+			if ( is_null( $resultPageSet ) ) {
 				$vals = [];
 				ApiQueryBase::addTitleInfo( $vals, $title );
 				if ( isset( $prop['timestamp'] ) ) {
 					$vals['timestamp'] = wfTimestamp( TS_ISO_8601, $row->pt_timestamp );
 				}
 
-				if ( isset( $prop['user'] ) && $row->user_name !== null ) {
+				if ( isset( $prop['user'] ) && !is_null( $row->user_name ) ) {
 					$vals['user'] = $row->user_name;
 				}
 
@@ -134,12 +134,12 @@ class ApiQueryProtectedTitles extends ApiQueryGeneratorBase {
 				}
 
 				if ( isset( $prop['comment'] ) ) {
-					$vals['comment'] = $commentStore->getComment( 'pt_reason', $row )->text;
+					$vals['comment'] = $commentStore->getComment( $row )->text;
 				}
 
 				if ( isset( $prop['parsedcomment'] ) ) {
 					$vals['parsedcomment'] = Linker::formatComment(
-						$commentStore->getComment( 'pt_reason', $row )->text
+						$commentStore->getComment( $row )->text, $titles
 					);
 				}
 
@@ -163,7 +163,7 @@ class ApiQueryProtectedTitles extends ApiQueryGeneratorBase {
 			}
 		}
 
-		if ( $resultPageSet === null ) {
+		if ( is_null( $resultPageSet ) ) {
 			$result->addIndexedTagName(
 				[ 'query', $this->getModuleName() ],
 				$this->getModulePrefix()
@@ -174,7 +174,7 @@ class ApiQueryProtectedTitles extends ApiQueryGeneratorBase {
 	}
 
 	public function getCacheMode( $params ) {
-		if ( $params['prop'] !== null && in_array( 'parsedcomment', $params['prop'] ) ) {
+		if ( !is_null( $params['prop'] ) && in_array( 'parsedcomment', $params['prop'] ) ) {
 			// formatComment() calls wfMessage() among other things
 			return 'anon-public-user-private';
 		} else {

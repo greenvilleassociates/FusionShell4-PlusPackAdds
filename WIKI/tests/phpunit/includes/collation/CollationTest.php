@@ -8,7 +8,7 @@
  * @covers UppercaseCollation
  */
 class CollationTest extends MediaWikiLangTestCase {
-	protected function setUp() : void {
+	protected function setUp() {
 		parent::setUp();
 		$this->checkPHPExtension( 'intl' );
 	}
@@ -21,7 +21,7 @@ class CollationTest extends MediaWikiLangTestCase {
 	 * code makes this assumption.
 	 *
 	 * @param string $lang Language code for collator
-	 * @param string $base
+	 * @param string $base Base string
 	 * @param string $extended String containing base as a prefix.
 	 *
 	 * @dataProvider prefixDataProvider
@@ -92,7 +92,7 @@ class CollationTest extends MediaWikiLangTestCase {
 		$this->assertEquals( $firstLetter, $col->getFirstLetter( $string ) );
 	}
 
-	public function firstLetterProvider() {
+	function firstLetterProvider() {
 		return [
 			[ 'uppercase', 'Abc', 'A' ],
 			[ 'uppercase', 'abc', 'A' ],

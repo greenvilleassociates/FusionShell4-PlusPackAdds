@@ -33,7 +33,7 @@ class Cookie {
 	// TO IMPLEMENT? protected $version
 	// TO IMPLEMENT? protected $comment
 
-	public function __construct( $name, $value, $attr ) {
+	function __construct( $name, $value, $attr ) {
 		$this->name = $name;
 		$this->set( $value, $attr );
 	}
@@ -58,7 +58,11 @@ class Cookie {
 			$this->expires = strtotime( $attr['expires'] );
 		}
 
-		$this->path = $attr['path'] ?? '/';
+		if ( isset( $attr['path'] ) ) {
+			$this->path = $attr['path'];
+		} else {
+			$this->path = '/';
+		}
 
 		if ( isset( $attr['domain'] ) ) {
 			if ( self::validateCookieDomain( $attr['domain'] ) ) {
@@ -82,7 +86,7 @@ class Cookie {
 	 * not a big problem in practice, but there are test cases)
 	 *
 	 * @param string $domain The domain to validate
-	 * @param string|null $originDomain (optional) the domain the cookie originates from
+	 * @param string $originDomain (optional) the domain the cookie originates from
 	 * @return bool
 	 */
 	public static function validateCookieDomain( $domain, $originDomain = null ) {

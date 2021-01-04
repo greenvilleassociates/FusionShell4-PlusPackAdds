@@ -1,24 +1,46 @@
 /**
  * Dialog Module for wikiEditor
  */
-( function () {
+( function ( $, mw ) {
 
-	var dialogsModule = {
+	$.wikiEditor.modules.dialogs = {
+
+		/**
+		 * Compatibility map
+		 */
+		browsers: {
+			// Left-to-right languages
+			ltr: {
+				msie: [ [ '>=', 9 ] ],
+				firefox: [ [ '>=', 4 ] ],
+				opera: [ [ '>=', '10.5' ] ],
+				safari: [ [ '>=', 5 ] ],
+				chrome: [ [ '>=', 5 ] ]
+			},
+			// Right-to-left languages
+			rtl: {
+				msie: [ [ '>=', 9 ] ],
+				firefox: [ [ '>=', 4 ] ],
+				opera: [ [ '>=', '10.5' ] ],
+				safari: [ [ '>=', 5 ] ],
+				chrome: [ [ '>=', 5 ] ]
+			}
+		},
 
 		/**
 		 * API accessible functions
 		 */
 		api: {
 			addDialog: function ( context, data ) {
-				dialogsModule.fn.create( context, data );
+				$.wikiEditor.modules.dialogs.fn.create( context, data );
 			},
 			openDialog: function ( context, module ) {
 				var mod, $dialog;
-				if ( module in dialogsModule.modules ) {
-					mod = dialogsModule.modules[ module ];
+				if ( module in $.wikiEditor.modules.dialogs.modules ) {
+					mod = $.wikiEditor.modules.dialogs.modules[ module ];
 					$dialog = $( '#' + mod.id );
 					if ( $dialog.length === 0 ) {
-						dialogsModule.fn.reallyCreate( context, mod, module );
+						$.wikiEditor.modules.dialogs.fn.reallyCreate( context, mod, module );
 						$dialog = $( '#' + mod.id );
 					}
 
@@ -31,8 +53,8 @@
 				}
 			},
 			closeDialog: function ( context, module ) {
-				if ( module in dialogsModule.modules ) {
-					$( '#' + dialogsModule.modules[ module ].id ).dialog( 'close' );
+				if ( module in $.wikiEditor.modules.dialogs.modules ) {
+					$( '#' + $.wikiEditor.modules.dialogs.modules[ module ].id ).dialog( 'close' );
 				}
 			}
 		},
@@ -53,7 +75,7 @@
 				// Defer building of modules, unless they require immediate creation
 				for ( mod in config ) {
 					module = config[ mod ];
-					// Only create the dialog if it isn't filtered and doesn't exist yet
+					// Only create the dialog if it's supported, isn't filtered and doesn't exist yet
 					filtered = false;
 					if ( typeof module.filters !== 'undefined' ) {
 						for ( i = 0; i < module.filters.length; i++ ) {
@@ -70,12 +92,12 @@
 					}
 					// Re-select from the DOM, we might have removed the dialog just now
 					$existingDialog = $( '#' + module.id );
-					if ( !filtered && $existingDialog.length === 0 ) {
-						dialogsModule.modules[ mod ] = module;
+					if ( !filtered && $.wikiEditor.isSupported( module ) && $existingDialog.length === 0 ) {
+						$.wikiEditor.modules.dialogs.modules[ mod ] = module;
 						context.$textarea.trigger( 'wikiEditor-dialogs-setup-' + mod );
 						// If this dialog requires immediate creation, create it now
 						if ( typeof module.immediateCreate !== 'undefined' && module.immediateCreate ) {
-							dialogsModule.fn.reallyCreate( context, module, mod );
+							$.wikiEditor.modules.dialogs.fn.reallyCreate( context, module, mod );
 						}
 					}
 				}
@@ -86,7 +108,7 @@
 			 *
 			 * @param {Object} context Context object of editor dialog belongs to
 			 * @param {Object} module Dialog module object
-			 * @param {string} name Dialog name (key in dialogsModule.modules)
+			 * @param {string} name Dialog name (key in $.wikiEditor.modules.dialogs.modules)
 			 */
 			reallyCreate: function ( context, module, name ) {
 				var msg, $dialogDiv, $content,
@@ -98,19 +120,18 @@
 				if ( typeof configuration.modal === 'undefined' ) {
 					configuration.modal = true;
 				}
-				configuration.title = $.wikiEditor.autoSafeMsg( module, 'title' );
+				configuration.title = $.wikiEditor.autoMsg( module, 'title' );
 				// Transform messages in keys
 				// Stupid JS won't let us do stuff like
 				// foo = { mw.msg( 'bar' ): baz }
 				configuration.newButtons = {};
 				for ( msg in configuration.buttons ) {
-					// eslint-disable-next-line mediawiki/msg-doc
 					configuration.newButtons[ mw.msg( msg ) ] = configuration.buttons[ msg ];
 				}
 				configuration.buttons = configuration.newButtons;
 				if ( module.htmlTemplate ) {
-					$content = mw.template.get( 'ext.wikiEditor', module.htmlTemplate ).render();
-				} else if ( module.html instanceof $ ) {
+					$content = mw.template.get( 'jquery.wikiEditor.dialogs.config', module.htmlTemplate ).render();
+				} else if ( module.html instanceof jQuery ) {
 					$content = module.html;
 				} else {
 					$content = $( $.parseHTML( module.html ) );
@@ -120,15 +141,18 @@
 					.attr( 'id', module.id )
 					.append( $content )
 					.data( 'context', context )
-					.appendTo( document.body )
+					.appendTo( $( 'body' ) )
 					.each( module.init )
 					.dialog( configuration );
+				// Set tabindexes on buttons added by .dialog()
+				$.wikiEditor.modules.dialogs.fn.setTabindexes( $dialogDiv.closest( '.ui-dialog' )
+					.find( 'button' ).not( '[tabindex]' ) );
 				if ( !( 'resizeme' in module ) || module.resizeme ) {
 					$dialogDiv
-						.on( 'dialogopen', dialogsModule.fn.resize )
+						.on( 'dialogopen', $.wikiEditor.modules.dialogs.fn.resize )
 						.find( '.ui-tabs' ).on( 'tabsshow', function () {
 							$( this ).closest( '.ui-dialog-content' ).each(
-								dialogsModule.fn.resize );
+								$.wikiEditor.modules.dialogs.fn.resize );
 						} );
 				}
 				$dialogDiv.on( 'dialogclose', function () {
@@ -152,7 +176,6 @@
 					// Make sure elements don't wrapped so we get an accurate idea of whether they really fit. Also temporarily show
 					// hidden elements. Work around jQuery bug where <div style="display: inline;"/> inside a dialog is both
 					// :visible and :hidden
-					// eslint-disable-next-line no-jquery/no-sizzle
 					$oldHidden = $( this ).find( '*' ).not( ':visible' );
 
 				// Save the style attributes of the hidden elements to restore them later. Calling hide() after show() messes up
@@ -179,6 +202,19 @@
 				$oldHidden.each( function () {
 					$( this ).attr( 'style', $( this ).data( 'oldstyle' ) );
 				} );
+			},
+
+			/**
+			 * Set the right tabindexes on elements in a dialog
+			 *
+			 * @param {Object} $elements Elements to set tabindexes on. If they already have tabindexes, this function can behave a bit weird
+			 */
+			setTabindexes: function ( $elements ) {
+				// Get the highest tab index
+				var tabIndex = $( document ).lastTabIndex() + 1;
+				$elements.each( function () {
+					$( this ).attr( 'tabindex', tabIndex++ );
+				} );
 			}
 		},
 
@@ -188,7 +224,7 @@
 		quickDialog: function ( body, settings ) {
 			$( '<div>' )
 				.text( body )
-				.appendTo( document.body )
+				.appendTo( $( 'body' ) )
 				.dialog( $.extend( {
 					bgiframe: true,
 					modal: true
@@ -198,6 +234,4 @@
 
 	};
 
-	module.exports = dialogsModule;
-
-}() );
+}( jQuery, mediaWiki ) );

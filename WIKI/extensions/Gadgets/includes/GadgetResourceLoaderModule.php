@@ -16,6 +16,8 @@ class GadgetResourceLoaderModule extends ResourceLoaderWikiModule {
 	private $gadget;
 
 	/**
+	 * Creates an instance of this class
+	 *
 	 * @param array $options
 	 */
 	public function __construct( array $options ) {
@@ -62,7 +64,7 @@ class GadgetResourceLoaderModule extends ResourceLoaderWikiModule {
 
 	/**
 	 * Overrides ResourceLoaderModule::getDependencies()
-	 * @param ResourceLoaderContext|null $context
+	 * @param ResourceLoaderContext $context
 	 * @return string[] Names of resources this module depends on
 	 */
 	public function getDependencies( ResourceLoaderContext $context = null ) {

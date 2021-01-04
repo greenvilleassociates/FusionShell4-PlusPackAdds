@@ -1,5 +1,9 @@
 <?php
 /**
+ * action=unprotect handler
+ *
+ * Copyright © 2012 Timo Tijhof
+ *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
  * the Free Software Foundation; either version 2 of the License, or
@@ -16,10 +20,11 @@
  *
  * @file
  * @ingroup Actions
+ * @author Timo Tijhof
  */
 
 /**
- * Handle page unprotection (action=unprotect)
+ * Handle page unprotection
  *
  * This is a wrapper that will call Article::unprotect().
  *
@@ -32,7 +37,7 @@ class UnprotectAction extends ProtectAction {
 	}
 
 	public function show() {
-		$this->getArticle()->unprotect();
+		$this->page->unprotect();
 	}
 
 	public function doesWrites() {

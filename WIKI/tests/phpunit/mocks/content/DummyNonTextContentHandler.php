@@ -10,7 +10,7 @@ class DummyNonTextContentHandler extends DummyContentHandlerForTesting {
 	 * @see ContentHandler::serializeContent
 	 *
 	 * @param Content $content
-	 * @param string|null $format
+	 * @param string $format
 	 *
 	 * @return string
 	 */
@@ -22,7 +22,7 @@ class DummyNonTextContentHandler extends DummyContentHandlerForTesting {
 	 * @see ContentHandler::unserializeContent
 	 *
 	 * @param string $blob
-	 * @param string|null $format Unused.
+	 * @param string $format Unused.
 	 *
 	 * @return Content
 	 */

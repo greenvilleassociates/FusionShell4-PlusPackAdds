@@ -22,8 +22,8 @@
  */
 
 use MediaWiki\MediaWikiServices;
+use Wikimedia\Rdbms\ResultWrapper;
 use Wikimedia\Rdbms\IDatabase;
-use Wikimedia\Rdbms\IResultWrapper;
 
 /**
  * A special page that lists last changes made to the wiki,
@@ -33,25 +33,13 @@ use Wikimedia\Rdbms\IResultWrapper;
  */
 class SpecialWatchlist extends ChangesListSpecialPage {
 	protected static $savedQueriesPreferenceName = 'rcfilters-wl-saved-queries';
-	protected static $daysPreferenceName = 'watchlistdays';
-	protected static $limitPreferenceName = 'wllimit';
-	protected static $collapsedPreferenceName = 'rcfilters-wl-collapsed';
 
-	/** @var float|int */
 	private $maxDays;
-
-	/** @var WatchedItemStore */
-	private $watchStore;
-
-	/** @var bool Watchlist Expiry flag */
-	private $isWatchlistExpiryEnabled;
 
 	public function __construct( $page = 'Watchlist', $restriction = 'viewmywatchlist' ) {
 		parent::__construct( $page, $restriction );
 
 		$this->maxDays = $this->getConfig()->get( 'RCMaxAge' ) / ( 3600 * 24 );
-		$this->watchStore = MediaWikiServices::getInstance()->getWatchedItemStore();
-		$this->isWatchlistExpiryEnabled = $this->getConfig()->get( 'WatchlistExpiry' );
 	}
 
 	public function doesWrites() {
@@ -63,18 +51,18 @@ class SpecialWatchlist extends ChangesListSpecialPage {
 	 *
 	 * @param string $subpage
 	 */
-	public function execute( $subpage ) {
+	function execute( $subpage ) {
 		// Anons don't get a watchlist
 		$this->requireLogin( 'watchlistanontext' );
 
 		$output = $this->getOutput();
 		$request = $this->getRequest();
 		$this->addHelpLink( 'Help:Watching pages' );
-		$output->addModuleStyles( [ 'mediawiki.special' ] );
 		$output->addModules( [
-			'mediawiki.special.recentchanges',
+			'mediawiki.special.changeslist.visitedstatus',
 			'mediawiki.special.watchlist',
 		] );
+		$output->addModuleStyles( [ 'mediawiki.special.watchlist.styles' ] );
 
 		$mode = SpecialEditWatchlist::getMode( $request, $subpage );
 		if ( $mode !== false ) {
@@ -102,9 +90,7 @@ class SpecialWatchlist extends ChangesListSpecialPage {
 			&& $request->wasPosted()
 			&& $user->matchEditToken( $request->getVal( 'token' ) )
 		) {
-			MediaWikiServices::getInstance()
-				->getWatchlistNotificationManager()
-				->clearAllUserNotifications( $user );
+			$user->clearAllNotifications();
 			$output->redirect( $this->getPageTitle()->getFullURL( $opts->getChangedValues() ) );
 
 			return;
@@ -114,18 +100,25 @@ class SpecialWatchlist extends ChangesListSpecialPage {
 
 		if ( $this->isStructuredFilterUiEnabled() ) {
 			$output->addModuleStyles( [ 'mediawiki.rcfilters.highlightCircles.seenunseen.styles' ] );
+
+			$output->addJsConfigVars( 'wgStructuredChangeFiltersLiveUpdateSupported', false );
+			$output->addJsConfigVars(
+				'wgStructuredChangeFiltersEditWatchlistUrl',
+				SpecialPage::getTitleFor( 'EditWatchlist' )->getLocalURL()
+			);
 		}
 	}
 
-	/**
-	 * @inheritDoc
-	 */
-	public static function checkStructuredFilterUiEnabled( $user ) {
-		if ( $user instanceof Config ) {
-			wfDeprecated( __METHOD__ . ' with Config argument', '1.34' );
-			$user = func_get_arg( 1 );
-		}
-		return !$user->getOption( 'wlenhancedfilters-disable' );
+	public function isStructuredFilterUiEnabled() {
+		return $this->getRequest()->getBool( 'rcfilters' ) || (
+			$this->getConfig()->get( 'StructuredChangeFiltersOnWatchlist' ) &&
+			$this->getUser()->getOption( 'rcenhancedfilters' )
+		);
+	}
+
+	public function isStructuredFilterUiEnabledByDefault() {
+		return $this->getConfig()->get( 'StructuredChangeFiltersOnWatchlist' ) &&
+			$this->getUser()->getDefaultOption( 'rcenhancedfilters' );
 	}
 
 	/**
@@ -155,7 +148,6 @@ class SpecialWatchlist extends ChangesListSpecialPage {
 
 	/**
 	 * @inheritDoc
-	 * @suppress PhanUndeclaredMethod
 	 */
 	protected function registerFilters() {
 		parent::registerFilters();
@@ -170,10 +162,9 @@ class SpecialWatchlist extends ChangesListSpecialPage {
 					'activeValue' => false,
 					'default' => $this->getUser()->getBoolOption( 'extendwatchlist' ),
 					'queryCallable' => function ( $specialClassName, $ctx, $dbr, &$tables,
-							&$fields, &$conds, &$query_options, &$join_conds ) {
+												  &$fields, &$conds, &$query_options, &$join_conds ) {
 						$nonRevisionTypes = [ RC_LOG ];
-						$this->getHookRunner()->onSpecialWatchlistGetNonRevisionTypes(
-							$nonRevisionTypes );
+						Hooks::run( 'SpecialWatchlistGetNonRevisionTypes', [ &$nonRevisionTypes ] );
 						if ( $nonRevisionTypes ) {
 							$conds[] = $dbr->makeList(
 								[
@@ -207,8 +198,10 @@ class SpecialWatchlist extends ChangesListSpecialPage {
 					'label' => 'rcfilters-filter-watchlistactivity-unseen-label',
 					'description' => 'rcfilters-filter-watchlistactivity-unseen-description',
 					'cssClassSuffix' => 'watchedunseen',
-					'isRowApplicableCallable' => function ( $ctx, RecentChange $rc ) {
-						return !$this->isChangeEffectivelySeen( $rc );
+					'isRowApplicableCallable' => function ( $ctx, $rc ) {
+						$changeTs = $rc->getAttribute( 'rc_timestamp' );
+						$lastVisitTs = $rc->getAttribute( 'wl_notificationtimestamp' );
+						return $lastVisitTs !== null && $changeTs >= $lastVisitTs;
 					},
 				],
 				[
@@ -216,23 +209,16 @@ class SpecialWatchlist extends ChangesListSpecialPage {
 					'label' => 'rcfilters-filter-watchlistactivity-seen-label',
 					'description' => 'rcfilters-filter-watchlistactivity-seen-description',
 					'cssClassSuffix' => 'watchedseen',
-					'isRowApplicableCallable' => function ( $ctx, RecentChange $rc ) {
-						return $this->isChangeEffectivelySeen( $rc );
+					'isRowApplicableCallable' => function ( $ctx, $rc ) {
+						$changeTs = $rc->getAttribute( 'rc_timestamp' );
+						$lastVisitTs = $rc->getAttribute( 'wl_notificationtimestamp' );
+						return $lastVisitTs === null || $changeTs < $lastVisitTs;
 					}
 				],
 			],
 			'default' => ChangesListStringOptionsFilterGroup::NONE,
-			'queryCallable' => function (
-				$specialPageClassName,
-				$context,
-				IDatabase $dbr,
-				&$tables,
-				&$fields,
-				&$conds,
-				&$query_options,
-				&$join_conds,
-				$selectedValues
-			) {
+			'queryCallable' => function ( $specialPageClassName, $context, $dbr,
+										  &$tables, &$fields, &$conds, &$query_options, &$join_conds, $selectedValues ) {
 				if ( $selectedValues === [ 'seen' ] ) {
 					$conds[] = $dbr->makeList( [
 						'wl_notificationtimestamp IS NULL',
@@ -263,31 +249,11 @@ class SpecialWatchlist extends ChangesListSpecialPage {
 		$hideLiu = $registration->getFilter( 'hideliu' );
 		$hideLiu->setDefault( $user->getBoolOption( 'watchlisthideliu' ) );
 
-		// Selecting both hideanons and hideliu on watchlist preferances
-		// gives mutually exclusive filters, so those are ignored
-		if ( $user->getBoolOption( 'watchlisthideanons' ) &&
-			!$user->getBoolOption( 'watchlisthideliu' )
-		) {
-			$this->getFilterGroup( 'userExpLevel' )
-				->setDefault( 'registered' );
-		}
-
-		if ( $user->getBoolOption( 'watchlisthideliu' ) &&
-			!$user->getBoolOption( 'watchlisthideanons' )
-		) {
-			$this->getFilterGroup( 'userExpLevel' )
-				->setDefault( 'unregistered' );
-		}
-
 		$reviewStatus = $this->getFilterGroup( 'reviewStatus' );
 		if ( $reviewStatus !== null ) {
 			// Conditional on feature being available and rights
-			if ( $user->getBoolOption( 'watchlisthidepatrolled' ) ) {
-				$reviewStatus->setDefault( 'unpatrolled' );
-				$legacyReviewStatus = $this->getFilterGroup( 'legacyReviewStatus' );
-				$legacyHidePatrolled = $legacyReviewStatus->getFilter( 'hidepatrolled' );
-				$legacyHidePatrolled->setDefault( true );
-			}
+			$hidePatrolled = $reviewStatus->getFilter( 'hidepatrolled' );
+			$hidePatrolled->setDefault( $user->getBoolOption( 'watchlisthidepatrolled' ) );
 		}
 
 		$authorship = $this->getFilterGroup( 'authorship' );
@@ -300,6 +266,40 @@ class SpecialWatchlist extends ChangesListSpecialPage {
 			// Conditional on feature being available
 			$hideCategorization->setDefault( $user->getBoolOption( 'watchlisthidecategorization' ) );
 		}
+	}
+
+	/**
+	 * Get a FormOptions object containing the default options
+	 *
+	 * @return FormOptions
+	 */
+	public function getDefaultOptions() {
+		$opts = parent::getDefaultOptions();
+
+		$opts->add( 'days', $this->getDefaultDays(), FormOptions::FLOAT );
+		$opts->add( 'limit', $this->getDefaultLimit(), FormOptions::INT );
+
+		return $opts;
+	}
+
+	public function validateOptions( FormOptions $opts ) {
+		$opts->validateBounds( 'days', 0, $this->maxDays );
+		$opts->validateIntBounds( 'limit', 0, 5000 );
+		parent::validateOptions( $opts );
+	}
+
+	/**
+	 * Get all custom filters
+	 *
+	 * @return array Map of filter URL param names to properties (msg/default)
+	 */
+	protected function getCustomFilters() {
+		if ( $this->customFilters === null ) {
+			$this->customFilters = parent::getCustomFilters();
+			Hooks::run( 'SpecialWatchlistFilters', [ $this, &$this->customFilters ], '1.23' );
+		}
+
+		return $this->customFilters;
 	}
 
 	/**
@@ -338,8 +338,15 @@ class SpecialWatchlist extends ChangesListSpecialPage {
 
 			// This is how we handle the fact that HTML forms don't submit
 			// unchecked boxes.
-			foreach ( $this->getLegacyShowHideFilters() as $filter ) {
-				$allBooleansFalse[ $filter->getName() ] = false;
+			foreach ( $this->filterGroups as $filterGroup ) {
+				if ( $filterGroup instanceof ChangesListBooleanFilterGroup ) {
+					/** @var ChangesListBooleanFilter $filter */
+					foreach ( $filterGroup->getFilters() as $filter ) {
+						if ( $filter->displaysOnUnstructuredUi() ) {
+							$allBooleansFalse[$filter->getName()] = false;
+						}
+					}
+				}
 			}
 
 			$params = $params + $allBooleansFalse;
@@ -356,20 +363,36 @@ class SpecialWatchlist extends ChangesListSpecialPage {
 	/**
 	 * @inheritDoc
 	 */
+	protected function buildQuery( &$tables, &$fields, &$conds, &$query_options,
+		&$join_conds, FormOptions $opts
+	) {
+		$dbr = $this->getDB();
+		parent::buildQuery( $tables, $fields, $conds, $query_options, $join_conds,
+			$opts );
+
+		// Calculate cutoff
+		if ( $opts['days'] > 0 ) {
+			$conds[] = 'rc_timestamp > ' .
+				$dbr->addQuotes( $dbr->timestamp( time() - $opts['days'] * 3600 * 24 ) );
+		}
+	}
+
+	/**
+	 * @inheritDoc
+	 */
 	protected function doMainQuery( $tables, $fields, $conds, $query_options,
 		$join_conds, FormOptions $opts
 	) {
 		$dbr = $this->getDB();
 		$user = $this->getUser();
 
-		$rcQuery = RecentChange::getQueryInfo();
-		$tables = array_merge( $tables, $rcQuery['tables'], [ 'watchlist' ] );
-		$fields = array_merge( $rcQuery['fields'], $fields );
+		$tables = array_merge( [ 'recentchanges', 'watchlist' ], $tables );
+		$fields = array_merge( RecentChange::selectFields(), $fields );
 
 		$join_conds = array_merge(
 			[
 				'watchlist' => [
-					'JOIN',
+					'INNER JOIN',
 					[
 						'wl_user' => $user->getId(),
 						'wl_namespace=rc_namespace',
@@ -377,16 +400,8 @@ class SpecialWatchlist extends ChangesListSpecialPage {
 					],
 				],
 			],
-			$rcQuery['joins'],
 			$join_conds
 		);
-
-		if ( $this->isWatchlistExpiryEnabled ) {
-			$tables[] = 'watchlist_expiry';
-			$fields[] = 'we_expiry';
-			$join_conds['watchlist_expiry'] = [ 'LEFT JOIN', 'wl_id = we_item' ];
-			$conds[] = 'we_expiry IS NULL OR we_expiry > ' . $dbr->addQuotes( $dbr->timestamp() );
-		}
 
 		$tables[] = 'page';
 		$fields[] = 'page_latest';
@@ -396,10 +411,9 @@ class SpecialWatchlist extends ChangesListSpecialPage {
 
 		// Log entries with DELETED_ACTION must not show up unless the user has
 		// the necessary rights.
-		$permissionManager = MediaWikiServices::getInstance()->getPermissionManager();
-		if ( !$permissionManager->userHasRight( $user, 'deletedhistory' ) ) {
+		if ( !$user->isAllowed( 'deletedhistory' ) ) {
 			$bitmask = LogPage::DELETED_ACTION;
-		} elseif ( !$permissionManager->userHasAnyRight( $user, 'suppressrevision', 'viewsuppressed' ) ) {
+		} elseif ( !$user->isAllowedAny( 'suppressrevision', 'viewsuppressed' ) ) {
 			$bitmask = LogPage::DELETED_ACTION | LogPage::DELETED_RESTRICTED;
 		} else {
 			$bitmask = 0;
@@ -454,6 +468,17 @@ class SpecialWatchlist extends ChangesListSpecialPage {
 		);
 	}
 
+	protected function runMainQueryHook( &$tables, &$fields, &$conds, &$query_options,
+		&$join_conds, $opts
+	) {
+		return parent::runMainQueryHook( $tables, $fields, $conds, $query_options, $join_conds, $opts )
+			&& Hooks::run(
+				'SpecialWatchlistQuery',
+				[ &$conds, &$tables, &$join_conds, &$fields, $opts ],
+				'1.23'
+			);
+	}
+
 	/**
 	 * Return a IDatabase object for reading
 	 *
@@ -482,7 +507,7 @@ class SpecialWatchlist extends ChangesListSpecialPage {
 	/**
 	 * Build and output the actual changes list.
 	 *
-	 * @param IResultWrapper $rows Database rows
+	 * @param ResultWrapper $rows Database rows
 	 * @param FormOptions $opts
 	 */
 	public function outputChangesList( $rows, $opts ) {
@@ -490,13 +515,13 @@ class SpecialWatchlist extends ChangesListSpecialPage {
 		$user = $this->getUser();
 		$output = $this->getOutput();
 
-		// Show a message about replica DB lag, if applicable
-		$lag = $dbr->getSessionLagStatus()['lag'];
+		# Show a message about replica DB lag, if applicable
+		$lag = wfGetLB()->safeGetLag( $dbr );
 		if ( $lag > 0 ) {
 			$output->showLagWarning( $lag );
 		}
 
-		// If there are no rows to display, show message before trying to render the list
+		# If no rows to display, show message before try to render the list
 		if ( $rows->numRows() == 0 ) {
 			$output->wrapWikiMsg(
 				"<div class='mw-changeslist-empty'>\n$1\n</div>", 'recentchanges-noresult'
@@ -509,7 +534,6 @@ class SpecialWatchlist extends ChangesListSpecialPage {
 		$list = ChangesList::newFromContext( $this->getContext(), $this->filterGroups );
 		$list->setWatchlistDivs();
 		$list->initChangesListRows( $rows );
-
 		if ( $user->getOption( 'watchlistunwatchlinks' ) ) {
 			$list->setChangeLinePrefixer( function ( RecentChange $rc, ChangesList $cl, $grouped ) {
 				// Don't show unwatch link if the line is a grouped log entry using EnhancedChangesList,
@@ -518,32 +542,22 @@ class SpecialWatchlist extends ChangesListSpecialPage {
 					$grouped ) {
 					return '';
 				} else {
-					$unwatchTooltipMessage = 'tooltip-ca-unwatch';
-					$diffInDays = null;
-					// Check if the watchlist expiry flag is enabled to show new tooltip message
-					if ( $this->isWatchlistExpiryEnabled ) {
-						$watchedItem = $this->watchStore->getWatchedItem( $this->getUser(), $rc->getTitle() );
-						if ( $watchedItem instanceof WatchedItem && $watchedItem->getExpiry() !== null ) {
-							$diffInDays = $watchedItem->getExpiryInDays();
-
-							if ( $diffInDays > 0 ) {
-								$unwatchTooltipMessage = 'tooltip-ca-unwatch-expiring';
-							} else {
-								$unwatchTooltipMessage = 'tooltip-ca-unwatch-expiring-hours';
-							}
-						}
-					}
-
 					return $this->getLinkRenderer()
 							->makeKnownLink( $rc->getTitle(),
 								$this->msg( 'watchlist-unwatch' )->text(), [
 									'class' => 'mw-unwatch-link',
-									'title' => $this->msg( $unwatchTooltipMessage, [ $diffInDays ] )->text()
-								], [ 'action' => 'unwatch' ] ) . "\u{00A0}";
+									'title' => $this->msg( 'tooltip-ca-unwatch' )->text()
+								], [ 'action' => 'unwatch' ] ) . '&#160;';
 				}
 			} );
 		}
 		$dbr->dataSeek( $rows, 0 );
+
+		if ( $this->getConfig()->get( 'RCShowWatchingUsers' )
+			&& $user->getOption( 'shownumberswatching' )
+		) {
+			$watchedItemStore = MediaWikiServices::getInstance()->getWatchedItemStore();
+		}
 
 		$s = $list->beginRecentChangesList();
 
@@ -554,10 +568,10 @@ class SpecialWatchlist extends ChangesListSpecialPage {
 		$userShowHiddenCats = $this->getUser()->getBoolOption( 'showhiddencats' );
 		$counter = 1;
 		foreach ( $rows as $obj ) {
-			// Make RC entry
+			# Make RC entry
 			$rc = RecentChange::newFromRow( $obj );
 
-			// Skip CatWatch entries for hidden cats based on user preference
+			# Skip CatWatch entries for hidden cats based on user preference
 			if (
 				$rc->getAttribute( 'rc_type' ) == RC_CATEGORIZE &&
 				!$userShowHiddenCats &&
@@ -569,24 +583,19 @@ class SpecialWatchlist extends ChangesListSpecialPage {
 			$rc->counter = $counter++;
 
 			if ( $this->getConfig()->get( 'ShowUpdatedMarker' ) ) {
-				$unseen = !$this->isChangeEffectivelySeen( $rc );
+				$updated = $obj->wl_notificationtimestamp;
 			} else {
-				$unseen = false;
+				$updated = false;
 			}
 
-			if ( $this->getConfig()->get( 'RCShowWatchingUsers' )
-				&& $user->getOption( 'shownumberswatching' )
-			) {
+			if ( isset( $watchedItemStore ) ) {
 				$rcTitleValue = new TitleValue( (int)$obj->rc_namespace, $obj->rc_title );
-				$rc->numberofWatchingusers = $this->watchStore->countWatchers( $rcTitleValue );
+				$rc->numberofWatchingusers = $watchedItemStore->countWatchers( $rcTitleValue );
 			} else {
 				$rc->numberofWatchingusers = 0;
 			}
 
-			// XXX: this treats pages with no unseen changes as "not on the watchlist" since
-			// everything is on the watchlist and it is an easy way to make pages with unseen
-			// changes appear bold. @TODO: clean this up.
-			$changeLine = $list->recentChangesLine( $rc, $unseen, $counter );
+			$changeLine = $list->recentChangesLine( $rc, $updated, $counter );
 			if ( $changeLine !== false ) {
 				$s .= $changeLine;
 			}
@@ -637,15 +646,16 @@ class SpecialWatchlist extends ChangesListSpecialPage {
 		}
 
 		$lang = $this->getLanguage();
+		if ( $opts['days'] > 0 ) {
+			$days = $opts['days'];
+		} else {
+			$days = $this->maxDays;
+		}
 		$timestamp = wfTimestampNow();
-		$now = $lang->userTimeAndDate( $timestamp, $user );
 		$wlInfo = Html::rawElement(
 			'span',
-			[
-				'class' => 'wlinfo',
-				'data-params' => json_encode( [ 'from' => $timestamp, 'fromFormatted' => $now ] ),
-			],
-			$this->msg( 'wlnote' )->numParams( $numRows, round( $opts['days'] * 24 ) )->params(
+			[ 'class' => 'wlinfo' ],
+			$this->msg( 'wlnote' )->numParams( $numRows, round( $days * 24 ) )->params(
 				$lang->userDate( $timestamp, $user ), $lang->userTime( $timestamp, $user )
 			)->parse()
 		) . "<br />\n";
@@ -657,18 +667,24 @@ class SpecialWatchlist extends ChangesListSpecialPage {
 			$this->msg( 'wlshowtime' ) . ' ' . $this->cutoffselector( $opts )
 		);
 
-		// Spit out some control panel links
+		# Spit out some control panel links
 		$links = [];
 		$namesOfDisplayedFilters = [];
-		foreach ( $this->getLegacyShowHideFilters() as $filterName => $filter ) {
-			$namesOfDisplayedFilters[] = $filterName;
-			$links[] = $this->showHideCheck(
-				$nondefaults,
-				$filter->getShowHide(),
-				$filterName,
-				$opts[ $filterName ],
-				$filter->isFeatureAvailableOnStructuredUi()
-			);
+		foreach ( $this->getFilterGroups() as $groupName => $group ) {
+			if ( !$group->isPerGroupRequestParameter() ) {
+				foreach ( $group->getFilters() as $filterName => $filter ) {
+					if ( $filter->displaysOnUnstructuredUi( $this ) ) {
+						$namesOfDisplayedFilters[] = $filterName;
+						$links[] = $this->showHideCheck(
+							$nondefaults,
+							$filter->getShowHide(),
+							$filterName,
+							$opts[$filterName],
+							$filter->isFeatureAvailableOnStructuredUi( $this )
+						);
+					}
+				}
+			}
 		}
 
 		$hiddenFields = $nondefaults;
@@ -681,7 +697,7 @@ class SpecialWatchlist extends ChangesListSpecialPage {
 			unset( $hiddenFields[$filterName] );
 		}
 
-		// Namespace filter and put the whole form together.
+		# Namespace filter and put the whole form together.
 		$form .= $wlInfo;
 		$form .= $cutofflinks;
 		$form .= Html::rawElement(
@@ -697,23 +713,21 @@ class SpecialWatchlist extends ChangesListSpecialPage {
 			[
 				'selected' => $opts['namespace'],
 				'all' => '',
-				'label' => $this->msg( 'namespace' )->text(),
-				'in-user-lang' => true,
+				'label' => $this->msg( 'namespace' )->text()
 			], [
 				'name' => 'namespace',
 				'id' => 'namespace',
 				'class' => 'namespaceselector',
 			]
 		) . "\n";
-		$hidden = $opts['namespace'] === '' ? ' mw-input-hidden' : '';
-		$namespaceForm .= '<span class="mw-input-with-label' . $hidden . '">' . Xml::checkLabel(
+		$namespaceForm .= '<span class="mw-input-with-label">' . Xml::checkLabel(
 			$this->msg( 'invert' )->text(),
 			'invert',
 			'nsinvert',
 			$opts['invert'],
 			[ 'title' => $this->msg( 'tooltip-invert' )->text() ]
 		) . "</span>\n";
-		$namespaceForm .= '<span class="mw-input-with-label' . $hidden . '">' . Xml::checkLabel(
+		$namespaceForm .= '<span class="mw-input-with-label">' . Xml::checkLabel(
 			$this->msg( 'namespace_association' )->text(),
 			'associated',
 			'nsassociated',
@@ -740,16 +754,15 @@ class SpecialWatchlist extends ChangesListSpecialPage {
 		if ( $this->isStructuredFilterUiEnabled() ) {
 			$rcfilterContainer = Html::element(
 				'div',
-				// TODO: Remove deprecated rcfilters-container class
-				[ 'class' => 'rcfilters-container mw-rcfilters-container' ]
+				[ 'class' => 'rcfilters-container' ]
 			);
 
 			$loadingContainer = Html::rawElement(
 				'div',
-				[ 'class' => 'mw-rcfilters-spinner' ],
+				[ 'class' => 'rcfilters-spinner' ],
 				Html::element(
 					'div',
-					[ 'class' => 'mw-rcfilters-spinner-bounce' ]
+					[ 'class' => 'rcfilters-spinner-bounce' ]
 				)
 			);
 
@@ -757,8 +770,7 @@ class SpecialWatchlist extends ChangesListSpecialPage {
 			$this->getOutput()->addHTML(
 				Html::rawElement(
 					'div',
-					// TODO: Remove deprecated rcfilters-head class
-					[ 'class' => 'rcfilters-head mw-rcfilters-head' ],
+					[ 'class' => 'rcfilters-head' ],
 					$rcfilterContainer . $form
 				)
 			);
@@ -772,43 +784,52 @@ class SpecialWatchlist extends ChangesListSpecialPage {
 		$this->setBottomText( $opts );
 	}
 
-	private function cutoffselector( $options ) {
-		$selected = (float)$options['days'];
-		if ( $selected <= 0 ) {
-			$selected = $this->maxDays;
+	function cutoffselector( $options ) {
+		// Cast everything to strings immediately, so that we know all of the values have the same
+		// precision, and can be compared with '==='. 2/24 has a few more decimal places than its
+		// default string representation, for example, and would confuse comparisons.
+
+		// Misleadingly, the 'days' option supports hours too.
+		$days = array_map( 'strval', [ 1 / 24, 2 / 24, 6 / 24, 12 / 24, 1, 3, 7 ] );
+
+		$userWatchlistOption = (string)$this->getUser()->getOption( 'watchlistdays' );
+		// add the user preference, if it isn't available already
+		if ( !in_array( $userWatchlistOption, $days ) && $userWatchlistOption !== '0' ) {
+			$days[] = $userWatchlistOption;
 		}
 
-		$selectedHours = round( $selected * 24 );
+		$maxDays = (string)$this->maxDays;
+		// add the maximum possible value, if it isn't available already
+		if ( !in_array( $maxDays, $days ) ) {
+			$days[] = $maxDays;
+		}
 
-		$hours = array_unique( array_filter( [
-			1,
-			2,
-			6,
-			12,
-			24,
-			72,
-			168,
-			24 * (float)$this->getUser()->getOption( 'watchlistdays', 0 ),
-			24 * $this->maxDays,
-			$selectedHours
-		] ) );
-		asort( $hours );
+		$selected = (string)$options['days'];
+		if ( $selected <= 0 ) {
+			$selected = $maxDays;
+		}
 
-		$select = new XmlSelect( 'days', 'days', (float)( $selectedHours / 24 ) );
+		// add the currently selected value, if it isn't available already
+		if ( !in_array( $selected, $days ) ) {
+			$days[] = $selected;
+		}
 
-		foreach ( $hours as $value ) {
-			if ( $value < 24 ) {
-				$name = $this->msg( 'hours' )->numParams( $value )->text();
+		$select = new XmlSelect( 'days', 'days', $selected );
+
+		asort( $days );
+		foreach ( $days as $value ) {
+			if ( $value < 1 ) {
+				$name = $this->msg( 'hours' )->numParams( $value * 24 )->text();
 			} else {
-				$name = $this->msg( 'days' )->numParams( $value / 24 )->text();
+				$name = $this->msg( 'days' )->numParams( $value )->text();
 			}
-			$select->addOption( $name, (float)( $value / 24 ) );
+			$select->addOption( $name, $value );
 		}
 
 		return $select->getHTML() . "\n<br />\n";
 	}
 
-	public function setTopText( FormOptions $opts ) {
+	function setTopText( FormOptions $opts ) {
 		$nondefaults = $opts->getChangedValues();
 		$form = '';
 		$user = $this->getUser();
@@ -869,12 +890,11 @@ class SpecialWatchlist extends ChangesListSpecialPage {
 		return Html::rawElement(
 			'span',
 			$attribs,
-			// not using Html::checkLabel because that would escape the contents
-			Html::check( $name, (int)$value, [ 'id' => $name ] ) . Html::rawElement(
-				'label',
-				$attribs + [ 'for' => $name ],
-				// <nowiki/> at beginning to avoid messages with "$1 ..." being parsed as pre tags
-				$this->msg( $message, '<nowiki/>' )->parse()
+			Xml::checkLabel(
+				$this->msg( $message, '' )->text(),
+				$name,
+				$name,
+				(int)$value
 			)
 		);
 	}
@@ -887,29 +907,16 @@ class SpecialWatchlist extends ChangesListSpecialPage {
 	 * @return int
 	 */
 	protected function countItems() {
-		$count = $this->watchStore->countWatchedItems( $this->getUser() );
+		$store = MediaWikiServices::getInstance()->getWatchedItemStore();
+		$count = $store->countWatchedItems( $this->getUser() );
 		return floor( $count / 2 );
 	}
 
-	/**
-	 * @param RecentChange $rc
-	 * @return bool User viewed the revision or a newer one
-	 */
-	protected function isChangeEffectivelySeen( RecentChange $rc ) {
-		$firstUnseen = $this->getLatestNotificationTimestamp( $rc );
-
-		return ( $firstUnseen === null || $firstUnseen > $rc->getAttribute( 'rc_timestamp' ) );
+	function getDefaultLimit() {
+		return $this->getUser()->getIntOption( 'wllimit' );
 	}
 
-	/**
-	 * @param RecentChange $rc
-	 * @return string|null TS_MW timestamp of first unseen revision or null if there isn't one
-	 */
-	private function getLatestNotificationTimestamp( RecentChange $rc ) {
-		return $this->watchStore->getLatestNotificationTimestamp(
-			$rc->getAttribute( 'wl_notificationtimestamp' ),
-			$this->getUser(),
-			$rc->getTitle()
-		);
+	function getDefaultDays() {
+		return floatval( $this->getUser()->getOption( 'watchlistdays' ) );
 	}
 }

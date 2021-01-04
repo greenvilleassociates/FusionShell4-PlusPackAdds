@@ -4,22 +4,22 @@ namespace MediaWiki\Auth;
 
 /**
  * @group AuthManager
- * @covers \MediaWiki\Auth\AuthenticationRequest
+ * @covers MediaWiki\Auth\AuthenticationRequest
  */
-class AuthenticationRequestTest extends \MediaWikiIntegrationTestCase {
+class AuthenticationRequestTest extends \MediaWikiTestCase {
 	public function testBasics() {
 		$mock = $this->getMockForAbstractClass( AuthenticationRequest::class );
 
 		$this->assertSame( get_class( $mock ), $mock->getUniqueId() );
 
-		$this->assertIsArray( $mock->getMetadata() );
+		$this->assertType( 'array', $mock->getMetadata() );
 
 		$ret = $mock->describeCredentials();
-		$this->assertIsArray( $ret );
+		$this->assertInternalType( 'array', $ret );
 		$this->assertArrayHasKey( 'provider', $ret );
-		$this->assertInstanceOf( \Message::class, $ret['provider'] );
+		$this->assertInstanceOf( 'Message', $ret['provider'] );
 		$this->assertArrayHasKey( 'account', $ret );
-		$this->assertInstanceOf( \Message::class, $ret['account'] );
+		$this->assertInstanceOf( 'Message', $ret['account'] );
 	}
 
 	public function testLoadRequestsFromSubmission() {
@@ -203,8 +203,6 @@ class AuthenticationRequestTest extends \MediaWikiIntegrationTestCase {
 
 		// Basic combining
 
-		$this->assertEquals( [], AuthenticationRequest::mergeFieldInfo( [] ) );
-
 		$fields = AuthenticationRequest::mergeFieldInfo( [ $req1 ] );
 		$expect = $req1->getFieldInfo();
 		foreach ( $expect as $name => &$options ) {
@@ -279,7 +277,7 @@ class AuthenticationRequestTest extends \MediaWikiIntegrationTestCase {
 		$ret = $mock->loadFromSubmission( $data );
 		if ( is_array( $expectState ) ) {
 			$this->assertTrue( $ret );
-			$expect = $mock::__set_state( $expectState );
+			$expect = call_user_func( [ get_class( $mock ), '__set_state' ], $expectState );
 			$this->assertEquals( $expect, $mock );
 		} else {
 			$this->assertFalse( $ret );

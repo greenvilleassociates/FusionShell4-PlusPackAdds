@@ -15,3 +15,4 @@ CREATE TABLE /*$wgDBprefix*/templatelinks (
   UNIQUE KEY tl_from(tl_from,tl_namespace,tl_title),
   KEY (tl_namespace,tl_title)
 ) /*$wgDBTableOptions*/;
+

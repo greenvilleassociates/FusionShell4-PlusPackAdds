@@ -23,7 +23,7 @@
  * @file
  * @ingroup Site
  *
- * @license GPL-2.0-or-later
+ * @license GNU GPL v2+
  */
 interface SiteLookup {
 

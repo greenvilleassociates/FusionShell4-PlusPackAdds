@@ -16,7 +16,7 @@
  * http://www.gnu.org/copyleft/gpl.html
  *
  * @file
- * @ingroup Installer
+ * @ingroup Deployment
  */
 
 class WebInstallerReleaseNotes extends WebInstallerDocument {
@@ -26,8 +26,10 @@ class WebInstallerReleaseNotes extends WebInstallerDocument {
 	 * @return string
 	 */
 	protected function getFileName() {
-		if ( !preg_match( '/^(\d+)\.(\d+).*/i', MW_VERSION, $result ) ) {
-			throw new MWException( 'Constant MW_VERSION has an invalid value.' );
+		global $wgVersion;
+
+		if ( !preg_match( '/^(\d+)\.(\d+).*/i', $wgVersion, $result ) ) {
+			throw new MWException( 'Variable $wgVersion has an invalid value.' );
 		}
 
 		return 'RELEASE-NOTES-' . $result[1] . '.' . $result[2];

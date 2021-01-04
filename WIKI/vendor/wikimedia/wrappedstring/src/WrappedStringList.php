@@ -24,18 +24,18 @@
  * @file
  */
 
-namespace Wikimedia;
+namespace WrappedString;
 
 class WrappedStringList {
 	/** @var string */
 	protected $sep;
 
-	/** @var (string|WrappedString|WrappedStringList)[] */
+	/** @var WrappedString[] */
 	protected $wraps;
 
 	/**
 	 * @param string $sep
-	 * @param (string|WrappedString|WrappedStringList)[] $wraps
+	 * @param WrappedString[] $wraps
 	 */
 	public function __construct( $sep, array $wraps ) {
 		$this->sep = $sep;
@@ -43,7 +43,7 @@ class WrappedStringList {
 	}
 
 	/**
-	 * @param (string|WrappedString|WrappedStringList)[] $wraps
+	 * @params WrappedString[] $wraps
 	 * @return WrappedStringList Combined list
 	 */
 	protected function extend( array $wraps ) {
@@ -53,43 +53,59 @@ class WrappedStringList {
 	}
 
 	/**
-	 * Merge consecutive lists with the same separator.
+	 * Merge lists with the same separator.
 	 *
 	 * Does not modify the given array or any of the objects in it.
 	 *
-	 * @param (string|WrappedString|WrappedStringList)[] $lists
-	 * @param string $outerSep Separator that the caller intends to use when joining the strings
-	 * @return string[] Compacted list to be treated as strings
-	 * (may contain WrappedString and WrappedStringList objects)
+	 * @param array $lists Array of strings and/or WrappedStringList objects
+	 * @param string $outerSep
+	 * @return string[] Compacted list
 	 */
 	protected static function compact( array $lists, $outerSep ) {
-		$consolidated = [];
-		foreach ( $lists as $list ) {
-			if ( !$list instanceof WrappedStringList ) {
-				// Probably WrappedString or regular string,
-				// Not mergable as a list, but may be merged as a string
-				// later by WrappedString::compact.
-				$consolidated[] = $list;
-				continue;
+		$consolidated = array();
+		$prev = current( $lists );
+		// Wrap single WrappedString objects in a list for easier merging
+		if ( $prev instanceof WrappedString ) {
+			$prev = new WrappedStringList( $outerSep, [ $prev ] );
+		}
+		while ( ( $curr = next( $lists ) ) !== false ) {
+			if ( $curr instanceof WrappedString ) {
+				$curr = new WrappedStringList( $outerSep, [ $curr ] );
 			}
-			if ( $list->sep === $outerSep ) {
-				$consolidated = array_merge(
-					$consolidated,
-					self::compact( $list->wraps, $outerSep )
-				);
+			if ( $prev instanceof WrappedStringList ) {
+				if ( $curr instanceof WrappedStringList
+					&& $prev->sep === $curr->sep
+				) {
+					// Merge into previous list, and keep looking.
+					$prev = $prev->extend( $curr->wraps );
+				} else {
+					// Current list not mergeable. Commit previous one.
+					$prev = implode( $prev->sep, WrappedString::compact( $prev->wraps ) );
+					$consolidated[] = $prev;
+					$prev = $curr;
+				}
 			} else {
-				$consolidated[] = $list;
+				// Commit previous one
+				$consolidated[] = $prev;
+				$prev = $curr;
 			}
 		}
 
-		return WrappedString::compact( $consolidated );
+		// Commit last one
+		if ( $prev instanceof WrappedStringList ) {
+			$consolidated[] = implode( $prev->sep, WrappedString::compact( $prev->wraps ) );
+		} else {
+			$consolidated[] = $prev;
+		}
+
+		return $consolidated;
 	}
 
 	/**
 	 * Join a several wrapped strings with a separator between each.
 	 *
 	 * @param string $sep
-	 * @param (string|WrappedString|WrappedStringList)[] $lists
+	 * @param array $lists Array of strings and/or WrappedStringList objects
 	 * @return string
 	 */
 	public static function join( $sep, array $lists ) {

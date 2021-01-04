@@ -22,13 +22,9 @@
 namespace Wikimedia\Rdbms;
 
 /**
- * @newable
  * @ingroup Database
  */
 class DBReadOnlyError extends DBExpectedError {
 }
 
-/**
- * @deprecated since 1.29
- */
 class_alias( DBReadOnlyError::class, 'DBReadOnlyError' );

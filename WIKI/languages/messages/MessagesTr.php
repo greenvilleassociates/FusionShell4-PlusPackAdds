@@ -111,7 +111,6 @@ $specialPageAliases = [
 	'CreateAccount'             => [ 'HesapOluştur' ],
 	'Deadendpages'              => [ 'BağlantısızSayfalar' ],
 	'DeletedContributions'      => [ 'SilinenKatkılar' ],
-	'Diff'                      => [ 'Fark' ],
 	'DoubleRedirects'           => [ 'ÇiftYönlendirmeler' ],
 	'EditWatchlist'             => [ 'İzlemeListesiDüzenle' ],
 	'Emailuser'                 => [ 'E-postaGönder' ],
@@ -351,15 +350,6 @@ $magicWords = [
 	'pagesincategory_pages'     => [ '0', 'sayfalar', 'pages' ],
 	'pagesincategory_subcats'   => [ '0', 'altkategoriler', 'subcats' ],
 	'pagesincategory_files'     => [ '0', 'dosyalar', 'files' ],
-];
-
-$dateFormats = [
-	'mdy time' => 'H.i',
-	'mdy both' => 'H.i, F j, Y',
-	'dmy time' => 'H.i',
-	'dmy both' => 'H.i, j F Y',
-	'ymd time' => 'H.i',
-	'ymd both' => 'H.i, Y F j',
 ];
 
 $separatorTransformTable = [ ',' => '.', '.' => ',' ];

@@ -1,8 +1,5 @@
 <?php
 
-/**
- * @covers KuConverter
- */
 class LanguageKuTest extends LanguageClassesTestCase {
 	/**
 	 * @dataProvider provideAutoConvertToAllVariants

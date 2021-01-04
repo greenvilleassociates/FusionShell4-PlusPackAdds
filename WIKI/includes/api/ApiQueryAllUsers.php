@@ -1,5 +1,9 @@
 <?php
 /**
+ *
+ *
+ * Created on July 7, 2007
+ *
  * Copyright © 2007 Yuri Astrakhan "<Firstname><Lastname>@gmail.com"
  *
  * This program is free software; you can redistribute it and/or modify
@@ -20,16 +24,12 @@
  * @file
  */
 
-use MediaWiki\Block\DatabaseBlock;
-
 /**
  * Query module to enumerate all registered users.
  *
  * @ingroup API
  */
 class ApiQueryAllUsers extends ApiQueryBase {
-	use ApiQueryBlockInfoTrait;
-
 	public function __construct( ApiQuery $query, $moduleName ) {
 		parent::__construct( $query, $moduleName, 'au' );
 	}
@@ -49,9 +49,10 @@ class ApiQueryAllUsers extends ApiQueryBase {
 		$activeUserDays = $this->getConfig()->get( 'ActiveUserDays' );
 
 		$db = $this->getDB();
+		$commentStore = new CommentStore( 'ipb_reason' );
 
 		$prop = $params['prop'];
-		if ( $prop !== null ) {
+		if ( !is_null( $prop ) ) {
 			$prop = array_flip( $prop );
 			$fld_blockinfo = isset( $prop['blockinfo'] );
 			$fld_editcount = isset( $prop['editcount'] );
@@ -70,8 +71,8 @@ class ApiQueryAllUsers extends ApiQueryBase {
 		$this->addTables( 'user' );
 
 		$dir = ( $params['dir'] == 'descending' ? 'older' : 'newer' );
-		$from = $params['from'] === null ? null : $this->getCanonicalUserName( $params['from'] );
-		$to = $params['to'] === null ? null : $this->getCanonicalUserName( $params['to'] );
+		$from = is_null( $params['from'] ) ? null : $this->getCanonicalUserName( $params['from'] );
+		$to = is_null( $params['to'] ) ? null : $this->getCanonicalUserName( $params['to'] );
 
 		# MySQL can't figure out that 'user_name' and 'qcc_title' are the same
 		# despite the JOIN condition, so manually sort on the correct one.
@@ -83,20 +84,19 @@ class ApiQueryAllUsers extends ApiQueryBase {
 
 		$this->addWhereRange( $userFieldToSort, $dir, $from, $to );
 
-		if ( $params['prefix'] !== null ) {
+		if ( !is_null( $params['prefix'] ) ) {
 			$this->addWhere( $userFieldToSort .
 				$db->buildLike( $this->getCanonicalUserName( $params['prefix'] ), $db->anyString() ) );
 		}
 
-		if ( $params['rights'] !== null && count( $params['rights'] ) ) {
+		if ( !is_null( $params['rights'] ) && count( $params['rights'] ) ) {
 			$groups = [];
 			foreach ( $params['rights'] as $r ) {
-				$groups = array_merge( $groups, $this->getPermissionManager()
-					->getGroupsWithPermission( $r ) );
+				$groups = array_merge( $groups, User::getGroupsWithPermission( $r ) );
 			}
 
 			// no group with the given right(s) exists, no need for a query
-			if ( $groups === [] ) {
+			if ( !count( $groups ) ) {
 				$this->getResult()->addIndexedTagName( [ 'query', $this->getModuleName() ], '' );
 
 				return;
@@ -104,7 +104,7 @@ class ApiQueryAllUsers extends ApiQueryBase {
 
 			$groups = array_unique( $groups );
 
-			if ( $params['group'] === null ) {
+			if ( is_null( $params['group'] ) ) {
 				$params['group'] = $groups;
 			} else {
 				$params['group'] = array_unique( array_merge( $params['group'], $groups ) );
@@ -113,13 +113,13 @@ class ApiQueryAllUsers extends ApiQueryBase {
 
 		$this->requireMaxOneParameter( $params, 'group', 'excludegroup' );
 
-		if ( $params['group'] !== null && count( $params['group'] ) ) {
+		if ( !is_null( $params['group'] ) && count( $params['group'] ) ) {
 			// Filter only users that belong to a given group. This might
 			// produce as many rows-per-user as there are groups being checked.
 			$this->addTables( 'user_groups', 'ug1' );
 			$this->addJoinConds( [
 				'ug1' => [
-					'JOIN',
+					'INNER JOIN',
 					[
 						'ug1.ug_user=user_id',
 						'ug1.ug_group' => $params['group'],
@@ -130,7 +130,7 @@ class ApiQueryAllUsers extends ApiQueryBase {
 			$maxDuplicateRows *= count( $params['group'] );
 		}
 
-		if ( $params['excludegroup'] !== null && count( $params['excludegroup'] ) ) {
+		if ( !is_null( $params['excludegroup'] ) && count( $params['excludegroup'] ) ) {
 			// Filter only users don't belong to a given group. This can only
 			// produce one row-per-user, because we only keep on "no match".
 			$this->addTables( 'user_groups', 'ug1' );
@@ -143,7 +143,7 @@ class ApiQueryAllUsers extends ApiQueryBase {
 					LIST_OR
 				) ];
 			}
-			$this->addJoinConds( [ 'ug1' => [ 'LEFT JOIN',
+			$this->addJoinConds( [ 'ug1' => [ 'LEFT OUTER JOIN',
 				array_merge( [
 					'ug1.ug_user=user_id',
 					'ug1.ug_expiry IS NULL OR ug1.ug_expiry >= ' . $db->addQuotes( $db->timestamp() )
@@ -156,7 +156,7 @@ class ApiQueryAllUsers extends ApiQueryBase {
 			$this->addWhere( 'user_editcount > 0' );
 		}
 
-		$this->addBlockInfoToQuery( $fld_blockinfo );
+		$this->showHiddenUsersAddBlockInfo( $fld_blockinfo );
 
 		if ( $fld_groups || $fld_rights ) {
 			$this->addFields( [ 'groups' =>
@@ -174,7 +174,7 @@ class ApiQueryAllUsers extends ApiQueryBase {
 			// There shouldn't be any duplicate rows in querycachetwo here.
 			$this->addTables( 'querycachetwo' );
 			$this->addJoinConds( [ 'querycachetwo' => [
-				'JOIN', [
+				'INNER JOIN', [
 					'qcc_type' => 'activeusers',
 					'qcc_namespace' => NS_USER,
 					'qcc_title=user_name',
@@ -182,24 +182,17 @@ class ApiQueryAllUsers extends ApiQueryBase {
 			] ] );
 
 			// Actually count the actions using a subquery (T66505 and T66507)
-			$tables = [ 'recentchanges', 'actor' ];
-			$joins = [
-				'actor' => [ 'JOIN', 'rc_actor = actor_id' ],
-			];
-			$timestamp = $db->timestamp( (int)wfTimestamp( TS_UNIX ) - $activeUserSeconds );
+			$timestamp = $db->timestamp( wfTimestamp( TS_UNIX ) - $activeUserSeconds );
 			$this->addFields( [
 				'recentactions' => '(' . $db->selectSQLText(
-					$tables,
+					'recentchanges',
 					'COUNT(*)',
 					[
-						'actor_user = user_id',
+						'rc_user_text = user_name',
 						'rc_type != ' . $db->addQuotes( RC_EXTERNAL ), // no wikidata
 						'rc_log_type IS NULL OR rc_log_type != ' . $db->addQuotes( 'newusers' ),
 						'rc_timestamp >= ' . $db->addQuotes( $timestamp ),
-					],
-					__METHOD__,
-					[],
-					$joins
+					]
 				) . ')'
 			] );
 		}
@@ -266,17 +259,24 @@ class ApiQueryAllUsers extends ApiQueryBase {
 				);
 			}
 
-			if ( $fld_blockinfo && $row->ipb_id !== null ) {
-				$data += $this->getBlockDetails( DatabaseBlock::newFromRow( $row ) );
+			if ( $fld_blockinfo && !is_null( $row->ipb_by_text ) ) {
+				$data['blockid'] = (int)$row->ipb_id;
+				$data['blockedby'] = $row->ipb_by_text;
+				$data['blockedbyid'] = (int)$row->ipb_by;
+				$data['blockedtimestamp'] = wfTimestamp( TS_ISO_8601, $row->ipb_timestamp );
+				$data['blockreason'] = $commentStore->getComment( $row )->text;
+				$data['blockexpiry'] = $row->ipb_expiry;
 			}
 			if ( $row->ipb_deleted ) {
 				$data['hidden'] = true;
 			}
 			if ( $fld_editcount ) {
-				$data['editcount'] = (int)$row->user_editcount;
+				$data['editcount'] = intval( $row->user_editcount );
 			}
 			if ( $params['activeusers'] ) {
-				$data['recentactions'] = (int)$row->recentactions;
+				$data['recentactions'] = intval( $row->recentactions );
+				// @todo 'recenteditcount' is set for BC, remove in 1.25
+				$data['recenteditcount'] = $data['recentactions'];
 			}
 			if ( $fld_registration ) {
 				$data['registration'] = $row->user_registration ?
@@ -304,7 +304,7 @@ class ApiQueryAllUsers extends ApiQueryBase {
 				}
 
 				if ( $fld_rights ) {
-					$data['rights'] = $this->getPermissionManager()->getGroupPermissions( $groups );
+					$data['rights'] = User::getGroupPermissions( $groups );
 					ApiResult::setIndexedTagName( $data['rights'], 'r' );
 					ApiResult::setArrayType( $data['rights'], 'array' );
 				}
@@ -324,12 +324,8 @@ class ApiQueryAllUsers extends ApiQueryBase {
 		return 'anon-public-user-private';
 	}
 
-	public function getAllowedParams( $flags = 0 ) {
+	public function getAllowedParams() {
 		$userGroups = User::getAllGroups();
-
-		if ( $flags & ApiBase::GET_VALUES_FOR_HELP ) {
-			sort( $userGroups );
-		}
 
 		return [
 			'from' => null,
@@ -351,7 +347,7 @@ class ApiQueryAllUsers extends ApiQueryBase {
 				ApiBase::PARAM_ISMULTI => true,
 			],
 			'rights' => [
-				ApiBase::PARAM_TYPE => $this->getPermissionManager()->getAllPermissions(),
+				ApiBase::PARAM_TYPE => User::getAllRights(),
 				ApiBase::PARAM_ISMULTI => true,
 			],
 			'prop' => [
@@ -389,7 +385,7 @@ class ApiQueryAllUsers extends ApiQueryBase {
 	protected function getExamplesMessages() {
 		return [
 			'action=query&list=allusers&aufrom=Y'
-				=> 'apihelp-query+allusers-example-y',
+				=> 'apihelp-query+allusers-example-Y',
 		];
 	}
 

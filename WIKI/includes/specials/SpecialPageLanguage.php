@@ -23,8 +23,6 @@
  * @since 1.24
  */
 
-use MediaWiki\MediaWikiServices;
-
 /**
  * Special page for changing the content language of a page
  *
@@ -45,8 +43,7 @@ class SpecialPageLanguage extends FormSpecialPage {
 	}
 
 	protected function preText() {
-		$this->getOutput()->addModules( 'mediawiki.misc-authed-ooui' );
-		return parent::preText();
+		$this->getOutput()->addModules( 'mediawiki.special.pageLanguage' );
 	}
 
 	protected function getFormFields() {
@@ -54,11 +51,8 @@ class SpecialPageLanguage extends FormSpecialPage {
 		$defaultName = $this->par;
 		$title = $defaultName ? Title::newFromText( $defaultName ) : null;
 		if ( $title ) {
-			$defaultPageLanguage = MediaWikiServices::getInstance()
-				->getContentHandlerFactory()
-				->getContentHandler( $title->getContentModel() )
-				->getPageLanguage( $title );
-
+			$defaultPageLanguage =
+				ContentHandler::getForTitle( $title )->getPageLanguage( $title );
 			$hasCustomLanguageSet = !$defaultPageLanguage->equals( $title->getPageLanguage() );
 		} else {
 			$hasCustomLanguageSet = false;
@@ -87,9 +81,8 @@ class SpecialPageLanguage extends FormSpecialPage {
 
 		// Building a language selector
 		$userLang = $this->getLanguage()->getCode();
-		$languages = MediaWikiServices::getInstance()
-			->getLanguageNameUtils()
-			->getLanguageNames( $userLang, 'mwfile' );
+		$languages = Language::fetchLanguageNames( $userLang, 'mwfile' );
+		ksort( $languages );
 		$options = [];
 		foreach ( $languages as $code => $name ) {
 			$options["$code - $name"] = $code;
@@ -127,11 +120,12 @@ class SpecialPageLanguage extends FormSpecialPage {
 	}
 
 	public function alterForm( HTMLForm $form ) {
-		$this->getHookRunner()->onLanguageSelector( $this->getOutput(), 'mw-languageselector' );
+		Hooks::run( 'LanguageSelector', [ $this->getOutput(), 'mw-languageselector' ] );
 		$form->setSubmitTextMsg( 'pagelang-submit' );
 	}
 
 	/**
+	 *
 	 * @param array $data
 	 * @return Status
 	 */
@@ -152,8 +146,7 @@ class SpecialPageLanguage extends FormSpecialPage {
 		}
 
 		// Check permissions and make sure the user has permission to edit the page
-		$errors = MediaWikiServices::getInstance()->getPermissionManager()
-			->getPermissionErrors( 'edit', $this->getUser(), $title );
+		$errors = $title->getUserPermissionsErrors( 'edit', $this->getUser() );
 
 		if ( $errors ) {
 			$out = $this->getOutput();
@@ -171,7 +164,7 @@ class SpecialPageLanguage extends FormSpecialPage {
 			$this->getContext(),
 			$title,
 			$newLanguage,
-			$data['reason'] ?? ''
+			$data['reason'] === null ? '' : $data['reason']
 		);
 	}
 
@@ -232,8 +225,8 @@ class SpecialPageLanguage extends FormSpecialPage {
 		}
 
 		// Hardcoded [def] if the language is set to null
-		$logOld = $oldLanguage ?: $defLang . '[def]';
-		$logNew = $newLanguage ?: $defLang . '[def]';
+		$logOld = $oldLanguage ? $oldLanguage : $defLang . '[def]';
+		$logNew = $newLanguage ? $newLanguage : $defLang . '[def]';
 
 		// Writing new page language to database
 		$dbw->update(
@@ -260,7 +253,7 @@ class SpecialPageLanguage extends FormSpecialPage {
 		$entry->setTarget( $title );
 		$entry->setParameters( $logParams );
 		$entry->setComment( $reason );
-		$entry->addTags( $tags );
+		$entry->setTags( $tags );
 
 		$logid = $entry->insert();
 		$entry->publish( $logid );
@@ -280,7 +273,7 @@ class SpecialPageLanguage extends FormSpecialPage {
 		$this->getOutput()->redirect( $this->goToUrl );
 	}
 
-	private function showLogFragment( $title ) {
+	function showLogFragment( $title ) {
 		$moveLogPage = new LogPage( 'pagelang' );
 		$out1 = Xml::element( 'h2', null, $moveLogPage->getName()->text() );
 		$out2 = '';

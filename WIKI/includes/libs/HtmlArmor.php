@@ -16,14 +16,12 @@
  * http://www.gnu.org/copyleft/gpl.html
  *
  * @file
- * @license GPL-2.0-or-later
+ * @license GPL-2.0+
  * @author Kunal Mehta <legoktm@member.fsf.org>
  */
 
 /**
  * Marks HTML that shouldn't be escaped
- *
- * @newable
  *
  * @since 1.28
  */
@@ -35,8 +33,6 @@ class HtmlArmor {
 	private $value;
 
 	/**
-	 * @stable to call
-	 *
 	 * @param string|null $value
 	 */
 	public function __construct( $value ) {

@@ -1,8 +1,5 @@
-( function () {
+( function ( mw ) {
 	QUnit.module( 'mediawiki.api.options', QUnit.newMwEnvironment( {
-		config: {
-			wgUserName: 'Foo'
-		},
 		setup: function () {
 			this.server = this.sandbox.useFakeServer();
 			this.server.respondImmediately = true;
@@ -24,7 +21,6 @@
 
 		// We need to respond to the request for token first, otherwise the other requests won't be sent
 		// until after the server.respond call, which confuses sinon terribly. This sucks a lot.
-		api.badToken( 'options' );
 		api.getToken( 'options' );
 		this.server.respond(
 			/meta=tokens&type=csrf/,
@@ -34,9 +30,7 @@
 
 		// Requests are POST, match requestBody instead of url
 		this.server.respond( function ( request ) {
-			if ( !request.requestBody ) {
-				// GET request for the token, already responded above
-			} else if ( [
+			if ( $.inArray( request.requestBody, [
 				// simple
 				'action=options&format=json&formatversion=2&change=foo%3Dbar&token=%2B%5C',
 				// two options
@@ -49,7 +43,7 @@
 				'action=options&format=json&formatversion=2&change=foo&token=%2B%5C',
 				// reset an option, not bundleable
 				'action=options&format=json&formatversion=2&optionname=foo%7Cbar%3Dquux&token=%2B%5C'
-			].indexOf( request.requestBody ) !== -1 ) {
+			] ) !== -1 ) {
 				assert.ok( true, 'Repond to ' + request.requestBody );
 				request.respond( 200, { 'Content-Type': 'application/json' },
 					'{ "options": "success" }' );
@@ -85,7 +79,6 @@
 
 		// We need to respond to the request for token first, otherwise the other requests won't be sent
 		// until after the server.respond call, which confuses sinon terribly. This sucks a lot.
-		api.badToken( 'options' );
 		api.getToken( 'options' );
 		this.server.respond(
 			/meta=tokens&type=csrf/,
@@ -95,9 +88,7 @@
 
 		// Requests are POST, match requestBody instead of url
 		this.server.respond( function ( request ) {
-			if ( !request.requestBody ) {
-				// GET request for the token, already responded above
-			} else if ( [
+			if ( $.inArray( request.requestBody, [
 				// simple
 				'action=options&format=json&formatversion=2&change=foo%3Dbar&token=%2B%5C',
 				// two options
@@ -111,7 +102,7 @@
 				'action=options&format=json&formatversion=2&change=foo&token=%2B%5C',
 				// reset an option, not bundleable
 				'action=options&format=json&formatversion=2&optionname=foo%7Cbar%3Dquux&token=%2B%5C'
-			].indexOf( request.requestBody ) !== -1 ) {
+			] ) !== -1 ) {
 				assert.ok( true, 'Repond to ' + request.requestBody );
 				request.respond(
 					200,
@@ -147,21 +138,4 @@
 			} )
 		);
 	} );
-
-	QUnit.test( 'saveOptions (anonymous)', function ( assert ) {
-		var promise, test = this;
-
-		mw.config.set( 'wgUserName', null );
-		promise = new mw.Api().saveOptions( { foo: 'bar' } );
-
-		assert.rejects( promise, /notloggedin/, 'Can not save options while not logged in' );
-
-		return promise
-			.catch( function () {
-				return $.Deferred().resolve();
-			} )
-			.then( function () {
-				assert.strictEqual( test.server.requests.length, 0, 'No requests made' );
-			} );
-	} );
-}() );
+}( mediaWiki ) );

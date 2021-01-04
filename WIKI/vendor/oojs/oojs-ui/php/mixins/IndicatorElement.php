@@ -27,16 +27,18 @@ trait IndicatorElement {
 
 	/**
 	 * @param array $config Configuration options
-	 *      - string $config['indicator'] Symbolic indicator name
+	 * @param string $config['indicator'] Symbolic indicator name
 	 */
 	public function initializeIndicatorElement( array $config = [] ) {
 		// Properties
 		// FIXME 'indicatorElement' is a very stupid way to call '$indicator'
-		$this->indicator = $config['indicatorElement'] ?? new Tag( 'span' );
+		$this->indicator = isset( $config['indicatorElement'] )
+			? $config['indicatorElement']
+			: new Tag( 'span' );
 
 		// Initialization
 		$this->indicator->addClasses( [ 'oo-ui-indicatorElement-indicator' ] );
-		$this->setIndicator( $config['indicator'] ?? null );
+		$this->setIndicator( isset( $config['indicator'] ) ? $config['indicator'] : null );
 
 		$this->registerConfigCallback( function ( &$config ) {
 			if ( $this->indicatorName !== null ) {
@@ -61,8 +63,6 @@ trait IndicatorElement {
 
 		$this->indicatorName = $indicator;
 		$this->toggleClasses( [ 'oo-ui-indicatorElement' ], (bool)$this->indicatorName );
-		$this->indicator->toggleClasses( [ 'oo-ui-indicatorElement-noIndicator' ],
-			!$this->indicatorName );
 
 		return $this;
 	}

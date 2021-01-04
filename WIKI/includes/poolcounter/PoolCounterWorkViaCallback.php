@@ -24,9 +24,6 @@
 /**
  * Convenience class for dealing with PoolCounters using callbacks
  * @since 1.22
- * @newable
- * @note marked as newable in 1.35 for lack of a better alternative,
- *       but should use a factory in the future.
  */
 class PoolCounterWorkViaCallback extends PoolCounterWork {
 	/** @var callable */
@@ -46,8 +43,6 @@ class PoolCounterWorkViaCallback extends PoolCounterWork {
 	 * and 'error' methods. Methods without callbacks will be no-ops that return false.
 	 * If a 'doCachedWork' callback is provided, then execute() may wait for any prior
 	 * process in the pool to finish and reuse its cached result.
-	 *
-	 * @stable to call
 	 *
 	 * @param string $type The class of actions to limit concurrency for
 	 * @param string $key
@@ -71,26 +66,26 @@ class PoolCounterWorkViaCallback extends PoolCounterWork {
 	}
 
 	public function doWork() {
-		return ( $this->doWork )();
+		return call_user_func_array( $this->doWork, [] );
 	}
 
 	public function getCachedWork() {
 		if ( $this->doCachedWork ) {
-			return ( $this->doCachedWork )();
+			return call_user_func_array( $this->doCachedWork, [] );
 		}
 		return false;
 	}
 
-	public function fallback( $fast ) {
+	public function fallback() {
 		if ( $this->fallback ) {
-			return ( $this->fallback )( $fast );
+			return call_user_func_array( $this->fallback, [] );
 		}
 		return false;
 	}
 
 	public function error( $status ) {
 		if ( $this->error ) {
-			return ( $this->error )( $status );
+			return call_user_func_array( $this->error, [ $status ] );
 		}
 		return false;
 	}

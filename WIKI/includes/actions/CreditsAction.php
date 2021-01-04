@@ -44,7 +44,7 @@ class CreditsAction extends FormlessAction {
 	 * @return string HTML
 	 */
 	public function onView() {
-		if ( $this->getWikiPage()->getId() == 0 ) {
+		if ( $this->page->getID() == 0 ) {
 			$s = $this->msg( 'nocredits' )->parse();
 		} else {
 			$s = $this->getCredits( -1 );
@@ -64,7 +64,7 @@ class CreditsAction extends FormlessAction {
 		$s = '';
 
 		if ( $cnt != 0 ) {
-			$s = $this->getAuthor();
+			$s = $this->getAuthor( $this->page );
 			if ( $cnt > 1 || $cnt < 0 ) {
 				$s .= ' ' . $this->getContributors( $cnt - 1, $showIfMax );
 			}
@@ -75,11 +75,10 @@ class CreditsAction extends FormlessAction {
 
 	/**
 	 * Get the last author with the last modification time
-	 *
+	 * @param Page $page
 	 * @return string HTML
 	 */
-	private function getAuthor() {
-		$page = $this->getWikiPage();
+	protected function getAuthor( Page $page ) {
 		$user = User::newFromName( $page->getUserText(), false );
 
 		$timestamp = $page->getTimestamp();
@@ -114,7 +113,7 @@ class CreditsAction extends FormlessAction {
 	 * @return string Html
 	 */
 	protected function getContributors( $cnt, $showIfMax ) {
-		$contributors = $this->getWikiPage()->getContributors();
+		$contributors = $this->page->getContributors();
 
 		$others_link = false;
 
@@ -199,9 +198,6 @@ class CreditsAction extends FormlessAction {
 	protected function link( User $user ) {
 		if ( $this->canShowRealUserName() && !$user->isAnon() ) {
 			$real = $user->getRealName();
-			if ( $real === '' ) {
-				$real = $user->getName();
-			}
 		} else {
 			$real = $user->getName();
 		}
@@ -223,10 +219,12 @@ class CreditsAction extends FormlessAction {
 		$link = $this->link( $user );
 		if ( $user->isAnon() ) {
 			return $this->msg( 'anonuser' )->rawParams( $link )->parse();
-		} elseif ( $this->canShowRealUserName() && $user->getRealName() ) {
-			return $link;
 		} else {
-			return $this->msg( 'siteuser' )->rawParams( $link )->params( $user->getName() )->escaped();
+			if ( $this->canShowRealUserName() && $user->getRealName() ) {
+				return $link;
+			} else {
+				return $this->msg( 'siteuser' )->rawParams( $link )->params( $user->getName() )->escaped();
+			}
 		}
 	}
 

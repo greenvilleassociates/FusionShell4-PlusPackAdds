@@ -24,9 +24,6 @@
  * @ingroup Maintenance
  */
 
-use MediaWiki\MediaWikiServices;
-use MediaWiki\Revision\RevisionLookup;
-
 require_once __DIR__ . '/Maintenance.php';
 
 /**
@@ -56,9 +53,6 @@ class AttachLatest extends Maintenance {
 			$conds,
 			__METHOD__ );
 
-		$lbFactory = MediaWikiServices::getInstance()->getDBLoadBalancerFactory();
-		$dbDomain = $lbFactory->getLocalDomainID();
-
 		$n = 0;
 		foreach ( $result as $row ) {
 			$pageId = intval( $row->page_id );
@@ -69,26 +63,21 @@ class AttachLatest extends Maintenance {
 				[ 'rev_page' => $pageId ],
 				__METHOD__ );
 			if ( !$latestTime ) {
-				$this->output( "$dbDomain $pageId [[$name]] can't find latest rev time?!\n" );
+				$this->output( wfWikiID() . " $pageId [[$name]] can't find latest rev time?!\n" );
 				continue;
 			}
 
-			$revRecord = MediaWikiServices::getInstance()
-				->getRevisionLookup()
-				->getRevisionByTimestamp( $title, $latestTime, RevisionLookup::READ_LATEST );
-			if ( $revRecord === null ) {
-				$this->output(
-					"$dbDomain $pageId [[$name]] latest time $latestTime, can't find revision id\n"
-				);
+			$revision = Revision::loadFromTimestamp( $dbw, $title, $latestTime );
+			if ( is_null( $revision ) ) {
+				$this->output( wfWikiID()
+					. " $pageId [[$name]] latest time $latestTime, can't find revision id\n" );
 				continue;
 			}
-
-			$id = $revRecord->getId();
-			$this->output( "$dbDomain $pageId [[$name]] latest time $latestTime, rev id $id\n" );
+			$id = $revision->getId();
+			$this->output( wfWikiID() . " $pageId [[$name]] latest time $latestTime, rev id $id\n" );
 			if ( $this->hasOption( 'fix' ) ) {
 				$page = WikiPage::factory( $title );
-				$page->updateRevisionOn( $dbw, $revRecord );
-				$lbFactory->waitForReplication();
+				$page->updateRevisionOn( $dbw, $revision );
 			}
 			$n++;
 		}
@@ -99,5 +88,5 @@ class AttachLatest extends Maintenance {
 	}
 }
 
-$maintClass = AttachLatest::class;
+$maintClass = "AttachLatest";
 require_once RUN_MAINTENANCE_IF_MAIN;

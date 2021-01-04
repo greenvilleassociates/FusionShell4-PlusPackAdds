@@ -333,11 +333,6 @@ $specialPageAliases['sr-ec'] = [
 	'Renameuser' => [ 'ПреименујКорисника', 'Преименуј_корисника' ],
 ];
 
-/** Serbian (Latin script) (srpski (latinica)‎) */
-$specialPageAliases['sr-el'] = [
-	'Renameuser' => [ 'PreimenujKorisnika', 'Preimenuj_korisnika' ],
-];
-
 /** Swedish (svenska) */
 $specialPageAliases['sv'] = [
 	'Renameuser' => [ 'Användarnamnbyte' ],
@@ -366,11 +361,6 @@ $specialPageAliases['tr'] = [
 /** Ukrainian (українська) */
 $specialPageAliases['uk'] = [
 	'Renameuser' => [ 'Перейменувати_користувача', 'Переименовать_участника' ],
-];
-
-/** Urdu (اردو) */
-$specialPageAliases['ur'] = [
-	'Renameuser' => [ 'تبدیلی_نام' ],
 ];
 
 /** Vietnamese (Tiếng Việt) */

@@ -21,9 +21,6 @@
  * @ingroup SpecialPage
  */
 
-use MediaWiki\Permissions\PermissionManager;
-use MediaWiki\Revision\RevisionRecord;
-
 /**
  * Special page allowing users with the appropriate permissions to view
  * and hide revisions. Log items can also be hidden.
@@ -67,16 +64,10 @@ class SpecialRevisionDelete extends UnlistedSpecialPage {
 	/** @var string */
 	private $otherReason;
 
-	/** @var PermissionManager */
-	private $permissionManager;
-
-	/** @var RepoGroup */
-	private $repoGroup;
-
 	/**
 	 * UI labels for each type.
 	 */
-	private const UI_LABELS = [
+	private static $UILabels = [
 		'revision' => [
 			'check-label' => 'revdelete-hide-text',
 			'success' => 'revdelete-success',
@@ -114,17 +105,8 @@ class SpecialRevisionDelete extends UnlistedSpecialPage {
 		],
 	];
 
-	/**
-	 * @inheritDoc
-	 *
-	 * @param PermissionManager $permissionManager
-	 * @param RepoGroup $repoGroup
-	 */
-	public function __construct( PermissionManager $permissionManager, RepoGroup $repoGroup ) {
+	public function __construct() {
 		parent::__construct( 'Revisiondelete', 'deleterevision' );
-
-		$this->permissionManager = $permissionManager;
-		$this->repoGroup = $repoGroup;
 	}
 
 	public function doesWrites() {
@@ -140,13 +122,18 @@ class SpecialRevisionDelete extends UnlistedSpecialPage {
 		$output = $this->getOutput();
 		$user = $this->getUser();
 
+		// Check blocks
+		if ( $user->isBlocked() ) {
+			throw new UserBlockedError( $user->getBlock() );
+		}
+
 		$this->setHeaders();
 		$this->outputHeader();
 		$request = $this->getRequest();
 		$this->submitClicked = $request->wasPosted() && $request->getBool( 'wpSubmit' );
 		# Handle our many different possible input types.
 		$ids = $request->getVal( 'ids' );
-		if ( $ids !== null ) {
+		if ( !is_null( $ids ) ) {
 			# Allow CSV, for backwards compatibility, or a single ID for show/hide links
 			$this->ids = explode( ',', $ids );
 		} else {
@@ -189,23 +176,12 @@ class SpecialRevisionDelete extends UnlistedSpecialPage {
 			return;
 		}
 
-		// Check blocks
-		if ( $this->permissionManager->isBlockedFrom( $user, $this->targetObj ) ) {
-			throw new UserBlockedError(
-				$user->getBlock(),
-				$user,
-				$this->getLanguage(),
-				$request->getIP()
-			);
-		}
-
-		$this->typeLabels = self::UI_LABELS[$this->typeName];
+		$this->typeLabels = self::$UILabels[$this->typeName];
 		$list = $this->getList();
 		$list->reset();
-		$this->mIsAllowed = $this->permissionManager->userHasRight( $user,
-			RevisionDeleter::getRestriction( $this->typeName ) );
-		$canViewSuppressedOnly = $this->permissionManager->userHasRight( $user, 'viewsuppressed' ) &&
-			!$this->permissionManager->userHasRight( $user, 'suppressrevision' );
+		$this->mIsAllowed = $user->isAllowed( RevisionDeleter::getRestriction( $this->typeName ) );
+		$canViewSuppressedOnly = $this->getUser()->isAllowed( 'viewsuppressed' ) &&
+			!$this->getUser()->isAllowed( 'suppressrevision' );
 		$pageIsSuppressed = $list->areAnySuppressed();
 		$this->mIsAllowed = $this->mIsAllowed && !( $canViewSuppressedOnly && $pageIsSuppressed );
 
@@ -219,22 +195,22 @@ class SpecialRevisionDelete extends UnlistedSpecialPage {
 			[ $this->typeLabels['check-label'], 'wpHidePrimary',
 				RevisionDeleter::getRevdelConstant( $this->typeName )
 			],
-			[ 'revdelete-hide-comment', 'wpHideComment', RevisionRecord::DELETED_COMMENT ],
-			[ 'revdelete-hide-user', 'wpHideUser', RevisionRecord::DELETED_USER ]
+			[ 'revdelete-hide-comment', 'wpHideComment', Revision::DELETED_COMMENT ],
+			[ 'revdelete-hide-user', 'wpHideUser', Revision::DELETED_USER ]
 		];
-		if ( $this->permissionManager->userHasRight( $user, 'suppressrevision' ) ) {
+		if ( $user->isAllowed( 'suppressrevision' ) ) {
 			$this->checks[] = [ 'revdelete-hide-restricted',
-				'wpHideRestricted', RevisionRecord::DELETED_RESTRICTED ];
+				'wpHideRestricted', Revision::DELETED_RESTRICTED ];
 		}
 
 		# Either submit or create our form
 		if ( $this->mIsAllowed && $this->submitClicked ) {
-			$this->submit();
+			$this->submit( $request );
 		} else {
 			$this->showForm();
 		}
 
-		if ( $this->permissionManager->userHasRight( $user, 'deletedhistory' ) ) {
+		if ( $user->isAllowed( 'deletedhistory' ) ) {
 			$qc = $this->getLogQueryCond();
 			# Show relevant lines from the deletion log
 			$deleteLogPage = new LogPage( 'delete' );
@@ -248,7 +224,7 @@ class SpecialRevisionDelete extends UnlistedSpecialPage {
 			);
 		}
 		# Show relevant lines from the suppression log
-		if ( $this->permissionManager->userHasRight( $user, 'suppressionlog' ) ) {
+		if ( $user->isAllowed( 'suppressionlog' ) ) {
 			$suppressLogPage = new LogPage( 'suppress' );
 			$output->addHTML( "<h2>" . $suppressLogPage->getName()->escaped() . "</h2>\n" );
 			LogEventsList::showLogExtract(
@@ -287,7 +263,7 @@ class SpecialRevisionDelete extends UnlistedSpecialPage {
 					[ 'action' => 'history' ]
 				);
 				# Link to deleted edits
-				if ( $this->permissionManager->userHasRight( $this->getUser(), 'undelete' ) ) {
+				if ( $this->getUser()->isAllowed( 'undelete' ) ) {
 					$undelete = SpecialPage::getTitleFor( 'Undelete' );
 					$links[] = $linkRenderer->makeKnownLink(
 						$undelete,
@@ -312,9 +288,7 @@ class SpecialRevisionDelete extends UnlistedSpecialPage {
 		$conds['log_type'] = [ 'delete', 'suppress' ];
 		$conds['log_action'] = $this->getList()->getLogAction();
 		$conds['ls_field'] = RevisionDeleter::getRelationType( $this->typeName );
-		// Convert IDs to strings, since ls_value is a text field. This avoids
-		// a fatal error in PostgreSQL: "operator does not exist: text = integer".
-		$conds['ls_value'] = array_map( 'strval', $this->ids );
+		$conds['ls_value'] = $this->ids;
 
 		return $conds;
 	}
@@ -327,7 +301,7 @@ class SpecialRevisionDelete extends UnlistedSpecialPage {
 	 * @throws PermissionsError
 	 */
 	protected function tryShowFile( $archiveName ) {
-		$repo = $this->repoGroup->getLocalRepo();
+		$repo = RepoGroup::singleton()->getLocalRepo();
 		$oimage = $repo->newFromArchiveName( $this->targetObj, $archiveName );
 		$oimage->load();
 		// Check if user is allowed to see this file
@@ -379,7 +353,7 @@ class SpecialRevisionDelete extends UnlistedSpecialPage {
 
 		$key = $oimage->getStorageKey();
 		$path = $repo->getZonePath( 'deleted' ) . '/' . $repo->getDeletedHashPath( $key ) . $key;
-		$repo->streamFileWithStatus( $path );
+		$repo->streamFile( $path );
 	}
 
 	/**
@@ -387,7 +361,7 @@ class SpecialRevisionDelete extends UnlistedSpecialPage {
 	 * @return RevDelList
 	 */
 	protected function getList() {
-		if ( $this->revDelList === null ) {
+		if ( is_null( $this->revDelList ) ) {
 			$this->revDelList = RevisionDeleter::createList(
 				$this->typeName, $this->getContext(), $this->targetObj, $this->ids
 			);
@@ -414,7 +388,9 @@ class SpecialRevisionDelete extends UnlistedSpecialPage {
 		$numRevisions = 0;
 		// Live revisions...
 		$list = $this->getList();
+		// @codingStandardsIgnoreStart Generic.CodeAnalysis.ForLoopWithTestFunctionCall.NotAllowed
 		for ( $list->reset(); $list->current(); $list->next() ) {
+			// @codingStandardsIgnoreEnd
 			$item = $list->current();
 
 			if ( !$item->canView() ) {
@@ -443,18 +419,7 @@ class SpecialRevisionDelete extends UnlistedSpecialPage {
 
 		// Show form if the user can submit
 		if ( $this->mIsAllowed ) {
-			$suppressAllowed = $this->permissionManager
-				->userHasRight( $this->getUser(), 'suppressrevision' );
-			$out->addModules( [ 'mediawiki.special.revisionDelete' ] );
-			$out->addModuleStyles( [ 'mediawiki.special',
-				'mediawiki.interface.helpers.styles' ] );
-
-			$dropDownReason = $this->msg( 'revdelete-reason-dropdown' )->inContentLanguage()->text();
-			// Add additional specific reasons for suppress
-			if ( $suppressAllowed ) {
-				$dropDownReason .= "\n" . $this->msg( 'revdelete-reason-dropdown-suppress' )
-					->inContentLanguage()->text();
-			}
+			$out->addModuleStyles( 'mediawiki.special' );
 
 			$form = Xml::openElement( 'form', [ 'method' => 'post',
 					'action' => $this->getPageTitle()->getLocalURL( [ 'action' => 'submit' ] ),
@@ -468,7 +433,7 @@ class SpecialRevisionDelete extends UnlistedSpecialPage {
 					'</td>' .
 					'<td class="mw-input">' .
 						Xml::listDropDown( 'wpRevDeleteReasonList',
-							$dropDownReason,
+							$this->msg( 'revdelete-reason-dropdown' )->inContentLanguage()->text(),
 							$this->msg( 'revdelete-reasonotherlist' )->inContentLanguage()->text(),
 							$this->getRequest()->getText( 'wpRevDeleteReasonList', 'other' ), 'wpReasonDropDown'
 						) .
@@ -478,14 +443,12 @@ class SpecialRevisionDelete extends UnlistedSpecialPage {
 						Xml::label( $this->msg( 'revdelete-otherreason' )->text(), 'wpReason' ) .
 					'</td>' .
 					'<td class="mw-input">' .
-						Xml::input( 'wpReason', 60, $this->otherReason, [
-							'id' => 'wpReason',
-							// HTML maxlength uses "UTF-16 code units", which means that characters outside BMP
-							// (e.g. emojis) count for two each. This limit is overridden in JS to instead count
-							// Unicode codepoints.
-							// "- 155" is to leave room for the 'wpRevDeleteReasonList' value.
-							'maxlength' => CommentStore::COMMENT_CHARACTER_LIMIT - 155,
-						] ) .
+						Xml::input(
+							'wpReason',
+							60,
+							$this->otherReason,
+							[ 'id' => 'wpReason', 'maxlength' => 100 ]
+						) .
 					'</td>' .
 				"</tr><tr>\n" .
 					'<td></td>' .
@@ -502,19 +465,8 @@ class SpecialRevisionDelete extends UnlistedSpecialPage {
 				Xml::closeElement( 'fieldset' ) . "\n" .
 				Xml::closeElement( 'form' ) . "\n";
 			// Show link to edit the dropdown reasons
-			if ( $this->permissionManager->userHasRight( $this->getUser(), 'editinterface' ) ) {
-				$link = '';
-				$linkRenderer = $this->getLinkRenderer();
-				if ( $suppressAllowed ) {
-					$link .= $linkRenderer->makeKnownLink(
-						$this->msg( 'revdelete-reason-dropdown-suppress' )->inContentLanguage()->getTitle(),
-						$this->msg( 'revdelete-edit-reasonlist-suppress' )->text(),
-						[],
-						[ 'action' => 'edit' ]
-					);
-					$link .= $this->msg( 'pipe-separator' )->escaped();
-				}
-				$link .= $linkRenderer->makeKnownLink(
+			if ( $this->getUser()->isAllowed( 'editinterface' ) ) {
+				$link = $this->getLinkRenderer()->makeKnownLink(
 					$this->msg( 'revdelete-reason-dropdown' )->inContentLanguage()->getTitle(),
 					$this->msg( 'revdelete-edit-reasonlist' )->text(),
 					[],
@@ -539,7 +491,7 @@ class SpecialRevisionDelete extends UnlistedSpecialPage {
 			'revdelete-text-others'
 		);
 
-		if ( $this->permissionManager->userHasRight( $this->getUser(), 'suppressrevision' ) ) {
+		if ( $this->getUser()->isAllowed( 'suppressrevision' ) ) {
 			$this->getOutput()->addWikiMsg( 'revdelete-suppress-text' );
 		}
 
@@ -574,7 +526,7 @@ class SpecialRevisionDelete extends UnlistedSpecialPage {
 					$bitfield & $field
 				);
 
-				if ( $field == RevisionRecord::DELETED_RESTRICTED ) {
+				if ( $field == Revision::DELETED_RESTRICTED ) {
 					$innerHTML = "<b>$innerHTML</b>";
 				}
 
@@ -605,7 +557,7 @@ class SpecialRevisionDelete extends UnlistedSpecialPage {
 				$line .= '<td class="mw-revdel-checkbox">' . Xml::radio( $name, 0, $selected == 0 ) . '</td>';
 				$line .= '<td class="mw-revdel-checkbox">' . Xml::radio( $name, 1, $selected == 1 ) . '</td>';
 				$label = $this->msg( $message )->escaped();
-				if ( $field == RevisionRecord::DELETED_RESTRICTED ) {
+				if ( $field == Revision::DELETED_RESTRICTED ) {
 					$label = "<b>$label</b>";
 				}
 				$line .= "<td>$label</td>";
@@ -643,8 +595,8 @@ class SpecialRevisionDelete extends UnlistedSpecialPage {
 				. $this->otherReason;
 		}
 		# Can the user set this field?
-		if ( $bitParams[RevisionRecord::DELETED_RESTRICTED] == 1
-			&& !$this->permissionManager->userHasRight( $this->getUser(), 'suppressrevision' )
+		if ( $bitParams[Revision::DELETED_RESTRICTED] == 1
+			&& !$this->getUser()->isAllowed( 'suppressrevision' )
 		) {
 			throw new PermissionsError( 'suppressrevision' );
 		}
@@ -684,9 +636,9 @@ class SpecialRevisionDelete extends UnlistedSpecialPage {
 	protected function failure( $status ) {
 		// Messages: revdelete-failure, logdelete-failure
 		$this->getOutput()->setPageTitle( $this->msg( 'actionfailed' ) );
-		$this->getOutput()->wrapWikiTextAsInterface(
-			'errorbox',
-			$status->getWikiText( $this->typeLabels['failure'], false, $this->getLanguage() )
+		$this->getOutput()->addWikiText( '<div class="errorbox">' .
+			$status->getWikiText( $this->typeLabels['failure'] ) .
+			'</div>'
 		);
 		$this->showForm();
 	}
@@ -706,8 +658,8 @@ class SpecialRevisionDelete extends UnlistedSpecialPage {
 			}
 			$bitfield[$field] = $val;
 		}
-		if ( !isset( $bitfield[RevisionRecord::DELETED_RESTRICTED] ) ) {
-			$bitfield[RevisionRecord::DELETED_RESTRICTED] = 0;
+		if ( !isset( $bitfield[Revision::DELETED_RESTRICTED] ) ) {
+			$bitfield[Revision::DELETED_RESTRICTED] = 0;
 		}
 
 		return $bitfield;

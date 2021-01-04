@@ -36,7 +36,7 @@ require_once "$IP/maintenance/Maintenance.php";
 class DeleteOldFancyCaptchas extends Maintenance {
 	public function __construct() {
 		parent::__construct();
-		$this->addDescription( "Deletes old fancy captchas from storage" );
+		$this->mDescription = "Deletes old fancy captchas from storage";
 		$this->addOption(
 			"date",
 			'Delete fancy captchas that were created before this date (e.g. 20170101000000)',
@@ -49,7 +49,7 @@ class DeleteOldFancyCaptchas extends Maintenance {
 	public function execute() {
 		$instance = ConfirmEditHooks::getInstance();
 		if ( !( $instance instanceof FancyCaptcha ) ) {
-			$this->fatalError( "\$wgCaptchaClass is not FancyCaptcha.\n", 1 );
+			$this->error( "\$wgCaptchaClass is not FancyCaptcha.\n", 1 );
 		}
 
 		$countAct = $instance->getCaptchaCount();
@@ -61,7 +61,7 @@ class DeleteOldFancyCaptchas extends Maintenance {
 		$filesToDelete = [];
 		$deleteDate = $this->getOption( 'date' );
 		foreach (
-			$backend->getFileList( [ 'dir' => $dir, 'adviseStat' => true ] ) as $file
+			$backend->getFileList( [ 'dir' => $dir ] ) as $file
 		) {
 			$fullPath = $dir . '/' . $file;
 			$timestamp = $backend->getFileTimestamp( [ 'src' => $fullPath ] );
@@ -77,19 +77,16 @@ class DeleteOldFancyCaptchas extends Maintenance {
 			return;
 		}
 
-		$this->output( "$count old fancy captchas to be deleted.\n" );
-
 		$ret = $backend->doQuickOperations( $filesToDelete );
 
 		if ( $ret->isOK() ) {
 			$this->output( "$count old fancy captchas deleted.\n" );
 		} else {
-			$status = Status::wrap( $ret );
 			$this->output( "Deleting old captchas errored.\n" );
-			$this->output( $status->getWikiText( false, false, 'en' ) );
+			$this->output( implode( "\n", $ret->getErrors() ) );
 		}
 	}
 }
 
-$maintClass = DeleteOldFancyCaptchas::class;
+$maintClass = "DeleteOldFancyCaptchas";
 require_once RUN_MAINTENANCE_IF_MAIN;

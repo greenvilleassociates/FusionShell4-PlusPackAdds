@@ -26,12 +26,13 @@
  *
  * @ingroup Language
  */
-// phpcs:ignore Squiz.Classes.ValidClassName.NotCamelCaps
+// @codingStandardsIgnoreStart Ignore class name is not in camel caps format error
 class LanguageZh_hans extends Language {
+	// @codingStandardsIgnoreEnd
 	/**
 	 * @return bool
 	 */
-	public function hasWordBreaks() {
+	function hasWordBreaks() {
 		return false;
 	}
 
@@ -44,7 +45,7 @@ class LanguageZh_hans extends Language {
 	 *
 	 * @return string
 	 */
-	public function segmentByWord( $string ) {
+	function segmentByWord( $string ) {
 		$reg = "/([\\xc0-\\xff][\\x80-\\xbf]*)/";
 		$s = self::insertSpace( $string, $reg );
 		return $s;
@@ -54,7 +55,7 @@ class LanguageZh_hans extends Language {
 	 * @param string $s
 	 * @return string
 	 */
-	public function normalizeForSearch( $s ) {
+	function normalizeForSearch( $s ) {
 		// Double-width roman characters
 		$s = parent::normalizeForSearch( $s );
 		$s = trim( $s );

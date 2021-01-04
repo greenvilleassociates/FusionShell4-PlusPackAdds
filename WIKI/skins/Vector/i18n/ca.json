@@ -1,16 +1,15 @@
 {
 	"@metadata": {
 		"authors": [
-			"Abella",
 			"Aleator",
 			"Anskar",
 			"Calak",
-			"Fitoschido",
 			"Paucabot",
 			"Ssola",
+			"Vriullop",
 			"Toniher",
-			"Townie",
-			"Vriullop"
+			"Fitoschido",
+			"Abella"
 		]
 	},
 	"skinname-vector": "Vector",
@@ -23,10 +22,8 @@
 	"vector-action-unprotect": "Desprotegeix",
 	"vector-view-create": "Crea",
 	"vector-view-edit": "Modifica",
-	"vector-view-history": "Mostra l'historial",
-	"vector-view-view": "Mostra",
+	"vector-view-history": "Mostra l’historial",
+	"vector-view-view": "Llegir",
 	"vector-view-viewsource": "Mostra el codi",
-	"vector-jumptonavigation": "Salta a la navegació",
-	"vector-jumptosearch": "Salta a la cerca",
 	"vector-more-actions": "Més"
 }

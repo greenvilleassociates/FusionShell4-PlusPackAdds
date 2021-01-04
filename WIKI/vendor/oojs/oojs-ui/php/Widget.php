@@ -22,7 +22,7 @@ class Widget extends Element {
 
 	/**
 	 * @param array $config Configuration options
-	 *      - bool $config['disabled'] Disable (default: false)
+	 * @param bool $config['disabled'] Disable (default: false)
 	 */
 	public function __construct( array $config = [] ) {
 		// Initialize config
@@ -54,7 +54,7 @@ class Widget extends Element {
 	 * @return $this
 	 */
 	public function setDisabled( $disabled ) {
-		$this->disabled = (bool)$disabled;
+		$this->disabled = !!$disabled;
 		$this->toggleClasses( [ 'oo-ui-widget-disabled' ], $this->disabled );
 		$this->toggleClasses( [ 'oo-ui-widget-enabled' ], !$this->disabled );
 		$this->setAttributes( [ 'aria-disabled' => $this->disabled ? 'true' : 'false' ] );
@@ -70,19 +70,6 @@ class Widget extends Element {
 	 */
 	public function getInputId() {
 		return null;
-	}
-
-	/**
-	 * Set the element with the given ID as a label for this widget.
-	 *
-	 * @param string|null $id
-	 */
-	public function setLabelledBy( $id ) {
-		if ( $id ) {
-			$this->setAttributes( [ 'aria-labelledby' => $id ] );
-		} else {
-			$this->removeAttributes( [ 'aria-labelledby' ] );
-		}
 	}
 
 	public function getConfig( &$config ) {

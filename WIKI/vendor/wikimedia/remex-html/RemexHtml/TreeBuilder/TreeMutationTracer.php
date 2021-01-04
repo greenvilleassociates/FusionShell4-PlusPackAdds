@@ -1,7 +1,6 @@
 <?php
 
 namespace RemexHtml\TreeBuilder;
-
 use RemexHtml\Tokenizer\Attributes;
 
 /**
@@ -10,21 +9,13 @@ use RemexHtml\Tokenizer\Attributes;
  * then forwards the event through to the supplied handler.
  */
 class TreeMutationTracer implements TreeHandler {
-	/** @var TreeHandler */
-	private $handler;
-
-	/** @var callable */
-	private $callback;
-
-	/** @var int */
-	private $verbosity;
 
 	/**
 	 * Constructor.
 	 *
 	 * @param TreeHandler $handler The next pipeline stage
 	 * @param callable $callback The message output function
-	 * @param int $verbosity Set to non-zero to call dump() on the handler
+	 * @param integer $verbosity Set to non-zero to call dump() on the handler
 	 *   before and after each event.
 	 */
 	public function __construct( TreeHandler $handler, callable $callback, $verbosity = 0 ) {
@@ -35,33 +26,43 @@ class TreeMutationTracer implements TreeHandler {
 
 	/**
 	 * Send a message
-	 *
-	 * @param string $msg
 	 */
 	private function trace( $msg ) {
 		call_user_func( $this->callback, "[Tree] $msg" );
 	}
 
 	/**
-	 * Send a message for an event
+	 * Get a debug tag for an element or null
 	 *
-	 * @param string $funcName
-	 * @param array $args
+	 * @param Element|null $element
 	 */
-	private function traceEvent( $funcName, $args ) {
-		$this->trace( call_user_func_array( [ TraceFormatter::class, $funcName ], $args ) );
+	private function getDebugTag( $element ) {
+		return $element ? $element->getDebugTag() : '';
 	}
 
-	private function handleMutation( $funcName, $args ) {
-		$this->traceEvent( $funcName, $args );
-		$this->before();
-		call_user_func_array( [ $this->handler, $funcName ], $args );
-		$this->after();
+	/**
+	 * Get a short excerpt of some text
+	 *
+	 * @param string $text
+	 * @return string
+	 */
+	private function excerpt( $text ) {
+		if ( strlen( $text ) > 20 ) {
+			$text = substr( $text, 0, 20 ) . '...';
+		}
+		return str_replace( "\n", "\\n", $text );
 	}
 
-	private function handleSimple( $funcName, $args ) {
-		$this->traceEvent( $funcName, $args );
-		call_user_func_array( [ $this->handler, $funcName ], $args );
+	/**
+	 * Get a readable version of the TreeBuilder preposition constants
+	 */
+	private function getPrepositionName( $prep ) {
+		$names = [
+			TreeBuilder::BEFORE => 'before',
+			TreeBuilder::UNDER => 'under',
+			TreeBuilder::ROOT => 'under root'
+		];
+		return isset( $names[$prep] ) ? $names[$prep] : '???';
 	}
 
 	/**
@@ -69,7 +70,6 @@ class TreeMutationTracer implements TreeHandler {
 	 */
 	private function before() {
 		if ( $this->verbosity > 0 ) {
-			// @phan-suppress-next-line PhanUndeclaredMethod
 			$this->trace( "Before: " . $this->handler->dump() . "\n" );
 		}
 	}
@@ -79,89 +79,105 @@ class TreeMutationTracer implements TreeHandler {
 	 */
 	private function after() {
 		if ( $this->verbosity > 0 ) {
-			// @phan-suppress-next-line PhanUndeclaredMethod
 			$this->trace( "After:  " . $this->handler->dump() . "\n" );
 		}
 	}
 
-	/**
-	 * @inheritDoc
-	 */
 	public function startDocument( $fns, $fn ) {
-		$this->handleSimple( __FUNCTION__, func_get_args() );
+		$this->trace( "startDocument" );
+		call_user_func_array( [ $this->handler, __FUNCTION__ ], func_get_args() );
 	}
 
-	/**
-	 * @inheritDoc
-	 */
 	public function endDocument( $pos ) {
-		$this->handleSimple( __FUNCTION__, func_get_args() );
+		$this->trace( "endDocument $pos" );
+		call_user_func_array( [ $this->handler, __FUNCTION__ ], func_get_args() );
 	}
 
-	/**
-	 * @inheritDoc
-	 */
 	public function characters( $preposition, $refNode, $text, $start, $length,
 		$sourceStart, $sourceLength
 	) {
-		$this->handleMutation( __FUNCTION__, func_get_args() );
+		$excerpt = $this->excerpt( substr( $text, $start, $length ) );
+		$prepName = $this->getPrepositionName( $preposition );
+		$refTag = $this->getDebugTag( $refNode );
+
+		$this->trace( "characters \"$excerpt\", $prepName $refTag, start=$sourceStart" );
+		$this->before();
+		call_user_func_array( [ $this->handler, __FUNCTION__ ], func_get_args() );
+		$this->after();
 	}
 
-	/**
-	 * @inheritDoc
-	 */
 	public function insertElement( $preposition, $refNode, Element $element, $void,
 		$sourceStart, $sourceLength
 	) {
-		$this->handleMutation( __FUNCTION__, func_get_args() );
+		$prepName = $this->getPrepositionName( $preposition );
+		$refTag = $this->getDebugTag( $refNode );
+		$elementTag = $this->getDebugTag( $element );
+		$voidMsg = $void ? 'void' : '';
+		$this->trace( "insert $elementTag $voidMsg, $prepName $refTag, start=$sourceStart" );
+		$this->before();
+		call_user_func_array( [ $this->handler, __FUNCTION__ ], func_get_args() );
+		$this->after();
 	}
 
-	/**
-	 * @inheritDoc
-	 */
 	public function endTag( Element $element, $sourceStart, $sourceLength ) {
-		$this->handleMutation( __FUNCTION__, func_get_args() );
+		$elementTag = $this->getDebugTag( $element );
+		$this->trace( "end $elementTag, start=$sourceStart" );
+		$this->before();
+		call_user_func_array( [ $this->handler, __FUNCTION__ ], func_get_args() );
+		$this->after();
 	}
 
-	/**
-	 * @inheritDoc
-	 */
 	public function doctype( $name, $public, $system, $quirks, $sourceStart, $sourceLength ) {
-		$this->handleMutation( __FUNCTION__, func_get_args() );
+		$quirksTypes = [
+			TreeBuilder::QUIRKS => 'quirks',
+			TreeBuilder::NO_QUIRKS => 'no-quirks',
+			TreeBuilder::LIMITED_QUIRKS => 'limited-quirks'
+		];
+		$quirksMsg = $quirksTypes[$quirks];
+		$this->trace( "doctype $name, public=\"$public\", system=\"$system\", " .
+			"$quirksMsg, start=$sourceStart" );
+		$this->before();
+		call_user_func_array( [ $this->handler, __FUNCTION__ ], func_get_args() );
+		$this->after();
 	}
 
-	/**
-	 * @inheritDoc
-	 */
 	public function comment( $preposition, $refNode, $text, $sourceStart, $sourceLength ) {
-		$this->handleMutation( __FUNCTION__, func_get_args() );
+		$prepName = $this->getPrepositionName( $preposition );
+		$refTag = $this->getDebugTag( $refNode );
+		$excerpt = $this->excerpt( $text );
+
+		$this->trace( "comment \"$excerpt\", $prepName $refTag, start=$sourceStart" );
+		$this->before();
+		call_user_func_array( [ $this->handler, __FUNCTION__ ], func_get_args() );
+		$this->after();
 	}
 
-	/**
-	 * @inheritDoc
-	 */
 	public function error( $text, $pos ) {
-		$this->handleSimple( __FUNCTION__, func_get_args() );
+		$this->trace( "error \"$text\", start=$pos" );
+		call_user_func_array( [ $this->handler, __FUNCTION__ ], func_get_args() );
 	}
 
-	/**
-	 * @inheritDoc
-	 */
 	public function mergeAttributes( Element $element, Attributes $attrs, $sourceStart ) {
-		$this->handleMutation( __FUNCTION__, func_get_args() );
+		$elementTag = $this->getDebugTag( $element );
+		$this->trace( "merge $elementTag, start=$sourceStart" );
+		$this->before();
+		call_user_func_array( [ $this->handler, __FUNCTION__ ], func_get_args() );
 	}
 
-	/**
-	 * @inheritDoc
-	 */
 	public function removeNode( Element $element, $sourceStart ) {
-		$this->handleMutation( __FUNCTION__, func_get_args() );
+		$elementTag = $this->getDebugTag( $element );
+		$this->trace( "remove $elementTag, start=$sourceStart" );
+		$this->before();
+		call_user_func_array( [ $this->handler, __FUNCTION__ ], func_get_args() );
+		$this->after();
 	}
 
-	/**
-	 * @inheritDoc
-	 */
 	public function reparentChildren( Element $element, Element $newParent, $sourceStart ) {
-		$this->handleMutation( __FUNCTION__, func_get_args() );
+		$elementTag = $this->getDebugTag( $element );
+		$newParentTag = $this->getDebugTag( $newParent );
+		$this->trace( "reparent children of $elementTag under $newParentTag, start=$sourceStart" );
+		$this->before();
+		call_user_func_array( [ $this->handler, __FUNCTION__ ], func_get_args() );
+		$this->after();
 	}
 }

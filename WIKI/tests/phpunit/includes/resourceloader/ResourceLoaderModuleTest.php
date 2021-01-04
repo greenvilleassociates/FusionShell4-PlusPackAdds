@@ -56,26 +56,12 @@ class ResourceLoaderModuleTest extends ResourceLoaderTestCase {
 		);
 
 		// Subclass
-		$module = new ResourceLoaderFileModuleTestingSubclass( $baseParams );
+		$module = new ResourceLoaderFileModuleTestModule( $baseParams );
 		$this->assertNotEquals(
 			$version,
 			json_encode( $module->getVersionHash( $context ) ),
 			'Class is significant'
 		);
-	}
-
-	/**
-	 * @covers ResourceLoaderModule::getVersionHash
-	 */
-	public function testGetVersionHash_parentDefinition() {
-		$context = $this->getResourceLoaderContext();
-		$module = $this->getMockBuilder( ResourceLoaderModule::class )
-			->setMethods( [ 'getDefinitionSummary' ] )->getMock();
-		$module->method( 'getDefinitionSummary' )->willReturn( [ 'a' => 'summary' ] );
-
-		$this->expectException( LogicException::class );
-		$this->expectExceptionMessage( 'must call parent' );
-		$module->getVersionHash( $context );
 	}
 
 	/**
@@ -87,13 +73,12 @@ class ResourceLoaderModuleTest extends ResourceLoaderTestCase {
 		$context = $this->getResourceLoaderContext();
 
 		$module = new ResourceLoaderTestModule( [
-			'mayValidateScript' => true,
 			'script' => "var a = 'this is';\n {\ninvalid"
 		] );
 		$this->assertEquals(
 			'mw.log.error(' .
-				'"JavaScript parse error (scripts need to be valid ECMAScript 5): ' .
-				'Parse error: Unexpected token; token } expected in file \'input\' on line 3"' .
+				'"JavaScript parse error: Parse error: Unexpected token; ' .
+				'token } expected in file \'input\' on line 3"' .
 			');',
 			$module->getScript( $context ),
 			'Replace invalid syntax with error logging'
@@ -146,15 +131,15 @@ class ResourceLoaderModuleTest extends ResourceLoaderTestCase {
 	 * @dataProvider provideBuildContentScripts
 	 * @covers ResourceLoaderModule::buildContent
 	 */
-	public function testBuildContentScripts( $raw, $build, $message = '' ) {
+	public function testBuildContentScripts( $raw, $build, $message = null ) {
 		$context = $this->getResourceLoaderContext();
 		$module = new ResourceLoaderTestModule( [
 			'script' => $raw
 		] );
 		$this->assertEquals( $raw, $module->getScript( $context ), 'Raw script' );
 		$this->assertEquals(
-			$build,
-			$module->getModuleContent( $context )[ 'scripts' ],
+			[ 'scripts' => $build ],
+			$module->getModuleContent( $context ),
 			$message
 		);
 	}
@@ -164,9 +149,9 @@ class ResourceLoaderModuleTest extends ResourceLoaderTestCase {
 	 * @covers ResourceLoaderModule::expandRelativePaths
 	 */
 	public function testPlaceholderize() {
-		$getRelativePaths = new ReflectionMethod( ResourceLoaderModule::class, 'getRelativePaths' );
+		$getRelativePaths = new ReflectionMethod( 'ResourceLoaderModule', 'getRelativePaths' );
 		$getRelativePaths->setAccessible( true );
-		$expandRelativePaths = new ReflectionMethod( ResourceLoaderModule::class, 'expandRelativePaths' );
+		$expandRelativePaths = new ReflectionMethod( 'ResourceLoaderModule', 'expandRelativePaths' );
 		$expandRelativePaths->setAccessible( true );
 
 		$this->setMwGlobals( [

@@ -1,10 +1,9 @@
 <?php
 
 namespace RemexHtml\TreeBuilder;
-
-use RemexHtml\Tokenizer\Attributes;
 use RemexHtml\Tokenizer\TokenHandler;
 use RemexHtml\Tokenizer\Tokenizer;
+use RemexHtml\Tokenizer\Attributes;
 
 /**
  * This is a debugging helper class which calls a callback function with a
@@ -17,7 +16,7 @@ class DispatchTracer implements TokenHandler {
 	private $dispatcher;
 	private $callback;
 
-	public function __construct( $input, Dispatcher $dispatcher, callable $callback ) {
+	function __construct( $input, Dispatcher $dispatcher, callable $callback ) {
 		$this->input = $input;
 		$this->dispatcher = $dispatcher;
 		$this->callback = $callback;

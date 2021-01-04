@@ -1,4 +1,4 @@
-( function () {
+( function ( mw, $ ) {
 	'use strict';
 
 	var grammarTests, bcp47Tests;
@@ -21,11 +21,10 @@
 
 	QUnit.test( 'mw.language getData and setData', function ( assert ) {
 		mw.language.setData( 'en', 'testkey', 'testvalue' );
-		assert.strictEqual( mw.language.getData( 'en', 'testkey' ), 'testvalue', 'Getter setter test for mw.language' );
-		assert.strictEqual( mw.language.getData( 'en', 'invalidkey' ), null, 'Getter setter test for mw.language with invalid key' );
-		assert.strictEqual( mw.language.getData( 'xx', 'invalidLang' ), undefined, 'Getter setter test for mw.language with invalid lang' );
+		assert.equal( mw.language.getData( 'en', 'testkey' ), 'testvalue', 'Getter setter test for mw.language' );
+		assert.equal( mw.language.getData( 'en', 'invalidkey' ), undefined, 'Getter setter test for mw.language with invalid key' );
 		mw.language.setData( 'en-us', 'testkey', 'testvalue' );
-		assert.strictEqual( mw.language.getData( 'en-US', 'testkey' ), 'testvalue', 'Case insensitive test for mw.language' );
+		assert.equal( mw.language.getData( 'en-US', 'testkey' ), 'testvalue', 'Case insensitive test for mw.language' );
 	} );
 
 	QUnit.test( 'mw.language.commafy test', function ( assert ) {
@@ -35,35 +34,26 @@
 
 		mw.config.set( 'wgUserLanguage', 'en' );
 		// Number grouping patterns are as per http://cldr.unicode.org/translation/number-patterns
-		assert.strictEqual( mw.language.commafy( 1234.567, '###0.#####' ), '1234.567', 'Pattern with no digit grouping separator defined' );
-		assert.strictEqual( mw.language.commafy( 123456789.567, '###0.#####' ), '123456789.567', 'Pattern with no digit grouping separator defined, bigger decimal part' );
-		assert.strictEqual( mw.language.commafy( 0.567, '###0.#####' ), '0.567', 'Decimal part 0' );
-		assert.strictEqual( mw.language.commafy( '.567', '###0.#####' ), '0.567', 'Decimal part missing. replace with zero' );
-		assert.strictEqual( mw.language.commafy( 1234, '##,#0.#####' ), '12,34', 'Pattern with no fractional part' );
-		assert.strictEqual( mw.language.commafy( -1234.567, '###0.#####' ), '-1234.567', 'Negative number' );
-		assert.strictEqual( mw.language.commafy( -1234.567, '#,###.00' ), '-1,234.56', 'Fractional part bigger than pattern.' );
-		assert.strictEqual( mw.language.commafy( 123456789.567, '###,##0.00' ), '123,456,789.56', 'Decimal part as group of 3' );
-		assert.strictEqual( mw.language.commafy( 123456789.567, '###,###,#0.00' ), '1,234,567,89.56', 'Decimal part as group of 3 and last one 2' );
+		assert.equal( mw.language.commafy( 1234.567, '###0.#####' ), '1234.567', 'Pattern with no digit grouping separator defined' );
+		assert.equal( mw.language.commafy( 123456789.567, '###0.#####' ), '123456789.567', 'Pattern with no digit grouping separator defined, bigger decimal part' );
+		assert.equal( mw.language.commafy( 0.567, '###0.#####' ), '0.567', 'Decimal part 0' );
+		assert.equal( mw.language.commafy( '.567', '###0.#####' ), '0.567', 'Decimal part missing. replace with zero' );
+		assert.equal( mw.language.commafy( 1234, '##,#0.#####' ), '12,34', 'Pattern with no fractional part' );
+		assert.equal( mw.language.commafy( -1234.567, '###0.#####' ), '-1234.567', 'Negative number' );
+		assert.equal( mw.language.commafy( -1234.567, '#,###.00' ), '-1,234.56', 'Fractional part bigger than pattern.' );
+		assert.equal( mw.language.commafy( 123456789.567, '###,##0.00' ), '123,456,789.56', 'Decimal part as group of 3' );
+		assert.equal( mw.language.commafy( 123456789.567, '###,###,#0.00' ), '1,234,567,89.56', 'Decimal part as group of 3 and last one 2' );
 	} );
 
 	QUnit.test( 'mw.language.convertNumber', function ( assert ) {
 		mw.language.setData( 'en', 'digitGroupingPattern', null );
 		mw.language.setData( 'en', 'digitTransformTable', null );
 		mw.language.setData( 'en', 'separatorTransformTable', { ',': '.', '.': ',' } );
-		mw.language.setData( 'en', 'minimumGroupingDigits', null );
 		mw.config.set( 'wgUserLanguage', 'en' );
 		mw.config.set( 'wgTranslateNumerals', true );
 
-		assert.strictEqual( mw.language.convertNumber( 180 ), '180', 'formatting 3-digit' );
-		assert.strictEqual( mw.language.convertNumber( 1800 ), '1.800', 'formatting 4-digit' );
-		assert.strictEqual( mw.language.convertNumber( 18000 ), '18.000', 'formatting 5-digit' );
-
-		assert.strictEqual( mw.language.convertNumber( '1.800', true ), 1800, 'unformatting' );
-
-		mw.language.setData( 'en', 'minimumGroupingDigits', 2 );
-		assert.strictEqual( mw.language.convertNumber( 180 ), '180', 'formatting 3-digit with minimumGroupingDigits=2' );
-		assert.strictEqual( mw.language.convertNumber( 1800 ), '1800', 'formatting 4-digit with minimumGroupingDigits=2' );
-		assert.strictEqual( mw.language.convertNumber( 18000 ), '18.000', 'formatting 5-digit with minimumGroupingDigits=2' );
+		assert.equal( mw.language.convertNumber( 1800 ), '1.800', 'formatting' );
+		assert.equal( mw.language.convertNumber( '1.800', true ), '1800', 'unformatting' );
 	} );
 
 	QUnit.test( 'mw.language.convertNumber - digitTransformTable', function ( assert ) {
@@ -71,7 +61,6 @@
 		mw.config.set( 'wgTranslateNumerals', true );
 		mw.language.setData( 'hi', 'digitGroupingPattern', null );
 		mw.language.setData( 'hi', 'separatorTransformTable', { ',': '.', '.': ',' } );
-		mw.language.setData( 'hi', 'minimumGroupingDigits', null );
 
 		// Example from Hindi (MessagesHi.php)
 		mw.language.setData( 'hi', 'digitTransformTable', {
@@ -80,15 +69,15 @@
 			2: '२'
 		} );
 
-		assert.strictEqual( mw.language.convertNumber( 1200 ), '१.२००', 'format' );
-		assert.strictEqual( mw.language.convertNumber( '१.२००', true ), 1200, 'unformat from digit transform' );
-		assert.strictEqual( mw.language.convertNumber( '1.200', true ), 1200, 'unformat plain' );
+		assert.equal( mw.language.convertNumber( 1200 ), '१.२००', 'format' );
+		assert.equal( mw.language.convertNumber( '१.२००', true ), '1200', 'unformat from digit transform' );
+		assert.equal( mw.language.convertNumber( '1.200', true ), '1200', 'unformat plain' );
 
 		mw.config.set( 'wgTranslateNumerals', false );
 
-		assert.strictEqual( mw.language.convertNumber( 1200 ), '1.200', 'format (digit transform disabled)' );
-		assert.strictEqual( mw.language.convertNumber( '१.२००', true ), 1200, 'unformat from digit transform (when disabled)' );
-		assert.strictEqual( mw.language.convertNumber( '1.200', true ), 1200, 'unformat plain (digit transform disabled)' );
+		assert.equal( mw.language.convertNumber( 1200 ), '1.200', 'format (digit transform disabled)' );
+		assert.equal( mw.language.convertNumber( '१.२००', true ), '1200', 'unformat from digit transform (when disabled)' );
+		assert.equal( mw.language.convertNumber( '1.200', true ), '1200', 'unformat plain (digit transform disabled)' );
 	} );
 
 	function grammarTest( langCode, test ) {
@@ -97,7 +86,7 @@
 		QUnit.test( 'Grammar test for lang=' + langCode, function ( assert ) {
 			var i;
 			for ( i = 0; i < test.length; i++ ) {
-				assert.strictEqual(
+				assert.equal(
 					mw.language.convertGrammar( test[ i ].word, test[ i ].grammarForm ),
 					test[ i ].expected,
 					test[ i ].description
@@ -312,18 +301,6 @@
 				grammarForm: 'prepositional',
 				expected: 'привилегии',
 				description: 'Grammar test for prepositional case, привилегия -> привилегии'
-			},
-			{
-				word: 'университет',
-				grammarForm: 'prepositional',
-				expected: 'университете',
-				description: 'Grammar test for prepositional case, университет -> университете'
-			},
-			{
-				word: 'университет',
-				grammarForm: 'genitive',
-				expected: 'университета',
-				description: 'Grammar test for prepositional case, университет -> университете'
 			},
 			{
 				word: 'установка',
@@ -598,7 +575,6 @@
 		]
 	};
 
-	// eslint-disable-next-line no-jquery/no-each-util
 	$.each( grammarTests, function ( langCode, test ) {
 		if ( langCode === mw.config.get( 'wgUserLanguage' ) ) {
 			grammarTest( langCode, test );
@@ -606,10 +582,10 @@
 	} );
 
 	QUnit.test( 'List to text test', function ( assert ) {
-		assert.strictEqual( mw.language.listToText( [] ), '', 'Blank list' );
-		assert.strictEqual( mw.language.listToText( [ 'a' ] ), 'a', 'Single item' );
-		assert.strictEqual( mw.language.listToText( [ 'a', 'b' ] ), 'a and b', 'Two items' );
-		assert.strictEqual( mw.language.listToText( [ 'a', 'b', 'c' ] ), 'a, b and c', 'More than two items' );
+		assert.equal( mw.language.listToText( [] ), '', 'Blank list' );
+		assert.equal( mw.language.listToText( [ 'a' ] ), 'a', 'Single item' );
+		assert.equal( mw.language.listToText( [ 'a', 'b' ] ), 'a and b', 'Two items' );
+		assert.equal( mw.language.listToText( [ 'a', 'b', 'c' ] ), 'a, b and c', 'More than two items' );
 	} );
 
 	bcp47Tests = [
@@ -692,57 +668,19 @@
 		// # Tags that use extensions
 		[ 'en-us-u-islamcal', 'en-US-u-islamcal' ],
 		[ 'zh-cn-a-myext-x-private', 'zh-CN-a-myext-x-private' ],
-		[ 'en-a-myext-b-another', 'en-a-myext-b-another' ],
+		[ 'en-a-myext-b-another', 'en-a-myext-b-another' ]
 
 		// # Invalid:
 		// de-419-DE
 		// a-DE
 		// ar-a-aaa-b-bbb-a-ccc
-
-		// Non-standard and deprecated language codes used by MediaWiki
-		[ 'als', 'gsw' ],
-		[ 'bat-smg', 'sgs' ],
-		[ 'be-x-old', 'be-tarask' ],
-		[ 'fiu-vro', 'vro' ],
-		[ 'roa-rup', 'rup' ],
-		[ 'zh-classical', 'lzh' ],
-		[ 'zh-min-nan', 'nan' ],
-		[ 'zh-yue', 'yue' ],
-		[ 'cbk-zam', 'cbk' ],
-		[ 'de-formal', 'de-x-formal' ],
-		[ 'eml', 'egl' ],
-		[ 'en-rtl', 'en-x-rtl' ],
-		[ 'es-formal', 'es-x-formal' ],
-		[ 'hu-formal', 'hu-x-formal' ],
-		[ 'kk-Arab', 'kk-Arab' ],
-		[ 'kk-Cyrl', 'kk-Cyrl' ],
-		[ 'kk-Latn', 'kk-Latn' ],
-		[ 'map-bms', 'jv-x-bms' ],
-		[ 'mo', 'ro-Cyrl-MD' ],
-		[ 'nrm', 'nrf' ],
-		[ 'nl-informal', 'nl-x-informal' ],
-		[ 'roa-tara', 'nap-x-tara' ],
-		[ 'simple', 'en-simple' ],
-		[ 'sr-ec', 'sr-Cyrl' ],
-		[ 'sr-el', 'sr-Latn' ],
-		[ 'zh-cn', 'zh-Hans-CN' ],
-		[ 'zh-sg', 'zh-Hans-SG' ],
-		[ 'zh-my', 'zh-Hans-MY' ],
-		[ 'zh-tw', 'zh-Hant-TW' ],
-		[ 'zh-hk', 'zh-Hant-HK' ],
-		[ 'zh-mo', 'zh-Hant-MO' ],
-		[ 'zh-hans', 'zh-Hans' ],
-		[ 'zh-hant', 'zh-Hant' ]
 	];
 
 	QUnit.test( 'mw.language.bcp47', function ( assert ) {
-		mw.language.data = this.liveLangData;
 		bcp47Tests.forEach( function ( data ) {
 			var input = data[ 0 ],
 				expected = data[ 1 ];
-			assert.strictEqual( mw.language.bcp47( input ), expected );
-			assert.strictEqual( mw.language.bcp47( input.toLowerCase() ), expected );
-			assert.strictEqual( mw.language.bcp47( input.toUpperCase() ), expected );
+			assert.equal( mw.language.bcp47( input ), expected );
 		} );
 	} );
-}() );
+}( mediaWiki, jQuery ) );

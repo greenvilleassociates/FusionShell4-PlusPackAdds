@@ -24,7 +24,7 @@
  */
 class UDPRCFeedEngine extends RCFeedEngine {
 	/**
-	 * @see FormattedRCFeed::send
+	 * @see RCFeedEngine::send
 	 * @param array $feed
 	 * @param string $line
 	 * @return bool
@@ -32,6 +32,5 @@ class UDPRCFeedEngine extends RCFeedEngine {
 	public function send( array $feed, $line ) {
 		$transport = UDPTransport::newFromString( $feed['uri'] );
 		$transport->emit( $line );
-		return true;
 	}
 }

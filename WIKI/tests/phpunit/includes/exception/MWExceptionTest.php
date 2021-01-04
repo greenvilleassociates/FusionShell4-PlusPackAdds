@@ -6,13 +6,12 @@
  * @file
  */
 
-class MWExceptionTest extends MediaWikiIntegrationTestCase {
+class MWExceptionTest extends MediaWikiTestCase {
 
 	/**
-	 * @covers MWException
+	 * @expectedException MWException
 	 */
 	public function testMwexceptionThrowing() {
-		$this->expectException( MWException::class );
 		throw new MWException();
 	}
 
@@ -44,17 +43,28 @@ class MWExceptionTest extends MediaWikiIntegrationTestCase {
 	}
 
 	private function getMockLanguage() {
-		return $this->getMockBuilder( Language::class )
+		return $this->getMockBuilder( 'Language' )
 			->disableOriginalConstructor()
 			->getMock();
 	}
 
 	/**
+	 * @dataProvider provideUseMessageCache
 	 * @covers MWException::useMessageCache
 	 */
-	public function testUseMessageCache() {
+	public function testUseMessageCache( $expected, $langObj ) {
+		$this->setMwGlobals( [
+			'wgLang' => $langObj,
+		] );
 		$e = new MWException();
-		$this->assertTrue( $e->useMessageCache() );
+		$this->assertEquals( $expected, $e->useMessageCache() );
+	}
+
+	public function provideUseMessageCache() {
+		return [
+			[ false, null ],
+			[ true, $this->getMockLanguage() ],
+		];
 	}
 
 	/**
@@ -100,8 +110,8 @@ class MWExceptionTest extends MediaWikiIntegrationTestCase {
 
 	public static function provideExceptionClasses() {
 		return [
-			[ Exception::class ],
-			[ MWException::class ],
+			[ 'Exception' ],
+			[ 'MWException' ],
 		];
 	}
 
@@ -125,7 +135,7 @@ class MWExceptionTest extends MediaWikiIntegrationTestCase {
 		$this->assertObjectHasAttribute( $key, $json,
 			"JSON serialized exception is missing key '$key'"
 		);
-		$this->assertSame( $expectedKeyType, gettype( $json->$key ),
+		$this->assertInternalType( $expectedKeyType, $json->$key,
 			"JSON serialized key '$key' has type " . gettype( $json->$key )
 			. " (expected: $expectedKeyType)."
 		);
@@ -136,13 +146,13 @@ class MWExceptionTest extends MediaWikiIntegrationTestCase {
 	 */
 	public static function provideJsonSerializedKeys() {
 		$testCases = [];
-		foreach ( [ Exception::class, MWException::class ] as $exClass ) {
+		foreach ( [ 'Exception', 'MWException' ] as $exClass ) {
 			$exTests = [
 				[ 'string', $exClass, 'id' ],
 				[ 'string', $exClass, 'file' ],
 				[ 'integer', $exClass, 'line' ],
 				[ 'string', $exClass, 'message' ],
-				[ 'NULL', $exClass, 'url' ],
+				[ 'null', $exClass, 'url' ],
 				# Backtrace only enabled with wgLogExceptionBacktrace = true
 				[ 'array', $exClass, 'backtrace' ],
 			];

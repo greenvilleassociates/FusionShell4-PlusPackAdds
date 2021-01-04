@@ -2,7 +2,7 @@
 /**
  * Specificly for testing Media handlers. Sets up a FileRepo backend
  */
-abstract class MediaWikiMediaTestCase extends MediaWikiIntegrationTestCase {
+abstract class MediaWikiMediaTestCase extends MediaWikiTestCase {
 
 	/** @var FileRepo */
 	protected $repo;
@@ -11,7 +11,7 @@ abstract class MediaWikiMediaTestCase extends MediaWikiIntegrationTestCase {
 	/** @var string */
 	protected $filePath;
 
-	protected function setUp() : void {
+	protected function setUp() {
 		parent::setUp();
 
 		$this->filePath = $this->getFilePath();
@@ -70,10 +70,16 @@ abstract class MediaWikiMediaTestCase extends MediaWikiIntegrationTestCase {
 	 *
 	 * File must be in the path returned by getFilePath()
 	 * @param string $name File name
-	 * @param string|false $type MIME type [optional]
+	 * @param string $type MIME type [optional]
 	 * @return UnregisteredLocalFile
 	 */
-	protected function dataFile( $name, $type = false ) {
+	protected function dataFile( $name, $type = null ) {
+		if ( !$type ) {
+			// Autodetect by file extension for the lazy.
+			$magic = MimeMagic::singleton();
+			$parts = explode( $name, '.' );
+			$type = $magic->guessTypesForExtension( $parts[count( $parts ) - 1] );
+		}
 		return new UnregisteredLocalFile( false, $this->repo,
 			"mwstore://localtesting/data/$name", $type );
 	}

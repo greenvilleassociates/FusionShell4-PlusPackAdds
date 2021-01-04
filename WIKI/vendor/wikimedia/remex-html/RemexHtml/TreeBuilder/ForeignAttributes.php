@@ -1,7 +1,6 @@
 <?php
 
 namespace RemexHtml\TreeBuilder;
-
 use RemexHtml\HTMLData;
 use RemexHtml\Tokenizer\Attribute;
 use RemexHtml\Tokenizer\Attributes;
@@ -11,13 +10,8 @@ use RemexHtml\Tokenizer\Attributes;
  * have namespaces. Features lazy adjustment of attribute name case.
  */
 class ForeignAttributes implements Attributes {
-	/** @var Attributes */
 	protected $unadjusted;
-
-	/** @var array The map of lowercase attribute name to correct attribute name */
 	protected $table;
-
-	/** @var Attribute[]|null */
 	protected $attrObjects;
 
 	/**
@@ -117,14 +111,13 @@ class ForeignAttributes implements Attributes {
 	}
 
 	public function offsetExists( $offset ) {
-		$offset = $this->table[$offset] ?? $offset;
+		$offset = isset( $this->table[$offset] ) ? $this->table[$offset] : $offset;
 		return $this->unadjusted->offsetExists( $offset );
 	}
 
 	public function &offsetGet( $offset ) {
-		$offset = $this->table[$offset] ?? $offset;
-		$value = &$this->unadjusted->offsetGet( $offset );
-		return $value;
+		$offset = isset( $this->table[$offset] ) ? $this->table[$offset] : $offset;
+		return $this->unadjusted->offsetGet( $offset );
 	}
 
 	public function offsetSet( $offset, $value ) {
@@ -138,10 +131,15 @@ class ForeignAttributes implements Attributes {
 	public function getValues() {
 		$result = [];
 		foreach ( $this->unadjusted->getValues() as $name => $value ) {
-			$name = $this->table[$name] ?? $name;
+			$name = isset( $this->table[$name] ) ? $this->table[$name] : $name;
 			$result[$name] = $value;
 		}
 		return $result;
+	}
+
+	public function key() {
+		$name = parent::key();
+		return isset( $this->table[$name] ) ? $this->table[$name] : $name;
 	}
 
 	public function count() {

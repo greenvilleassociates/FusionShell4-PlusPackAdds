@@ -16,39 +16,26 @@ trait LabelElement {
 	protected $labelValue = null;
 
 	/**
-	 * Label value.
-	 *
-	 * @var bool
-	 */
-	protected $invisibleLabel = false;
-
-	/**
 	 * @var Tag
 	 */
 	protected $label;
 
 	/**
 	 * @param array $config Configuration options
-	 *      - string|HtmlSnippet $config['label'] Label text
-	 *      - bool $config['invisibleLabel'] Whether the label should be visually hidden (but still
-	 *          accessible to screen-readers). (default: false)
+	 * @param string|HtmlSnippet $config['label'] Label text
 	 */
 	public function initializeLabelElement( array $config = [] ) {
 		// Properties
 		// FIXME 'labelElement' is a very stupid way to call '$label'
-		$this->label = $config['labelElement'] ?? new Tag( 'span' );
+		$this->label = isset( $config['labelElement'] ) ? $config['labelElement'] : new Tag( 'span' );
 
 		// Initialization
 		$this->label->addClasses( [ 'oo-ui-labelElement-label' ] );
-		$this->setLabel( $config['label'] ?? null );
-		$this->setInvisibleLabel( $config['invisibleLabel'] ?? false );
+		$this->setLabel( isset( $config['label'] ) ? $config['label'] : null );
 
 		$this->registerConfigCallback( function ( &$config ) {
 			if ( $this->labelValue !== null ) {
 				$config['label'] = $this->labelValue;
-			}
-			if ( $this->invisibleLabel !== false ) {
-				$config['invisibleLabel'] = $this->invisibleLabel;
 			}
 		} );
 	}
@@ -63,39 +50,20 @@ trait LabelElement {
 	 * @return $this
 	 */
 	public function setLabel( $label ) {
-		$this->labelValue = (string)$label !== '' ? $label : null;
+		$this->labelValue = (string)$label ? $label : null;
 
 		$this->label->clearContent();
 		if ( $this->labelValue !== null ) {
-			if ( is_string( $this->labelValue ) && trim( $this->labelValue ) === '' ) {
+			if ( is_string( $this->labelValue ) && $this->labelValue !== ''
+				&& trim( $this->labelValue ) === ''
+			) {
 				$this->label->appendContent( new HtmlSnippet( '&nbsp;' ) );
 			} else {
 				$this->label->appendContent( $label );
 			}
 		}
 
-		$visibleLabel = $this->labelValue !== null && !$this->invisibleLabel;
-		$this->toggleClasses( [ 'oo-ui-labelElement' ], $visibleLabel );
-
-		return $this;
-	}
-
-	/**
-	 * Set whether the label should be visually hidden (but still accessible to screen-readers).
-	 *
-	 * An empty string will result in the label being hidden. A string containing only whitespace will
-	 * be converted to a single `&nbsp;`.
-	 *
-	 * @param bool $invisibleLabel
-	 * @return $this
-	 */
-	public function setInvisibleLabel( $invisibleLabel ) {
-		$this->invisibleLabel = (bool)$invisibleLabel;
-
-		$this->label->toggleClasses( [ 'oo-ui-labelElement-invisible' ], $this->invisibleLabel );
-		// Pretend that there is no label, a lot of CSS has been written with this assumption
-		$visibleLabel = $this->labelValue !== null && !$this->invisibleLabel;
-		$this->toggleClasses( [ 'oo-ui-labelElement' ], $visibleLabel );
+		$this->toggleClasses( [ 'oo-ui-labelElement' ], !!$this->labelValue );
 
 		return $this;
 	}

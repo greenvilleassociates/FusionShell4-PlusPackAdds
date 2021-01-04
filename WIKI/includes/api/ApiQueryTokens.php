@@ -2,6 +2,8 @@
 /**
  * Module to fetch tokens via action=query&meta=tokens
  *
+ * Created on August 8, 2014
+ *
  * Copyright © 2014 Wikimedia Foundation and contributors
  *
  * This program is free software; you can redistribute it and/or modify
@@ -22,9 +24,6 @@
  * @file
  * @since 1.24
  */
-
-use MediaWiki\Api\ApiHookRunner;
-use MediaWiki\MediaWikiServices;
 
 /**
  * Module to fetch tokens via action=query&meta=tokens
@@ -75,9 +74,7 @@ class ApiQueryTokens extends ApiQueryBase {
 				'login' => [ '', 'login' ],
 				'createaccount' => [ '', 'createaccount' ],
 			];
-			$hookContainer = MediaWikiServices::getInstance()->getHookContainer();
-			$hookRunner = new ApiHookRunner( $hookContainer );
-			$hookRunner->onApiQueryTokensRegisterTypes( $salts );
+			Hooks::run( 'ApiQueryTokensRegisterTypes', [ &$salts ] );
 			ksort( $salts );
 		}
 
@@ -99,7 +96,7 @@ class ApiQueryTokens extends ApiQueryBase {
 	public static function getToken( User $user, MediaWiki\Session\Session $session, $salt ) {
 		if ( is_array( $salt ) ) {
 			$session->persist();
-			return $session->getToken( ...$salt );
+			return call_user_func_array( [ $session, 'getToken' ], $salt );
 		} else {
 			return $user->getEditTokenObject( $salt, $session->getRequest() );
 		}

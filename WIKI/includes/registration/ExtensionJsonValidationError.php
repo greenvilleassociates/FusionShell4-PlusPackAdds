@@ -18,9 +18,5 @@
  *
  * @file
  */
-
-/**
- * @newable
- */
 class ExtensionJsonValidationError extends Exception {
 }

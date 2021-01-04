@@ -58,7 +58,8 @@ class ThrottlePreAuthenticationProvider extends AbstractPreAuthenticationProvide
 	public function __construct( $params = [] ) {
 		$this->throttleSettings = array_intersect_key( $params,
 			[ 'accountCreationThrottle' => true, 'passwordAttemptThrottle' => true ] );
-		$this->cache = $params['cache'] ?? \ObjectCache::getLocalClusterInstance();
+		$this->cache = isset( $params['cache'] ) ? $params['cache'] :
+			\ObjectCache::getLocalClusterInstance();
 	}
 
 	public function setConfig( Config $config ) {
@@ -105,8 +106,8 @@ class ThrottlePreAuthenticationProvider extends AbstractPreAuthenticationProvide
 
 		$ip = $this->manager->getRequest()->getIP();
 
-		if ( !$this->getHookRunner()->onExemptFromAccountCreationThrottle( $ip ) ) {
-			$this->logger->debug( __METHOD__ . ": a hook allowed account creation w/o throttle" );
+		if ( !\Hooks::run( 'ExemptFromAccountCreationThrottle', [ $ip ] ) ) {
+			$this->logger->debug( __METHOD__ . ": a hook allowed account creation w/o throttle\n" );
 			return \StatusValue::newGood();
 		}
 

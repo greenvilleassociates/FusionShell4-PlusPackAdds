@@ -24,7 +24,7 @@
  * @author  Platonides
  */
 
-require_once __DIR__ . '/../includes/Benchmarker.php';
+require_once __DIR__ . '/Benchmarker.php';
 
 /**
  * Maintenance script that benchmark if elseif... versus switch case.
@@ -44,10 +44,7 @@ class BenchIfSwitch extends Benchmarker {
 		] );
 	}
 
-	/**
-	 * bench function 1
-	 * @suppress PhanSuspiciousValueComparison
-	 */
+	// bench function 1
 	protected function doElseIf() {
 		$a = 'z';
 		if ( $a == 'a' ) {
@@ -70,9 +67,7 @@ class BenchIfSwitch extends Benchmarker {
 		}
 	}
 
-	/**
-	 * bench function 2
-	 */
+	// bench function 2
 	protected function doSwitch() {
 		$a = 'z';
 		switch ( $a ) {
@@ -111,5 +106,5 @@ class BenchIfSwitch extends Benchmarker {
 	}
 }
 
-$maintClass = BenchIfSwitch::class;
+$maintClass = 'BenchIfSwitch';
 require_once RUN_MAINTENANCE_IF_MAIN;

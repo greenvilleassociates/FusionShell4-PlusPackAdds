@@ -1,4 +1,4 @@
-( function () {
+( function ( mw ) {
 
 	var getBucket = mw.experiments.getBucket;
 
@@ -21,7 +21,7 @@
 		var experiment = createExperiment(),
 			token = '123457890';
 
-		assert.strictEqual(
+		assert.equal(
 			getBucket( experiment, token ),
 			getBucket( experiment, token ),
 			'It returns the same bucket for the same experiment-token pair.'
@@ -33,9 +33,9 @@
 			A: 0.314159265359
 		};
 
-		assert.strictEqual(
-			getBucket( experiment, token ),
+		assert.equal(
 			'A',
+			getBucket( experiment, token ),
 			'It returns the bucket if only one is defined.'
 		);
 
@@ -43,9 +43,9 @@
 		experiment = createExperiment();
 		experiment.enabled = false;
 
-		assert.strictEqual(
-			getBucket( experiment, token ),
+		assert.equal(
 			'control',
+			getBucket( experiment, token ),
 			'It returns "control" if the experiment is disabled.'
 		);
 
@@ -53,11 +53,11 @@
 		experiment = createExperiment();
 		experiment.buckets = {};
 
-		assert.strictEqual(
-			getBucket( experiment, token ),
+		assert.equal(
 			'control',
+			getBucket( experiment, token ),
 			'It returns "control" if the experiment doesn\'t have any buckets.'
 		);
 	} );
 
-}() );
+}( mediaWiki ) );

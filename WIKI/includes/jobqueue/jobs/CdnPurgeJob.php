@@ -27,9 +27,13 @@
  * @ingroup JobQueue
  * @since 1.27
  */
-class CdnPurgeJob extends Job implements GenericParameterJob {
-	public function __construct( array $params ) {
-		parent::__construct( 'cdnPurge', $params );
+class CdnPurgeJob extends Job {
+	/**
+	 * @param Title $title
+	 * @param array $params Job parameters (urls)
+	 */
+	function __construct( Title $title, array $params ) {
+		parent::__construct( 'cdnPurge', $title, $params );
 		$this->removeDuplicates = false; // delay semantics are critical
 	}
 

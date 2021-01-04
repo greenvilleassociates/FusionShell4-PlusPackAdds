@@ -3,7 +3,8 @@
 /**
  * @covers WikiReference
  */
-class WikiReferenceTest extends MediaWikiIntegrationTestCase {
+
+class WikiReferenceTest extends PHPUnit_Framework_TestCase {
 
 	public function provideGetDisplayName() {
 		return [

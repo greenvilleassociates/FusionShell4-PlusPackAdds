@@ -1,8 +1,5 @@
 <?php
 
-use MediaWiki\HookContainer\HookContainer;
-use MediaWiki\HookContainer\HookRunner;
-
 /**
  * Configuration handling class for SearchEngine.
  * Provides added service over plain configuration.
@@ -23,34 +20,9 @@ class SearchEngineConfig {
 	 */
 	private $language;
 
-	/**
-	 * Search Engine Mappings
-	 *
-	 * Key is the canonical name (used in $wgSearchType and $wgSearchTypeAlternatives).
-	 * Value is a specification for ObjectFactory.
-	 *
-	 * @var array
-	 */
-	private $engineMappings;
-
-	/**
-	 * @var HookRunner
-	 */
-	private $hookRunner;
-
-	/**
-	 * @param Config $config
-	 * @param Language $lang
-	 * @param HookContainer $hookContainer
-	 * @param array $mappings
-	 */
-	public function __construct( Config $config, Language $lang,
-		HookContainer $hookContainer, array $mappings
-	) {
+	public function __construct( Config $config, Language $lang ) {
 		$this->config = $config;
 		$this->language = $lang;
-		$this->engineMappings = $mappings;
-		$this->hookRunner = new HookRunner( $hookContainer );
 	}
 
 	/**
@@ -63,8 +35,7 @@ class SearchEngineConfig {
 
 	/**
 	 * Make a list of searchable namespaces and their canonical names.
-	 * @return string[] Namespace ID => name
-	 * @phan-return array<int,string>
+	 * @return array Namespace ID => name
 	 */
 	public function searchableNamespaces() {
 		$arr = [];
@@ -74,7 +45,7 @@ class SearchEngineConfig {
 			}
 		}
 
-		$this->hookRunner->onSearchableNamespaces( $arr );
+		Hooks::run( 'SearchableNamespaces', [ &$arr ] );
 		return $arr;
 	}
 
@@ -125,30 +96,6 @@ class SearchEngineConfig {
 	 */
 	public function getSearchType() {
 		return $this->config->get( 'SearchType' );
-	}
-
-	/**
-	 * Returns the mappings between canonical search name and underlying PHP class
-	 *
-	 * Key is the canonical name (used in $wgSearchType and $wgSearchTypeAlternatives).
-	 * Value is a specification for ObjectFactory.
-	 *
-	 * For example to be able to use 'foobarsearch' in $wgSearchType and
-	 * $wgSearchTypeAlternatives but the PHP class for 'foobarsearch'
-	 * is 'MediaWiki\Extensions\FoobarSearch\FoobarSearch' set:
-	 *
-	 * @par extension.json Example:
-	 * @code
-	 * "SearchMappings": {
-	 * 	"foobarsearch": { "class": "MediaWiki\\Extensions\\FoobarSearch\\FoobarSearch" }
-	 * }
-	 * @endcode
-	 *
-	 * @since 1.35
-	 * @return array
-	 */
-	public function getSearchMappings() {
-		return $this->engineMappings;
 	}
 
 	/**

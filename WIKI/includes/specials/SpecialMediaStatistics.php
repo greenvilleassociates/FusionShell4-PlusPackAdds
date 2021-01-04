@@ -22,26 +22,26 @@
  * @author Brian Wolff
  */
 
+use Wikimedia\Rdbms\ResultWrapper;
 use Wikimedia\Rdbms\IDatabase;
-use Wikimedia\Rdbms\IResultWrapper;
 
 /**
  * @ingroup SpecialPage
  */
-class SpecialMediaStatistics extends QueryPage {
+class MediaStatisticsPage extends QueryPage {
 	protected $totalCount = 0, $totalBytes = 0;
 
 	/**
-	 * @var int Combined file size of all files in a section
+	 * @var int $totalPerType Combined file size of all files in a section
 	 */
 	protected $totalPerType = 0;
 
 	/**
-	 * @var int Combined file size of all files
+	 * @var int $totalSize Combined file size of all files
 	 */
 	protected $totalSize = 0;
 
-	public function __construct( $name = 'MediaStatistics' ) {
+	function __construct( $name = 'MediaStatistics' ) {
 		parent::__construct( $name );
 		// Generally speaking there is only a small number of file types,
 		// so just show all of them.
@@ -76,9 +76,9 @@ class SpecialMediaStatistics extends QueryPage {
 			$dbr->addQuotes( '/' ),
 			'img_minor_mime',
 			$dbr->addQuotes( ';' ),
-			$dbr->buildStringCast( 'COUNT(*)' ),
+			'COUNT(*)',
 			$dbr->addQuotes( ';' ),
-			$dbr->buildStringCast( 'SUM( img_size )' )
+			'SUM( img_size )'
 		] );
 		return [
 			'tables' => [ 'image' ],
@@ -102,9 +102,9 @@ class SpecialMediaStatistics extends QueryPage {
 	 *
 	 * It's important that img_media_type come first, otherwise the
 	 * tables will be fragmented.
-	 * @return array Fields to sort by
+	 * @return Array Fields to sort by
 	 */
-	protected function getOrderFields() {
+	function getOrderFields() {
 		return [ 'img_media_type', 'count(*)', 'img_major_mime', 'img_minor_mime' ];
 	}
 
@@ -114,7 +114,7 @@ class SpecialMediaStatistics extends QueryPage {
 	 * @param OutputPage $out
 	 * @param Skin $skin (deprecated presumably)
 	 * @param IDatabase $dbr
-	 * @param IResultWrapper $res Results from query
+	 * @param ResultWrapper $res Results from query
 	 * @param int $num Number of results
 	 * @param int $offset Paging offset (Should always be 0 in our case)
 	 */
@@ -143,7 +143,7 @@ class SpecialMediaStatistics extends QueryPage {
 			$this->outputTableEnd();
 			// add total size of all files
 			$this->outputMediaType( 'total' );
-			$this->getOutput()->addWikiTextAsInterface(
+			$this->getOutput()->addWikiText(
 				$this->msg( 'mediastatistics-allbytes' )
 					->numParams( $this->totalSize )
 					->sizeParams( $this->totalSize )
@@ -156,11 +156,8 @@ class SpecialMediaStatistics extends QueryPage {
 	 * Output closing </table>
 	 */
 	protected function outputTableEnd() {
-		$this->getOutput()->addHTML(
-			Html::closeElement( 'tbody' ) .
-			Html::closeElement( 'table' )
-		);
-		$this->getOutput()->addWikiTextAsInterface(
+		$this->getOutput()->addHTML( Html::closeElement( 'table' ) );
+		$this->getOutput()->addWikiText(
 				$this->msg( 'mediastatistics-bytespertype' )
 					->numParams( $this->totalPerType )
 					->sizeParams( $this->totalPerType )
@@ -185,7 +182,7 @@ class SpecialMediaStatistics extends QueryPage {
 			[],
 			$linkRenderer->makeLink( $mimeSearch, $mime )
 		);
-		$row .= Html::rawElement(
+		$row .= Html::element(
 			'td',
 			[],
 			$this->getExtensionList( $mime )
@@ -217,7 +214,7 @@ class SpecialMediaStatistics extends QueryPage {
 
 	/**
 	 * @param float $decimal A decimal percentage (ie for 12.3%, this would be 0.123)
-	 * @return string The percentage formatted so that 3 significant digits are shown.
+	 * @return String The percentage formatted so that 3 significant digits are shown.
 	 */
 	protected function makePercentPretty( $decimal ) {
 		$decimal *= 100;
@@ -240,16 +237,17 @@ class SpecialMediaStatistics extends QueryPage {
 	 * @return string Comma separated list of allowed extensions (e.g. ".ogg, .oga")
 	 */
 	private function getExtensionList( $mime ) {
-		$exts = MediaWiki\MediaWikiServices::getInstance()->getMimeAnalyzer()
-			->getExtensionsFromMimeType( $mime );
-		if ( !$exts ) {
+		$exts = MimeMagic::singleton()->getExtensionsForType( $mime );
+		if ( $exts === null ) {
 			return '';
 		}
-		foreach ( $exts as &$ext ) {
-			$ext = htmlspecialchars( '.' . $ext );
+		$extArray = explode( ' ', $exts );
+		$extArray = array_unique( $extArray );
+		foreach ( $extArray as &$ext ) {
+			$ext = '.' . $ext;
 		}
 
-		return $this->getLanguage()->commaList( $exts );
+		return $this->getLanguage()->commaList( $extArray );
 	}
 
 	/**
@@ -259,10 +257,7 @@ class SpecialMediaStatistics extends QueryPage {
 	 * @param string $mediaType
 	 */
 	protected function outputTableStart( $mediaType ) {
-		$out = $this->getOutput();
-		$out->addModuleStyles( 'jquery.tablesorter.styles' );
-		$out->addModules( 'jquery.tablesorter' );
-		$out->addHTML(
+		$this->getOutput()->addHTML(
 			Html::openElement(
 				'table',
 				[ 'class' => [
@@ -271,16 +266,15 @@ class SpecialMediaStatistics extends QueryPage {
 					'sortable',
 					'wikitable'
 				] ]
-			) .
-			Html::rawElement( 'thead', [], $this->getTableHeaderRow() ) .
-			Html::openElement( 'tbody' )
+			)
 		);
+		$this->getOutput()->addHTML( $this->getTableHeaderRow() );
 	}
 
 	/**
 	 * Get (not output) the header row for the table
 	 *
-	 * @return string The header row of the table
+	 * @return String the header row of the able
 	 */
 	protected function getTableHeaderRow() {
 		$headers = [ 'mimetype', 'extensions', 'count', 'totalbytes' ];
@@ -361,15 +355,15 @@ class SpecialMediaStatistics extends QueryPage {
 	 * Initialize total values so we can figure out percentages later.
 	 *
 	 * @param IDatabase $dbr
-	 * @param IResultWrapper $res
+	 * @param ResultWrapper $res
 	 */
 	public function preprocessResults( $dbr, $res ) {
 		$this->executeLBFromResultWrapper( $res );
 		$this->totalCount = $this->totalBytes = 0;
 		foreach ( $res as $row ) {
 			$mediaStats = $this->splitFakeTitle( $row->title );
-			$this->totalCount += $mediaStats[2] ?? 0;
-			$this->totalBytes += $mediaStats[3] ?? 0;
+			$this->totalCount += isset( $mediaStats[2] ) ? $mediaStats[2] : 0;
+			$this->totalBytes += isset( $mediaStats[3] ) ? $mediaStats[3] : 0;
 		}
 		$res->seek( 0 );
 	}

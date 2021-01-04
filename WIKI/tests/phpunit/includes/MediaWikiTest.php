@@ -1,9 +1,7 @@
 <?php
 
-class MediaWikiTest extends MediaWikiIntegrationTestCase {
-	private $oldServer, $oldGet, $oldPost;
-
-	protected function setUp() : void {
+class MediaWikiTest extends MediaWikiTestCase {
+	protected function setUp() {
 		parent::setUp();
 
 		$this->setMwGlobals( [
@@ -13,18 +11,6 @@ class MediaWikiTest extends MediaWikiIntegrationTestCase {
 			'wgArticlePath' => '/wiki/$1',
 			'wgActionPaths' => [],
 		] );
-
-		// phpcs:disable MediaWiki.Usage.SuperGlobalsUsage.SuperGlobals
-		$this->oldServer = $_SERVER;
-		$this->oldGet = $_GET;
-		$this->oldPost = $_POST;
-	}
-
-	protected function tearDown() : void {
-		parent::tearDown();
-		$_SERVER = $this->oldServer;
-		$_GET = $this->oldGet;
-		$_POST = $this->oldPost;
 	}
 
 	public static function provideTryNormaliseRedirect() {
@@ -127,20 +113,6 @@ class MediaWikiTest extends MediaWikiIntegrationTestCase {
 				'title' => 'Foo_Bar',
 				'redirect' => false,
 			],
-			[
-				// Path with double slash prefix (T100782)
-				'url' => 'http://example.org//wiki/Double_slash',
-				'query' => [],
-				'title' => 'Double_slash',
-				'redirect' => false,
-			],
-			[
-				// View: Media namespace redirect (T203942)
-				'url' => 'http://example.org/w/index.php?title=Media:Foo_Bar',
-				'query' => [ 'title' => 'Foo_Bar' ],
-				'title' => 'File:Foo_Bar',
-				'redirect' => 'http://example.org/wiki/File:Foo_Bar',
-			],
 		];
 	}
 
@@ -150,13 +122,11 @@ class MediaWikiTest extends MediaWikiIntegrationTestCase {
 	 */
 	public function testTryNormaliseRedirect( $url, $query, $title, $expectedRedirect = false ) {
 		// Set SERVER because interpolateTitle() doesn't use getRequestURL(),
-		// whereas tryNormaliseRedirect does(). Also, using WebRequest allows
-		// us to test some quirks in that class.
+		// whereas tryNormaliseRedirect does().
 		$_SERVER['REQUEST_URI'] = $url;
-		$_POST = [];
-		$_GET = $query;
-		$req = new WebRequest;
 
+		$req = new FauxRequest( $query );
+		$req->setRequestURL( $url );
 		// This adds a virtual 'title' query parameter. Normally called from Setup.php
 		$req->interpolateTitle();
 
@@ -182,56 +152,6 @@ class MediaWikiTest extends MediaWikiIntegrationTestCase {
 		$this->assertEquals(
 			$expectedRedirect ?: '',
 			$context->getOutput()->getRedirect()
-		);
-	}
-
-	/**
-	 * Test a post-send job can not set cookies (T191537).
-	 * @coversNothing
-	 */
-	public function testPostSendJobDoesNotSetCookie() {
-		// Prevent updates from running
-		$this->setMwGlobals( 'wgCommandLineMode', false );
-
-		$response = new WebResponse;
-
-		// A job that attempts to set a cookie
-		$jobHasRun = false;
-		DeferredUpdates::addCallableUpdate( function () use ( $response, &$jobHasRun ) {
-			$jobHasRun = true;
-			$response->setCookie( 'JobCookie', 'yes' );
-			$response->header( 'Foo: baz' );
-		} );
-
-		$hookWasRun = false;
-		$this->setTemporaryHook( 'WebResponseSetCookie', function () use ( &$hookWasRun ) {
-			$hookWasRun = true;
-			return true;
-		} );
-
-		$logger = new TestLogger();
-		$logger->setCollect( true );
-		$this->setLogger( 'cookie', $logger );
-		$this->setLogger( 'header', $logger );
-
-		$mw = new MediaWiki();
-		$mw->doPostOutputShutdown();
-		// restInPeace() might have been registered to a callback of
-		// register_postsend_function() and thus can not be triggered from
-		// PHPUnit.
-		if ( $jobHasRun === false ) {
-			$mw->restInPeace();
-		}
-
-		$this->assertTrue( $jobHasRun, 'post-send job has run' );
-		$this->assertFalse( $hookWasRun,
-			'post-send job must not trigger WebResponseSetCookie hook' );
-		$this->assertEquals(
-			[
-				[ 'info', 'ignored post-send cookie {cookie}' ],
-				[ 'info', 'ignored post-send header {header}' ],
-			],
-			$logger->getBuffer()
 		);
 	}
 }

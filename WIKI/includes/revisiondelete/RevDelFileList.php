@@ -19,7 +19,6 @@
  * @ingroup RevisionDelete
  */
 
-use MediaWiki\MediaWikiServices;
 use Wikimedia\Rdbms\IDatabase;
 
 /**
@@ -61,17 +60,15 @@ class RevDelFileList extends RevDelList {
 			$archiveNames[] = $timestamp . '!' . $this->title->getDBkey();
 		}
 
-		$oiQuery = OldLocalFile::getQueryInfo();
 		return $db->select(
-			$oiQuery['tables'],
-			$oiQuery['fields'],
+			'oldimage',
+			OldLocalFile::selectFields(),
 			[
 				'oi_name' => $this->title->getDBkey(),
 				'oi_archive_name' => $archiveNames
 			],
 			__METHOD__,
-			[ 'ORDER BY' => 'oi_timestamp DESC' ],
-			$oiQuery['joins']
+			[ 'ORDER BY' => 'oi_timestamp DESC' ]
 		);
 	}
 
@@ -87,7 +84,7 @@ class RevDelFileList extends RevDelList {
 
 	public function doPreCommitUpdates() {
 		$status = Status::newGood();
-		$repo = MediaWikiServices::getInstance()->getRepoGroup()->getLocalRepo();
+		$repo = RepoGroup::singleton()->getLocalRepo();
 		if ( $this->storeBatch ) {
 			$status->merge( $repo->storeBatch( $this->storeBatch, FileRepo::OVERWRITE_SAME ) );
 		}
@@ -110,8 +107,7 @@ class RevDelFileList extends RevDelList {
 	}
 
 	public function doPostCommitUpdates( array $visibilityChangeMap ) {
-		$file = MediaWikiServices::getInstance()->getRepoGroup()->getLocalRepo()
-			->newFile( $this->title );
+		$file = wfLocalFile( $this->title );
 		$file->purgeCache();
 		$file->purgeDescription();
 
@@ -122,9 +118,10 @@ class RevDelFileList extends RevDelList {
 			$file->purgeOldThumbnails( $archiveName );
 			$purgeUrls[] = $file->getArchiveUrl( $archiveName );
 		}
-
-		$hcu = MediaWikiServices::getInstance()->getHtmlCacheUpdater();
-		$hcu->purgeUrls( $purgeUrls, $hcu::PURGE_INTENT_TXROUND_REFLECTED );
+		DeferredUpdates::addUpdate(
+			new CdnCacheUpdate( $purgeUrls ),
+			DeferredUpdates::PRESEND
+		);
 
 		return Status::newGood();
 	}

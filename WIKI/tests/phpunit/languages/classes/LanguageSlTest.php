@@ -6,10 +6,7 @@
  * @file
  */
 
-/**
- * @group Language
- * @covers LanguageSl
- */
+/** Tests for MediaWiki languages/classes/LanguageSl.php */
 class LanguageSlTest extends LanguageClassesTestCase {
 	/**
 	 * @dataProvider providerPlural

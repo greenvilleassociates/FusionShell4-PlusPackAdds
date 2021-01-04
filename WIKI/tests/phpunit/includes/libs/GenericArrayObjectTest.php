@@ -26,9 +26,7 @@
  *
  * @author Jeroen De Dauw < jeroendedauw@gmail.com >
  */
-abstract class GenericArrayObjectTest extends PHPUnit\Framework\TestCase {
-
-	use MediaWikiCoversValidator;
+abstract class GenericArrayObjectTest extends PHPUnit_Framework_TestCase {
 
 	/**
 	 * Returns objects that can serve as elements in the concrete
@@ -173,6 +171,8 @@ abstract class GenericArrayObjectTest extends PHPUnit\Framework\TestCase {
 	 * @since 1.20
 	 *
 	 * @param callable $function
+	 *
+	 * @covers GenericArrayObject::getObjectType
 	 */
 	protected function checkTypeChecks( $function ) {
 		$excption = null;
@@ -180,11 +180,11 @@ abstract class GenericArrayObjectTest extends PHPUnit\Framework\TestCase {
 
 		$elementClass = $list->getObjectType();
 
-		foreach ( [ 42, 'foo', [], (object)[], 4.2 ] as $element ) {
+		foreach ( [ 42, 'foo', [], new stdClass(), 4.2 ] as $element ) {
 			$validValid = $element instanceof $elementClass;
 
 			try {
-				$function( $list, $element );
+				call_user_func( $function, $list, $element );
 				$valid = true;
 			} catch ( InvalidArgumentException $exception ) {
 				$valid = false;
@@ -204,7 +204,7 @@ abstract class GenericArrayObjectTest extends PHPUnit\Framework\TestCase {
 	 * @since 1.20
 	 *
 	 * @param array $elements
-	 * @covers GenericArrayObject::getObjectType
+	 *
 	 * @covers GenericArrayObject::offsetSet
 	 */
 	public function testOffsetSet( array $elements ) {

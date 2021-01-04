@@ -1,6 +1,10 @@
 <?php
 
 /**
+ *
+ *
+ * Created on Dec 29, 2015
+ *
  * Copyright © 2015 Geoffrey Mon <geofbot@gmail.com>
  *
  * This program is free software; you can redistribute it and/or modify
@@ -20,17 +24,8 @@
  *
  * @file
  */
-
-use MediaWiki\Content\IContentHandlerFactory;
-use MediaWiki\EditPage\SpamChecker;
-use MediaWiki\MediaWikiServices;
-use MediaWiki\Permissions\PermissionManager;
-use MediaWiki\Revision\MutableRevisionRecord;
-use MediaWiki\Revision\RevisionStore;
-use MediaWiki\Revision\SlotRecord;
-use Wikimedia\Rdbms\IDatabase;
-use Wikimedia\Rdbms\ILoadBalancer;
 use Wikimedia\Timestamp\TimestampException;
+use Wikimedia\Rdbms\IDatabase;
 
 /**
  * Handles the backend logic of merging the histories of two
@@ -40,8 +35,8 @@ use Wikimedia\Timestamp\TimestampException;
  */
 class MergeHistory {
 
-	/** Maximum number of revisions that can be merged at once */
-	public const REVISION_LIMIT = 5000;
+	/** @const int Maximum number of revisions that can be merged at once */
+	const REVISION_LIMIT = 5000;
 
 	/** @var Title Page from which history will be merged */
 	protected $source;
@@ -64,71 +59,18 @@ class MergeHistory {
 	/** @var int Number of revisions merged (for Special:MergeHistory success message) */
 	protected $revisionsMerged;
 
-	/** @var PermissionManager */
-	private $permManager;
-
-	/** @var IContentHandlerFactory */
-	private $contentHandlerFactory;
-
-	/** @var RevisionStore */
-	private $revisionStore;
-
-	/** @var WatchedItemStoreInterface */
-	private $watchedItemStore;
-
-	/** @var SpamChecker */
-	private $spamChecker;
-
 	/**
-	 * Since 1.35 dependencies are injected and not providing them is hard deprecated; use the
-	 * MergeHistoryFactory service
-	 *
 	 * @param Title $source Page from which history will be merged
 	 * @param Title $dest Page to which history will be merged
 	 * @param string|bool $timestamp Timestamp up to which history from the source will be merged
-	 * @param ILoadBalancer|null $loadBalancer
-	 * @param PermissionManager|null $permManager
-	 * @param IContentHandlerFactory|null $contentHandlerFactory
-	 * @param RevisionStore|null $revisionStore
-	 * @param WatchedItemStoreInterface|null $watchedItemStore
-	 * @param SpamChecker|null $spamChecker
 	 */
-	public function __construct(
-		Title $source,
-		Title $dest,
-		$timestamp = false,
-		ILoadBalancer $loadBalancer = null,
-		PermissionManager $permManager = null,
-		IContentHandlerFactory $contentHandlerFactory = null,
-		RevisionStore $revisionStore = null,
-		WatchedItemStoreInterface $watchedItemStore = null,
-		SpamChecker $spamChecker = null
-	) {
-		if ( $loadBalancer === null ) {
-			wfDeprecatedMsg( 'Direct construction of ' . __CLASS__ .
-				' was deprecated in MediaWiki 1.35', '1.35' );
-			$services = MediaWikiServices::getInstance();
-
-			$loadBalancer = $services->getDBLoadBalancer();
-			$permManager = $services->getPermissionManager();
-			$contentHandlerFactory = $services->getContentHandlerFactory();
-			$revisionStore = $services->getRevisionStore();
-			$watchedItemStore = $services->getWatchedItemStore();
-			$spamChecker = $services->getSpamChecker();
-		}
-
+	public function __construct( Title $source, Title $dest, $timestamp = false ) {
 		// Save the parameters
 		$this->source = $source;
 		$this->dest = $dest;
 
 		// Get the database
-		$this->dbw = $loadBalancer->getConnection( DB_MASTER );
-
-		$this->permManager = $permManager;
-		$this->contentHandlerFactory = $contentHandlerFactory;
-		$this->revisionStore = $revisionStore;
-		$this->watchedItemStore = $watchedItemStore;
-		$this->spamChecker = $spamChecker;
+		$this->dbw = wfGetDB( DB_MASTER );
 
 		// Max timestamp should be min of destination page
 		$firstDestTimestamp = $this->dbw->selectField(
@@ -221,25 +163,25 @@ class MergeHistory {
 
 		// Check if user can edit both pages
 		$errors = wfMergeErrorArrays(
-			$this->permManager->getPermissionErrors( 'edit', $user, $this->source ),
-			$this->permManager->getPermissionErrors( 'edit', $user, $this->dest )
+			$this->source->getUserPermissionsErrors( 'edit', $user ),
+			$this->dest->getUserPermissionsErrors( 'edit', $user )
 		);
 
 		// Convert into a Status object
 		if ( $errors ) {
 			foreach ( $errors as $error ) {
-				$status->fatal( ...$error );
+				call_user_func_array( [ $status, 'fatal' ], $error );
 			}
 		}
 
 		// Anti-spam
-		if ( $this->spamChecker->checkSummary( $reason ) !== false ) {
+		if ( EditPage::matchSummarySpamRegex( $reason ) !== false ) {
 			// This is kind of lame, won't display nice
 			$status->fatal( 'spamprotectiontext' );
 		}
 
 		// Check mergehistory permission
-		if ( !$this->permManager->userHasRight( $user, 'mergehistory' ) ) {
+		if ( !$user->isAllowed( 'mergehistory' ) ) {
 			// User doesn't have the right to merge histories
 			$status->fatal( 'mergehistory-fail-permission' );
 		}
@@ -315,8 +257,6 @@ class MergeHistory {
 			return $permCheck;
 		}
 
-		$this->dbw->startAtomic( __METHOD__ );
-
 		$this->dbw->update(
 			'revision',
 			[ 'rev_page' => $this->dest->getArticleID() ],
@@ -327,31 +267,18 @@ class MergeHistory {
 		// Check if this did anything
 		$this->revisionsMerged = $this->dbw->affectedRows();
 		if ( $this->revisionsMerged < 1 ) {
-			$this->dbw->endAtomic( __METHOD__ );
 			$status->fatal( 'mergehistory-fail-no-change' );
-
 			return $status;
 		}
 
-		// Update denormalized revactor_page too
-		$this->dbw->update(
-			'revision_actor_temp',
-			[ 'revactor_page' => $this->dest->getArticleID() ],
-			[
-				'revactor_page' => $this->source->getArticleID(),
-				// Slightly hacky, but should work given the values assigned in this class
-				str_replace( 'rev_timestamp', 'revactor_timestamp', $this->timeWhere )
-			],
-			__METHOD__
-		);
-
 		// Make the source page a redirect if no revisions are left
-		$haveRevisions = $this->dbw->lockForUpdate(
+		$haveRevisions = $this->dbw->selectField(
 			'revision',
+			'rev_timestamp',
 			[ 'rev_page' => $this->source->getArticleID() ],
-			__METHOD__
+			__METHOD__,
+			[ 'FOR UPDATE' ]
 		);
-
 		if ( !$haveRevisions ) {
 			if ( $reason ) {
 				$reason = wfMessage(
@@ -368,30 +295,21 @@ class MergeHistory {
 				)->inContentLanguage()->text();
 			}
 
-			$redirectContent = $this->contentHandlerFactory
-				->getContentHandler( $this->source->getContentModel() )
-				->makeRedirectContent(
-					$this->dest,
-					wfMessage( 'mergehistory-redirect-text' )->inContentLanguage()->plain()
-				);
+			$contentHandler = ContentHandler::getForTitle( $this->source );
+			$redirectContent = $contentHandler->makeRedirectContent(
+				$this->dest,
+				wfMessage( 'mergehistory-redirect-text' )->inContentLanguage()->plain()
+			);
 
 			if ( $redirectContent ) {
-				$redirectComment = CommentStoreComment::newUnsavedComment( $reason );
-
-				$redirectRevRecord = new MutableRevisionRecord( $this->source );
-				$redirectRevRecord->setContent( SlotRecord::MAIN, $redirectContent );
-				$redirectRevRecord->setPageId( $this->source->getArticleID() );
-				$redirectRevRecord->setComment( $redirectComment );
-				$redirectRevRecord->setUser( $user );
-				$redirectRevRecord->setTimestamp( wfTimestampNow() );
-
-				$insertedRevRecord = $this->revisionStore->insertRevisionOn(
-					$redirectRevRecord,
-					$this->dbw
-				);
-
 				$redirectPage = WikiPage::factory( $this->source );
-				$redirectPage->updateRevisionOn( $this->dbw, $insertedRevRecord );
+				$redirectRevision = new Revision( [
+					'title' => $this->source,
+					'page' => $this->source->getArticleID(),
+					'comment' => $reason,
+					'content' => $redirectContent ] );
+				$redirectRevision->insertOn( $this->dbw );
+				$redirectPage->updateRevisionOn( $this->dbw, $redirectRevision );
 
 				// Now, we record the link from the redirect to the new title.
 				// It should have no other outgoing links...
@@ -417,9 +335,6 @@ class MergeHistory {
 		}
 		$this->dest->invalidateCache(); // update histories
 
-		// Duplicate watchers of the old article to the new article on history merge
-		$this->watchedItemStore->duplicateAllAssociatedEntries( $this->source, $this->dest );
-
 		// Update our logs
 		$logEntry = new ManualLogEntry( 'merge', 'merge' );
 		$logEntry->setPerformer( $user );
@@ -432,9 +347,7 @@ class MergeHistory {
 		$logId = $logEntry->insert();
 		$logEntry->publish( $logId );
 
-		Hooks::runner()->onArticleMergeComplete( $this->source, $this->dest );
-
-		$this->dbw->endAtomic( __METHOD__ );
+		Hooks::run( 'ArticleMergeComplete', [ $this->source, $this->dest ] );
 
 		return $status;
 	}

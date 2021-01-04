@@ -4,7 +4,20 @@
  * @covers ErrorPageError
  * @author Addshore
  */
-class ErrorPageErrorTest extends MediaWikiIntegrationTestCase {
+class ErrorPageErrorTest extends MediaWikiTestCase {
+
+	private function getMockMessage() {
+		$mockMessage = $this->getMockBuilder( 'Message' )
+			->disableOriginalConstructor()
+			->getMock();
+		$mockMessage->expects( $this->once() )
+			->method( 'inLanguage' )
+			->will( $this->returnValue( $mockMessage ) );
+		$mockMessage->expects( $this->once() )
+			->method( 'useDatabase' )
+			->will( $this->returnValue( $mockMessage ) );
+		return $mockMessage;
+	}
 
 	public function testConstruction() {
 		$mockMessage = $this->getMockMessage();
@@ -21,7 +34,7 @@ class ErrorPageErrorTest extends MediaWikiIntegrationTestCase {
 		$title = 'Foo';
 		$params = [ 'Baz' ];
 
-		$mock = $this->getMockBuilder( OutputPage::class )
+		$mock = $this->getMockBuilder( 'OutputPage' )
 			->disableOriginalConstructor()
 			->getMock();
 		$mock->expects( $this->once() )

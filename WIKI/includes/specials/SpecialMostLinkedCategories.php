@@ -24,20 +24,20 @@
  * @author Ævar Arnfjörð Bjarmason <avarab@gmail.com>
  */
 
+use Wikimedia\Rdbms\ResultWrapper;
 use Wikimedia\Rdbms\IDatabase;
-use Wikimedia\Rdbms\IResultWrapper;
 
 /**
  * A querypage to show categories ordered in descending order by the pages in them
  *
  * @ingroup SpecialPage
  */
-class SpecialMostLinkedCategories extends QueryPage {
-	public function __construct( $name = 'Mostlinkedcategories' ) {
+class MostlinkedCategoriesPage extends QueryPage {
+	function __construct( $name = 'Mostlinkedcategories' ) {
 		parent::__construct( $name );
 	}
 
-	public function isSyndicated() {
+	function isSyndicated() {
 		return false;
 	}
 
@@ -51,7 +51,7 @@ class SpecialMostLinkedCategories extends QueryPage {
 		];
 	}
 
-	protected function sortDescending() {
+	function sortDescending() {
 		return true;
 	}
 
@@ -59,9 +59,9 @@ class SpecialMostLinkedCategories extends QueryPage {
 	 * Fetch user page links and cache their existence
 	 *
 	 * @param IDatabase $db
-	 * @param IResultWrapper $res
+	 * @param ResultWrapper $res
 	 */
-	public function preprocessResults( $db, $res ) {
+	function preprocessResults( $db, $res ) {
 		$this->executeLBFromResultWrapper( $res );
 	}
 
@@ -70,7 +70,9 @@ class SpecialMostLinkedCategories extends QueryPage {
 	 * @param object $result Result row
 	 * @return string
 	 */
-	public function formatResult( $skin, $result ) {
+	function formatResult( $skin, $result ) {
+		global $wgContLang;
+
 		$nt = Title::makeTitleSafe( NS_CATEGORY, $result->title );
 		if ( !$nt ) {
 			return Html::element(
@@ -83,9 +85,8 @@ class SpecialMostLinkedCategories extends QueryPage {
 			);
 		}
 
-		$text = $this->getLanguageConverter()->convertHtml( $nt->getText() );
-
-		$plink = $this->getLinkRenderer()->makeLink( $nt, new HtmlArmor( $text ) );
+		$text = $wgContLang->convert( $nt->getText() );
+		$plink = $this->getLinkRenderer()->makeLink( $nt, $text );
 		$nlinks = $this->msg( 'nmembers' )->numParams( $result->value )->escaped();
 
 		return $this->getLanguage()->specialList( $plink, $nlinks );

@@ -22,7 +22,7 @@
  * @author Tyler Romeo
  */
 
-require_once __DIR__ . '/../includes/Benchmarker.php';
+require_once __DIR__ . '/Benchmarker.php';
 
 /**
  * Maintenance script that benchmarks Wikimedia\base_convert().
@@ -73,5 +73,5 @@ class BenchWikimediaBaseConvert extends Benchmarker {
 	}
 }
 
-$maintClass = BenchWikimediaBaseConvert::class;
+$maintClass = 'BenchWikimediaBaseConvert';
 require_once RUN_MAINTENANCE_IF_MAIN;

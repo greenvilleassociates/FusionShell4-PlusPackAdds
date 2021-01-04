@@ -2,21 +2,14 @@
 
 use Wikimedia\TestingAccessWrapper;
 
-/**
- * @covers ExtensionProcessor
- */
-class ExtensionProcessorTest extends MediaWikiIntegrationTestCase {
+class ExtensionProcessorTest extends MediaWikiTestCase {
 
 	private $dir, $dirname;
 
-	protected function setUp() : void {
+	public function setUp() {
 		parent::setUp();
-		$this->dir = $this->getCurrentDir();
+		$this->dir = __DIR__ . '/FooBar/extension.json';
 		$this->dirname = dirname( $this->dir );
-	}
-
-	private function getCurrentDir() {
-		return __DIR__ . '/FooBar/extension.json';
 	}
 
 	/**
@@ -29,13 +22,8 @@ class ExtensionProcessorTest extends MediaWikiIntegrationTestCase {
 	];
 
 	/**
-	 * 'name' is absolutely required, and sometimes we require two distinct ones...
-	 * @var array
+	 * @covers ExtensionProcessor::extractInfo
 	 */
-	public static $default2 = [
-		'name' => 'FooBar2',
-	];
-
 	public function testExtractInfo() {
 		// Test that attributes that begin with @ are ignored
 		$processor = new ExtensionProcessor();
@@ -43,8 +31,6 @@ class ExtensionProcessorTest extends MediaWikiIntegrationTestCase {
 			'@metadata' => [ 'foobarbaz' ],
 			'AnAttribute' => [ 'omg' ],
 			'AutoloadClasses' => [ 'FooBar' => 'includes/FooBar.php' ],
-			'SpecialPages' => [ 'Foo' => 'SpecialFoo' ],
-			'callback' => 'FooBar::onRegistration',
 		], 1 );
 
 		$extracted = $processor->getExtractedInfo();
@@ -52,18 +38,13 @@ class ExtensionProcessorTest extends MediaWikiIntegrationTestCase {
 		$this->assertArrayHasKey( 'AnAttribute', $attributes );
 		$this->assertArrayNotHasKey( '@metadata', $attributes );
 		$this->assertArrayNotHasKey( 'AutoloadClasses', $attributes );
-		$this->assertSame(
-			[ 'FooBar' => 'FooBar::onRegistration' ],
-			$extracted['callbacks']
-		);
-		$this->assertSame(
-			[ 'Foo' => 'SpecialFoo' ],
-			$extracted['globals']['wgSpecialPages']
-		);
 	}
 
-	public function testExtractNamespaces() {
-		// Test that namespace IDs defined in extension.json can be overwritten locally
+	/**
+	 * @covers ExtensionProcessor::extractInfo
+	 */
+	public function testExtractInfo_namespaces() {
+		// Test that namespace IDs can be overwritten
 		if ( !defined( 'MW_EXTENSION_PROCESSOR_TEST_EXTRACT_INFO_X' ) ) {
 			define( 'MW_EXTENSION_PROCESSOR_TEST_EXTRACT_INFO_X', 123456 );
 		}
@@ -75,20 +56,13 @@ class ExtensionProcessorTest extends MediaWikiIntegrationTestCase {
 					'id' => 332200,
 					'constant' => 'MW_EXTENSION_PROCESSOR_TEST_EXTRACT_INFO_A',
 					'name' => 'Test_A',
-					'defaultcontentmodel' => 'TestModel',
-					'gender' => [
-						'male' => 'Male test',
-						'female' => 'Female test',
-					],
-					'subpages' => true,
-					'content' => true,
-					'protection' => 'userright',
+					'content' => 'TestModel'
 				],
 				[ // Test_X will use ID 123456 not 334400
 					'id' => 334400,
 					'constant' => 'MW_EXTENSION_PROCESSOR_TEST_EXTRACT_INFO_X',
 					'name' => 'Test_X',
-					'defaultcontentmodel' => 'TestModel'
+					'content' => 'TestModel'
 				],
 			]
 		], 1 );
@@ -99,14 +73,9 @@ class ExtensionProcessorTest extends MediaWikiIntegrationTestCase {
 			'MW_EXTENSION_PROCESSOR_TEST_EXTRACT_INFO_A',
 			$extracted['defines']
 		);
-		$this->assertArrayHasKey(
+		$this->assertArrayNotHasKey(
 			'MW_EXTENSION_PROCESSOR_TEST_EXTRACT_INFO_X',
 			$extracted['defines']
-		);
-
-		$this->assertSame(
-			$extracted['defines']['MW_EXTENSION_PROCESSOR_TEST_EXTRACT_INFO_X'],
-			123456
 		);
 
 		$this->assertSame(
@@ -121,205 +90,9 @@ class ExtensionProcessorTest extends MediaWikiIntegrationTestCase {
 
 		$this->assertSame( 'Test_X', $extracted['attributes']['ExtensionNamespaces'][123456] );
 		$this->assertSame( 'Test_A', $extracted['attributes']['ExtensionNamespaces'][332200] );
-		$this->assertSame(
-			[ 'male' => 'Male test', 'female' => 'Female test' ],
-			$extracted['globals']['wgExtraGenderNamespaces'][332200]
-		);
-		// A has subpages, X does not
-		$this->assertTrue( $extracted['globals']['wgNamespacesWithSubpages'][332200] );
-		$this->assertArrayNotHasKey( 123456, $extracted['globals']['wgNamespacesWithSubpages'] );
 	}
 
-	public function provideMixedStyleHooks() {
-		// Format:
-		// Content in extension.json
-		// Expected wgHooks
-		// Expected Hooks
-		return [
-			[
-				[
-					'Hooks' => [ 'FooBaz' => [
-						[ 'handler' => 'HandlerObjectCallback' ],
-						[ 'handler' => 'HandlerObjectCallback', 'deprecated' => true ],
-						'HandlerObjectCallback',
-						[ 'FooClass', 'FooMethod' ],
-						'GlobalLegacyFunction',
-						'FooClass',
-						"FooClass::staticMethod"
-					] ],
-					'HookHandlers' => [
-						'HandlerObjectCallback' => [ 'class' => 'FooClass', 'services' => [] ]
-					]
-				] + self::$default,
-				[
-					'FooBaz' => [
-						[ 'FooClass', 'FooMethod' ],
-						'GlobalLegacyFunction',
-						'FooClass',
-						'FooClass::staticMethod'
-					]
-				] + [ ExtensionRegistry::MERGE_STRATEGY => 'array_merge_recursive' ],
-				[
-					'FooBaz' => [
-						[
-							'handler' => [
-								'class' => 'FooClass',
-								'services' => [],
-								'name' => 'FooBar-HandlerObjectCallback'
-							],
-							'extensionPath' => $this->getCurrentDir()
-						],
-						[
-							'handler' => [
-								'class' => 'FooClass',
-								'services' => [],
-								'name' => 'FooBar-HandlerObjectCallback'
-							],
-							'deprecated' => true,
-							'extensionPath' => $this->getCurrentDir()
-						],
-						[
-							'handler' => [
-								'class' => 'FooClass',
-								'services' => [],
-								'name' => 'FooBar-HandlerObjectCallback'
-							],
-							'extensionPath' => $this->getCurrentDir()
-						]
-					]
-				]
-			]
-		];
-	}
-
-	public function provideNonLegacyHooks() {
-		// Format:
-		// Current Hooks attribute
-		// Content in extension.json
-		// Expected Hooks attribute
-		return [
-			// Hook for "FooBaz": object with handler attribute
-			[
-				[ 'FooBaz' => [ 'PriorCallback' ] ],
-				[
-					'Hooks' => [ 'FooBaz' => [ 'handler' => 'HandlerObjectCallback', 'deprecated' => true ] ],
-					'HookHandlers' => [
-						'HandlerObjectCallback' => [
-							'class' => 'FooClass',
-							'services' => [],
-							'name' => 'FooBar-HandlerObjectCallback'
-						]
-					]
-				] + self::$default,
-				[ 'FooBaz' =>
-					[
-						'PriorCallback',
-						[
-							'handler' => [
-								'class' => 'FooClass',
-								'services' => [],
-								'name' => 'FooBar-HandlerObjectCallback'
-							],
-							'deprecated' => true,
-							'extensionPath' => $this->getCurrentDir()
-						]
-					]
-				],
-				[]
-			],
-			// Hook for "FooBaz": string corresponding to a handler definition
-			[
-				[ 'FooBaz' => [ 'PriorCallback' ] ],
-				[
-					'Hooks' => [ 'FooBaz' => [ 'HandlerObjectCallback' ] ],
-					'HookHandlers' => [
-						'HandlerObjectCallback' => [ 'class' => 'FooClass', 'services' => [] ],
-					]
-				] + self::$default,
-				[ 'FooBaz' =>
-					[
-						'PriorCallback',
-						[
-							'handler' => [
-								'class' => 'FooClass',
-								'services' => [],
-								'name' => 'FooBar-HandlerObjectCallback'
-							],
-							'extensionPath' => $this->getCurrentDir()
-						],
-					]
-				],
-				[]
-			],
-			// Hook for "FooBaz", string corresponds to handler def. and object with handler attribute
-			[
-				[ 'FooBaz' => [ 'PriorCallback' ] ],
-				[
-					'Hooks' => [ 'FooBaz' => [
-						[ 'handler' => 'HandlerObjectCallback', 'deprecated' => true ],
-						'HandlerObjectCallback2'
-					] ],
-					'HookHandlers' => [
-						'HandlerObjectCallback2' => [ 'class' => 'FooClass', 'services' => [] ],
-						'HandlerObjectCallback' => [ 'class' => 'FooClass', 'services' => [] ],
-					]
-				] + self::$default,
-				[ 'FooBaz' =>
-					[
-						'PriorCallback',
-						[
-							'handler' => [
-								'name' => 'FooBar-HandlerObjectCallback',
-								'class' => 'FooClass',
-								'services' => []
-							],
-							'deprecated' => true,
-							'extensionPath' => $this->getCurrentDir()
-						],
-						[
-							'handler' => [
-								'name' => 'FooBar-HandlerObjectCallback2',
-								'class' => 'FooClass',
-								'services' => [],
-							],
-							'extensionPath' => $this->getCurrentDir()
-						]
-					]
-				],
-				[]
-			],
-			// Hook for "FooBaz": string corresponding to a new-style handler definition
-			// and legacy style object and method array
-			[
-				[ 'FooBaz' => [ 'PriorCallback' ] ],
-				[
-					'Hooks' => [ 'FooBaz' => [
-						'HandlerObjectCallback',
-						[ 'FooClass', 'FooMethod ' ]
-					] ],
-					'HookHandlers' => [
-						'HandlerObjectCallback' => [ 'class' => 'FooClass', 'services' => [] ],
-					]
-				] + self::$default,
-				[ 'FooBaz' =>
-					[
-						'PriorCallback',
-						[
-							'handler' => [
-								'name' => 'FooBar-HandlerObjectCallback',
-								'class' => 'FooClass',
-								'services' => []
-							],
-							'extensionPath' => $this->getCurrentDir()
-						],
-					]
-				],
-				[ 'FooClass', 'FooMethod' ]
-			]
-		];
-	}
-
-	public function provideLegacyHooks() {
+	public static function provideRegisterHooks() {
 		$merge = [ ExtensionRegistry::MERGE_STRATEGY => 'array_merge_recursive' ];
 		// Format:
 		// Current $wgHooks
@@ -379,53 +152,21 @@ class ExtensionProcessorTest extends MediaWikiIntegrationTestCase {
 	}
 
 	/**
-	 * @dataProvider provideNonLegacyHooks
+	 * @covers ExtensionProcessor::extractHooks
+	 * @dataProvider provideRegisterHooks
 	 */
-	public function testNonLegacyHooks( $pre, $info, $expected ) {
-		$processor = new MockExtensionProcessor( [ 'attributes' => [ 'Hooks' => $pre ] ] );
-		$processor->extractInfo( $this->dir, $info, 1 );
-		$extracted = $processor->getExtractedInfo();
-		$this->assertEquals( $expected, $extracted['attributes']['Hooks'] );
-	}
-
-	/**
-	 * @dataProvider provideMixedStyleHooks
-	 */
-	public function testMixedStyleHooks( $info, $expectedWgHooks, $expectedNewHooks ) {
-		$processor = new MockExtensionProcessor();
-		$processor->extractInfo( $this->dir, $info, 1 );
-		$extracted = $processor->getExtractedInfo();
-		$this->assertEquals( $expectedWgHooks, $extracted['globals']['wgHooks'] );
-		$this->assertEquals( $expectedNewHooks, $extracted['attributes']['Hooks'] );
-	}
-
-	/**
-	 * @dataProvider provideLegacyHooks
-	 */
-	public function testLegacyHooks( $pre, $info, $expected ) {
-		$preset = [ 'globals' => [ 'wgHooks' => $pre ] ];
-		$processor = new MockExtensionProcessor( $preset );
+	public function testRegisterHooks( $pre, $info, $expected ) {
+		$processor = new MockExtensionProcessor( [ 'wgHooks' => $pre ] );
 		$processor->extractInfo( $this->dir, $info, 1 );
 		$extracted = $processor->getExtractedInfo();
 		$this->assertEquals( $expected, $extracted['globals']['wgHooks'] );
 	}
 
-	public function testRegisterHandlerWithoutDefinition() {
-		$info = [
-			'Hooks' => [ 'FooBaz' => [ 'handler' => 'NoHandlerDefinition' ] ],
-			'HookHandlers' => []
-		] + self::$default;
-		$processor = new MockExtensionProcessor();
-		$this->expectException( 'UnexpectedValueException' );
-		$this->expectExceptionMessage(
-			'Missing handler definition for FooBaz in HookHandlers attribute'
-		);
-		$processor->extractInfo( $this->dir, $info, 1 );
-		$processor->getExtractedInfo();
-	}
-
+	/**
+	 * @covers ExtensionProcessor::extractConfig1
+	 */
 	public function testExtractConfig1() {
-		$processor = new ExtensionProcessor();
+		$processor = new ExtensionProcessor;
 		$info = [
 			'config' => [
 				'Bar' => 'somevalue',
@@ -438,7 +179,8 @@ class ExtensionProcessorTest extends MediaWikiIntegrationTestCase {
 				'_prefix' => 'eg',
 				'Bar' => 'somevalue'
 			],
-		] + self::$default2;
+			'name' => 'FooBar2',
+		];
 		$processor->extractInfo( $this->dir, $info, 1 );
 		$processor->extractInfo( $this->dir, $info2, 1 );
 		$extracted = $processor->getExtractedInfo();
@@ -449,21 +191,16 @@ class ExtensionProcessorTest extends MediaWikiIntegrationTestCase {
 		$this->assertEquals( 'somevalue', $extracted['globals']['egBar'] );
 	}
 
+	/**
+	 * @covers ExtensionProcessor::extractConfig2
+	 */
 	public function testExtractConfig2() {
-		$processor = new ExtensionProcessor();
+		$processor = new ExtensionProcessor;
 		$info = [
 			'config' => [
 				'Bar' => [ 'value' => 'somevalue' ],
 				'Foo' => [ 'value' => 10 ],
 				'Path' => [ 'value' => 'foo.txt', 'path' => true ],
-				'PathArray' => [ 'value' => [ 'foo.bar', 'bar.foo', 'bar/foo.txt' ], 'path' => true ],
-				'Namespaces' => [
-					'value' => [
-						'10' => true,
-						'12' => false,
-					],
-					'merge_strategy' => 'array_plus',
-				],
 			],
 		] + self::$default;
 		$info2 = [
@@ -471,61 +208,16 @@ class ExtensionProcessorTest extends MediaWikiIntegrationTestCase {
 				'Bar' => [ 'value' => 'somevalue' ],
 			],
 			'config_prefix' => 'eg',
-		] + self::$default2;
+			'name' => 'FooBar2',
+		];
 		$processor->extractInfo( $this->dir, $info, 2 );
 		$processor->extractInfo( $this->dir, $info2, 2 );
 		$extracted = $processor->getExtractedInfo();
 		$this->assertEquals( 'somevalue', $extracted['globals']['wgBar'] );
 		$this->assertEquals( 10, $extracted['globals']['wgFoo'] );
 		$this->assertEquals( "{$this->dirname}/foo.txt", $extracted['globals']['wgPath'] );
-		$this->assertEquals(
-			[
-				"{$this->dirname}/foo.bar",
-				"{$this->dirname}/bar.foo",
-				"{$this->dirname}/bar/foo.txt"
-			],
-			$extracted['globals']['wgPathArray']
-		);
 		// Custom prefix:
 		$this->assertEquals( 'somevalue', $extracted['globals']['egBar'] );
-		$this->assertSame(
-			[ 10 => true, 12 => false, ExtensionRegistry::MERGE_STRATEGY => 'array_plus' ],
-			$extracted['globals']['wgNamespaces']
-		);
-	}
-
-	public function testDuplicateConfigKey1() {
-		$processor = new ExtensionProcessor();
-		$info = [
-			'config' => [
-				'Bar' => '',
-			]
-		] + self::$default;
-		$info2 = [
-			'config' => [
-				'Bar' => 'g',
-			],
-		] + self::$default2;
-		$this->expectException( RuntimeException::class );
-		$processor->extractInfo( $this->dir, $info, 1 );
-		$processor->extractInfo( $this->dir, $info2, 1 );
-	}
-
-	public function testDuplicateConfigKey2() {
-		$processor = new ExtensionProcessor();
-		$info = [
-			'config' => [
-				'Bar' => [ 'value' => 'somevalue' ],
-			]
-		] + self::$default;
-		$info2 = [
-			'config' => [
-				'Bar' => [ 'value' => 'somevalue' ],
-			],
-		] + self::$default2;
-		$this->expectException( RuntimeException::class );
-		$processor->extractInfo( $this->dir, $info, 2 );
-		$processor->extractInfo( $this->dir, $info2, 2 );
 	}
 
 	public static function provideExtractExtensionMessagesFiles() {
@@ -553,6 +245,7 @@ class ExtensionProcessorTest extends MediaWikiIntegrationTestCase {
 	}
 
 	/**
+	 * @covers ExtensionProcessor::extractExtensionMessagesFiles
 	 * @dataProvider provideExtractExtensionMessagesFiles
 	 */
 	public function testExtractExtensionMessagesFiles( $input, $expected ) {
@@ -579,6 +272,7 @@ class ExtensionProcessorTest extends MediaWikiIntegrationTestCase {
 	}
 
 	/**
+	 * @covers ExtensionProcessor::extractMessagesDirs
 	 * @dataProvider provideExtractMessagesDirs
 	 */
 	public function testExtractMessagesDirs( $input, $expected ) {
@@ -590,29 +284,26 @@ class ExtensionProcessorTest extends MediaWikiIntegrationTestCase {
 		}
 	}
 
+	/**
+	 * @covers ExtensionProcessor::extractCredits
+	 */
 	public function testExtractCredits() {
 		$processor = new ExtensionProcessor();
 		$processor->extractInfo( $this->dir, self::$default, 1 );
-		$this->expectException( Exception::class );
+		$this->setExpectedException( 'Exception' );
 		$processor->extractInfo( $this->dir, self::$default, 1 );
 	}
 
 	/**
+	 * @covers ExtensionProcessor::extractResourceLoaderModules
 	 * @dataProvider provideExtractResourceLoaderModules
 	 */
-	public function testExtractResourceLoaderModules(
-		$input,
-		array $expectedGlobals,
-		array $expectedAttribs = []
-	) {
+	public function testExtractResourceLoaderModules( $input, $expected ) {
 		$processor = new ExtensionProcessor();
 		$processor->extractInfo( $this->dir, $input + self::$default, 1 );
 		$out = $processor->getExtractedInfo();
-		foreach ( $expectedGlobals as $key => $value ) {
+		foreach ( $expected as $key => $value ) {
 			$this->assertEquals( $value, $out['globals'][$key] );
-		}
-		foreach ( $expectedAttribs as $key => $value ) {
-			$this->assertEquals( $value, $out['attributes'][$key] );
 		}
 	}
 
@@ -632,9 +323,8 @@ class ExtensionProcessorTest extends MediaWikiIntegrationTestCase {
 					],
 				],
 				// Expected
-				[],
 				[
-					'ResourceModules' => [
+					'wgResourceModules' => [
 						'test.foo' => [
 							'styles' => 'foobar.js',
 							'localBasePath' => $dir,
@@ -648,8 +338,8 @@ class ExtensionProcessorTest extends MediaWikiIntegrationTestCase {
 				// Input
 				[
 					'ResourceFileModulePaths' => [
-						'localBasePath' => 'modules',
-						'remoteExtPath' => 'FooBar/modules',
+						'localBasePath' => '',
+						'remoteExtPath' => 'FooBar',
 					],
 					'ResourceModules' => [
 						// No paths
@@ -676,13 +366,12 @@ class ExtensionProcessorTest extends MediaWikiIntegrationTestCase {
 					],
 				],
 				// Expected
-				[],
 				[
-					'ResourceModules' => [
+					'wgResourceModules' => [
 						'test.foo' => [
 							'styles' => 'foo.js',
-							'localBasePath' => "$dir/modules",
-							'remoteExtPath' => 'FooBar/modules',
+							'localBasePath' => $dir,
+							'remoteExtPath' => 'FooBar',
 						],
 						'test.bar' => [
 							'styles' => 'bar.js',
@@ -692,14 +381,14 @@ class ExtensionProcessorTest extends MediaWikiIntegrationTestCase {
 						'test.class' => [
 							'class' => 'FooBarModule',
 							'extra' => 'argument',
-							'localBasePath' => "$dir/modules",
-							'remoteExtPath' => 'FooBar/modules',
+							'localBasePath' => $dir,
+							'remoteExtPath' => 'FooBar',
 						],
 						'test.class.with.path' => [
 							'class' => 'FooBarPathModule',
 							'extra' => 'argument',
 							'localBasePath' => $dir,
-							'remoteExtPath' => 'FooBar/modules',
+							'remoteExtPath' => 'FooBar',
 						]
 					],
 				],
@@ -719,9 +408,8 @@ class ExtensionProcessorTest extends MediaWikiIntegrationTestCase {
 					],
 				],
 				// Expected
-				[],
 				[
-					'ResourceModuleSkinStyles' => [
+					'wgResourceModuleSkinStyles' => [
 						'foobar' => [
 							'test.foo' => 'foo.css',
 							'localBasePath' => $dir,
@@ -746,34 +434,12 @@ class ExtensionProcessorTest extends MediaWikiIntegrationTestCase {
 					],
 				],
 				// Expected
-				[],
 				[
-					'ResourceModuleSkinStyles' => [
+					'wgResourceModuleSkinStyles' => [
 						'foobar' => [
 							'test.foo' => 'foo.css',
 							'localBasePath' => $dir,
 							'remoteSkinPath' => 'BarFoo',
-						],
-					],
-				],
-			],
-			'QUnit test module' => [
-				// Input
-				[
-					'QUnitTestModule' => [
-						'localBasePath' => '',
-						'remoteExtPath' => 'Foo',
-						'scripts' => 'bar.js',
-					],
-				],
-				// Expected
-				[],
-				[
-					'QUnitTestModules' => [
-						'test.FooBar' => [
-							'localBasePath' => $dir,
-							'remoteExtPath' => 'Foo',
-							'scripts' => 'bar.js',
 						],
 					],
 				],
@@ -835,11 +501,14 @@ class ExtensionProcessorTest extends MediaWikiIntegrationTestCase {
 
 	/**
 	 * Attributes under manifest_version 2
+	 *
+	 * @covers ExtensionProcessor::extractAttributes
+	 * @covers ExtensionProcessor::getExtractedInfo
 	 */
 	public function testExtractAttributes() {
 		$processor = new ExtensionProcessor();
 		// Load FooBar extension
-		$processor->extractInfo( $this->dir, self::$default, 2 );
+		$processor->extractInfo( $this->dir, [ 'name' => 'FooBar' ], 2 );
 		$processor->extractInfo(
 			$this->dir,
 			[
@@ -870,28 +539,22 @@ class ExtensionProcessorTest extends MediaWikiIntegrationTestCase {
 
 	/**
 	 * Attributes under manifest_version 1
+	 *
+	 * @covers ExtensionProcessor::extractInfo
 	 */
 	public function testAttributes1() {
 		$processor = new ExtensionProcessor();
 		$processor->extractInfo(
 			$this->dir,
 			[
+				'name' => 'FooBar',
 				'FooBarPlugins' => [
 					'ext.baz.foobar',
 				],
 				'FizzBuzzMorePlugins' => [
 					'ext.baz.fizzbuzz',
 				],
-			] + self::$default,
-			1
-		);
-		$processor->extractInfo(
-			$this->dir,
-			[
-				'FizzBuzzMorePlugins' => [
-					'ext.bar.fizzbuzz',
-				]
-			] + self::$default2,
+			],
 			1
 		);
 
@@ -899,148 +562,9 @@ class ExtensionProcessorTest extends MediaWikiIntegrationTestCase {
 		$this->assertArrayHasKey( 'FooBarPlugins', $info['attributes'] );
 		$this->assertSame( [ 'ext.baz.foobar' ], $info['attributes']['FooBarPlugins'] );
 		$this->assertArrayHasKey( 'FizzBuzzMorePlugins', $info['attributes'] );
-		$this->assertSame(
-			[ 'ext.baz.fizzbuzz', 'ext.bar.fizzbuzz' ],
-			$info['attributes']['FizzBuzzMorePlugins']
-		);
+		$this->assertSame( [ 'ext.baz.fizzbuzz' ], $info['attributes']['FizzBuzzMorePlugins'] );
 	}
 
-	public function testAttributes1_notarray() {
-		$processor = new ExtensionProcessor();
-		$this->expectException( InvalidArgumentException::class );
-		$this->expectExceptionMessage(
-			"The value for 'FooBarPlugins' should be an array (from {$this->dir})"
-		);
-		$processor->extractInfo(
-			$this->dir,
-			[
-				'FooBarPlugins' => 'ext.baz.foobar',
-			] + self::$default,
-			1
-		);
-	}
-
-	public function testExtractPathBasedGlobal() {
-		$processor = new ExtensionProcessor();
-		$processor->extractInfo(
-			$this->dir,
-			[
-				'ParserTestFiles' => [
-					'tests/parserTests.txt',
-					'tests/extraParserTests.txt',
-				],
-				'ServiceWiringFiles' => [
-					'includes/ServiceWiring.php'
-				],
-			] + self::$default,
-			1
-		);
-		$globals = $processor->getExtractedInfo()['globals'];
-		$this->assertArrayHasKey( 'wgParserTestFiles', $globals );
-		$this->assertSame( [
-			"{$this->dirname}/tests/parserTests.txt",
-			"{$this->dirname}/tests/extraParserTests.txt"
-		], $globals['wgParserTestFiles'] );
-		$this->assertArrayHasKey( 'wgServiceWiringFiles', $globals );
-		$this->assertSame( [
-			"{$this->dirname}/includes/ServiceWiring.php"
-		], $globals['wgServiceWiringFiles'] );
-	}
-
-	public function testGetRequirements() {
-		$info = self::$default + [
-			'requires' => [
-				'MediaWiki' => '>= 1.25.0',
-				'platform' => [
-					'php' => '>= 5.5.9'
-				],
-				'extensions' => [
-					'Bar' => '*'
-				]
-			]
-		];
-		$processor = new ExtensionProcessor();
-		$this->assertSame(
-			$info['requires'],
-			$processor->getRequirements( $info, false )
-		);
-		$this->assertSame(
-			[],
-			$processor->getRequirements( [], false )
-		);
-	}
-
-	public function testGetDevRequirements() {
-		$info = self::$default + [
-			'dev-requires' => [
-				'MediaWiki' => '>= 1.31.0',
-				'platform' => [
-					'ext-foo' => '*',
-				],
-				'skins' => [
-					'Baz' => '*',
-				],
-				'extensions' => [
-					'Biz' => '*',
-				],
-			],
-		];
-		$processor = new ExtensionProcessor();
-		$this->assertSame(
-			$info['dev-requires'],
-			$processor->getRequirements( $info, true )
-		);
-		// Set some standard requirements, so we can test merging
-		$info['requires'] = [
-			'MediaWiki' => '>= 1.25.0',
-			'platform' => [
-				'php' => '>= 5.5.9'
-			],
-			'extensions' => [
-				'Bar' => '*'
-			]
-		];
-		$this->assertSame(
-			[
-				'MediaWiki' => '>= 1.25.0 >= 1.31.0',
-				'platform' => [
-					'php' => '>= 5.5.9',
-					'ext-foo' => '*',
-				],
-				'extensions' => [
-					'Bar' => '*',
-					'Biz' => '*',
-				],
-				'skins' => [
-					'Baz' => '*',
-				],
-			],
-			$processor->getRequirements( $info, true )
-		);
-
-		// If there's no dev-requires, it just returns requires
-		unset( $info['dev-requires'] );
-		$this->assertSame(
-			$info['requires'],
-			$processor->getRequirements( $info, true )
-		);
-	}
-
-	public function testGetExtraAutoloaderPaths() {
-		$processor = new ExtensionProcessor();
-		$this->assertSame(
-			[ "{$this->dirname}/vendor/autoload.php" ],
-			$processor->getExtraAutoloaderPaths( $this->dirname, [
-				'load_composer_autoloader' => true,
-			] )
-		);
-	}
-
-	/**
-	 * Verify that extension.schema.json is in sync with ExtensionProcessor
-	 *
-	 * @coversNothing
-	 */
 	public function testGlobalSettingsDocumentedInSchema() {
 		global $IP;
 		$globalSettings = TestingAccessWrapper::newFromClass(
@@ -1061,46 +585,14 @@ class ExtensionProcessorTest extends MediaWikiIntegrationTestCase {
 		$this->assertEquals( [], $missing,
 			"The following global settings are not documented in docs/extension.schema.json" );
 	}
-
-	public function testGetCoreAttribsMerging() {
-		$processor = new ExtensionProcessor();
-
-		$info = self::$default + [
-			'TrackingCategories' => [
-				'Foo'
-			]
-		];
-
-		$info2 = self::$default2 + [
-			'TrackingCategories' => [
-				'Bar'
-			]
-		];
-
-		$processor->extractInfo( $this->dir, $info, 2 );
-		$processor->extractInfo( $this->dir, $info2, 2 );
-
-		$attributes = $processor->getExtractedInfo()['attributes'];
-
-		$this->assertEquals(
-			[ 'Foo', 'Bar' ],
-			$attributes['TrackingCategories']
-		);
-	}
 }
 
 /**
- * Allow overriding the default value of $this->globals and $this->attributes
- * so we can test merging and hook extraction
+ * Allow overriding the default value of $this->globals
+ * so we can test merging
  */
 class MockExtensionProcessor extends ExtensionProcessor {
-
-	public function __construct( $preset = [] ) {
-		if ( isset( $preset['globals'] ) ) {
-			$this->globals = $preset['globals'] + $this->globals;
-		}
-		if ( isset( $preset['attributes'] ) ) {
-			$this->attributes = $preset['attributes'] + $this->attributes;
-		}
+	public function __construct( $globals = [] ) {
+		$this->globals = $globals + $this->globals;
 	}
 }

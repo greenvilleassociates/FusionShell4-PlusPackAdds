@@ -2,16 +2,12 @@
 /**
  * @file
  * @author Niklas Laxström
- * @license GPL-2.0-or-later
+ * @license GPL-2.0+
  */
 
 namespace LocalisationUpdate;
 
-/**
- * @covers \LocalisationUpdate\Updater
- */
-class UpdaterTest extends \PHPUnit\Framework\TestCase {
-
+class UpdaterTest extends \PHPUnit_Framework_TestCase {
 	public function testIsDirectory() {
 		$updater = new Updater();
 
@@ -48,13 +44,13 @@ class UpdaterTest extends \PHPUnit\Framework\TestCase {
 		$input = [ 'file' => 'Hello World!' ];
 		$output = [ 'en' => [ 'key' => $input['file'] ] ];
 
-		$reader = $this->createMock( 'LocalisationUpdate\Reader\Reader' );
+		$reader = $this->getMock( 'LocalisationUpdate\Reader' );
 		$reader
 			->expects( $this->once() )
 			->method( 'parse' )
 			->will( $this->returnValue( $output ) );
 
-		$factory = $this->createMock( 'LocalisationUpdate\Reader\ReaderFactory' );
+		$factory = $this->getMock( 'LocalisationUpdate\ReaderFactory' );
 		$factory
 			->expects( $this->once() )
 			->method( 'getReader' )

@@ -4,7 +4,7 @@
  * @copyright 2011-2015 MediaWiki Widgets Team and others; see AUTHORS.txt
  * @license The MIT License (MIT); see LICENSE.txt
  */
-( function () {
+( function ( $, mw ) {
 
 	/**
 	 * Creates a mw.widgets.TitleOptionWidget object.
@@ -16,28 +16,24 @@
 	 * @param {Object} config Configuration options
 	 * @cfg {string} data Label to display
 	 * @cfg {string} url URL of page
-	 * @cfg {boolean} [showImages] Whether to attempt to show images
 	 * @cfg {string} [imageUrl] Thumbnail image URL with URL encoding
 	 * @cfg {string} [description] Page description
 	 * @cfg {boolean} [missing] Page doesn't exist
 	 * @cfg {boolean} [redirect] Page is a redirect
 	 * @cfg {boolean} [disambiguation] Page is a disambiguation page
-	 * @cfg {string} [query] Matching query string to highlight
-	 * @cfg {Function} [compare] String comparison function for query highlighting
+	 * @cfg {string} [query] Matching query string
 	 */
 	mw.widgets.TitleOptionWidget = function MwWidgetsTitleOptionWidget( config ) {
 		var icon;
 
-		if ( !config.showImages ) {
-			icon = null;
-		} else if ( config.missing ) {
-			icon = 'articleNotFound';
+		if ( config.missing ) {
+			icon = 'page-not-found';
 		} else if ( config.redirect ) {
-			icon = 'articleRedirect';
+			icon = 'page-redirect';
 		} else if ( config.disambiguation ) {
-			icon = 'articleDisambiguation';
+			icon = 'page-disambiguation';
 		} else {
-			icon = 'article';
+			icon = 'page-existing';
 		}
 
 		// Config initialization
@@ -50,9 +46,6 @@
 
 		// Parent constructor
 		mw.widgets.TitleOptionWidget.parent.call( this, config );
-
-		// Remove check icon
-		this.checkIcon.$element.remove();
 
 		// Initialization
 		this.$label.attr( 'href', config.url );
@@ -72,10 +65,9 @@
 		} );
 
 		// Highlight matching parts of link suggestion
-		if ( config.query ) {
-			this.setHighlightedQuery( config.data, config.query, config.compare, true );
-		}
-		this.$label.attr( 'title', config.data );
+		this.$label
+			.highlightText( config.query )
+			.attr( 'title', config.data );
 
 		if ( config.missing ) {
 			this.$label.addClass( 'new' );
@@ -85,7 +77,7 @@
 			this.$label.addClass( 'mw-disambig' );
 		}
 
-		if ( config.showImages && config.imageUrl ) {
+		if ( config.imageUrl ) {
 			this.$icon
 				.addClass( 'mw-widget-titleOptionWidget-hasImage' )
 				.css( 'background-image', 'url(' + config.imageUrl + ')' );
@@ -105,4 +97,4 @@
 
 	OO.inheritClass( mw.widgets.TitleOptionWidget, OO.ui.MenuOptionWidget );
 
-}() );
+}( jQuery, mediaWiki ) );

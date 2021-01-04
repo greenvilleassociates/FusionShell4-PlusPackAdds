@@ -2,17 +2,12 @@
 /**
  * @file
  * @author Niklas Laxström
- * @license GPL-2.0-or-later
+ * @license GPL-2.0+
  */
 
 namespace LocalisationUpdate;
 
-use LocalisationUpdate\Reader\ReaderFactory;
-
-/**
- * @covers \LocalisationUpdate\Reader\ReaderFactory
- */
-class ReaderFactoryTest extends \PHPUnit\Framework\TestCase {
+class ReaderFactoryTest extends \PHPUnit_Framework_TestCase {
 	/**
 	 * @dataProvider getReaderProvider
 	 */
@@ -26,13 +21,18 @@ class ReaderFactoryTest extends \PHPUnit\Framework\TestCase {
 	public function getReaderProvider() {
 		return [
 			[
-				'languages/i18n/fi.json',
-				'LocalisationUpdate\Reader\JSONReader',
-				'core json file',
+				'languages/messages/MessagesFi.php',
+				'LocalisationUpdate\PHPReader',
+				'core php file',
+			],
+			[
+				'extensions/Translate/Translate.i18n.php',
+				'LocalisationUpdate\PHPReader',
+				'extension php file',
 			],
 			[
 				'extension/Translate/i18n/core/de.json',
-				'LocalisationUpdate\Reader\JSONReader',
+				'LocalisationUpdate\JSONReader',
 				'extension json file',
 			],
 		];

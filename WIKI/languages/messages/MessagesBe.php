@@ -65,7 +65,7 @@ $dateFormats = [
 
 # Per discussion on https://translatewiki.net/wiki/Thread:Support/Customization_of number format
 $separatorTransformTable = [
-	',' => "\u{00A0}", # nbsp
+	',' => "\xc2\xa0", # nbsp
 	'.' => ','
 ];
 

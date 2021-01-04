@@ -2,7 +2,7 @@
 
 use MediaWiki\MediaWikiServices;
 
-class ConfigFactoryTest extends \MediaWikiIntegrationTestCase {
+class ConfigFactoryTest extends MediaWikiTestCase {
 
 	/**
 	 * @covers ConfigFactory::register
@@ -18,17 +18,8 @@ class ConfigFactoryTest extends \MediaWikiIntegrationTestCase {
 	 */
 	public function testRegisterInvalid() {
 		$factory = new ConfigFactory();
-		$this->expectException( InvalidArgumentException::class );
+		$this->setExpectedException( 'InvalidArgumentException' );
 		$factory->register( 'invalid', 'Invalid callback' );
-	}
-
-	/**
-	 * @covers ConfigFactory::register
-	 */
-	public function testRegisterInvalidInstance() {
-		$factory = new ConfigFactory();
-		$this->expectException( InvalidArgumentException::class );
-		$factory->register( 'invalidInstance', (object)[] );
 	}
 
 	/**
@@ -87,7 +78,7 @@ class ConfigFactoryTest extends \MediaWikiIntegrationTestCase {
 		$this->assertNotSame( $bar, $newBar, 'don\'t salvage if callbacks differ' );
 
 		// the new factory doesn't have quux defined, so the quux instance should not be salvaged
-		$this->expectException( ConfigException::class );
+		$this->setExpectedException( 'ConfigException' );
 		$newFactory->makeConfig( 'quux' );
 	}
 
@@ -110,7 +101,7 @@ class ConfigFactoryTest extends \MediaWikiIntegrationTestCase {
 		$factory->register( 'unittest', 'GlobalVarConfig::newInstance' );
 
 		$conf = $factory->makeConfig( 'unittest' );
-		$this->assertInstanceOf( Config::class, $conf );
+		$this->assertInstanceOf( 'Config', $conf );
 		$this->assertSame( $conf, $factory->makeConfig( 'unittest' ) );
 	}
 
@@ -131,7 +122,7 @@ class ConfigFactoryTest extends \MediaWikiIntegrationTestCase {
 		$factory = new ConfigFactory();
 		$factory->register( '*', 'GlobalVarConfig::newInstance' );
 		$conf = $factory->makeConfig( 'unittest' );
-		$this->assertInstanceOf( Config::class, $conf );
+		$this->assertInstanceOf( 'Config', $conf );
 	}
 
 	/**
@@ -139,7 +130,7 @@ class ConfigFactoryTest extends \MediaWikiIntegrationTestCase {
 	 */
 	public function testMakeConfigWithNoBuilders() {
 		$factory = new ConfigFactory();
-		$this->expectException( ConfigException::class );
+		$this->setExpectedException( 'ConfigException' );
 		$factory->makeConfig( 'nobuilderregistered' );
 	}
 
@@ -151,7 +142,7 @@ class ConfigFactoryTest extends \MediaWikiIntegrationTestCase {
 		$factory->register( 'unittest', function () {
 			return true; // Not a Config object
 		} );
-		$this->expectException( UnexpectedValueException::class );
+		$this->setExpectedException( 'UnexpectedValueException' );
 		$factory->makeConfig( 'unittest' );
 	}
 
@@ -162,7 +153,7 @@ class ConfigFactoryTest extends \MediaWikiIntegrationTestCase {
 		// NOTE: the global config factory returned here has been overwritten
 		// for operation in test mode. It may not reflect LocalSettings.
 		$factory = MediaWikiServices::getInstance()->getConfigFactory();
-		$this->assertInstanceOf( Config::class, $factory->makeConfig( 'main' ) );
+		$this->assertInstanceOf( 'Config', $factory->makeConfig( 'main' ) );
 	}
 
 }

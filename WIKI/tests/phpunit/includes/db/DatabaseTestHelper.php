@@ -1,9 +1,7 @@
 <?php
 
-use Psr\Log\NullLogger;
-use Wikimedia\Rdbms\Database;
-use Wikimedia\Rdbms\DatabaseDomain;
 use Wikimedia\Rdbms\TransactionProfiler;
+use Wikimedia\Rdbms\DatabaseDomain;
 
 /**
  * Helper for testing the methods from the Database class
@@ -27,11 +25,6 @@ class DatabaseTestHelper extends Database {
 	/** @var array List of row arrays */
 	protected $nextResult = [];
 
-	/** @var array|null */
-	protected $nextError = null;
-	/** @var array|null */
-	protected $lastError = null;
-
 	/**
 	 * Array of tables to be considered as existing by tableExist()
 	 * Use setExistingTables() to alter.
@@ -43,40 +36,18 @@ class DatabaseTestHelper extends Database {
 	 */
 	protected $unionSupportsOrderAndLimit = true;
 
-	/** @var int[] */
-	protected $forcedAffectedCountQueue = [];
-
 	public function __construct( $testName, array $opts = [] ) {
-		parent::__construct( $opts + [
-			'host' => null,
-			'user' => null,
-			'password' => null,
-			'dbname' => null,
-			'schema' => null,
-			'tablePrefix' => '',
-			'flags' => 0,
-			'cliMode' => true,
-			'agent' => '',
-			'topologyRole' => null,
-			'topologicalMaster' => null,
-			'srvCache' => new HashBagOStuff(),
-			'profiler' => null,
-			'trxProfiler' => new TransactionProfiler(),
-			'connLogger' => new NullLogger(),
-			'queryLogger' => new NullLogger(),
-			'replLogger' => new NullLogger(),
-			'errorLogger' => function ( Exception $e ) {
-				wfWarn( get_class( $e ) . ": {$e->getMessage()}" );
-			},
-			'deprecationLogger' => function ( $msg ) {
-				wfWarn( $msg );
-			}
-		] );
-
 		$this->testName = $testName;
 
+		$this->profiler = new ProfilerStub( [] );
+		$this->trxProfiler = new TransactionProfiler();
+		$this->cliMode = isset( $opts['cliMode'] ) ? $opts['cliMode'] : true;
+		$this->connLogger = new \Psr\Log\NullLogger();
+		$this->queryLogger = new \Psr\Log\NullLogger();
+		$this->errorLogger = function ( Exception $e ) {
+			wfWarn( get_class( $e ) . ": {$e->getMessage()}" );
+		};
 		$this->currentDomain = DatabaseDomain::newUnspecified();
-		$this->open( 'localhost', 'testuser', 'password', 'testdb', null, '' );
 	}
 
 	/**
@@ -102,16 +73,6 @@ class DatabaseTestHelper extends Database {
 		$this->nextResult = $res;
 	}
 
-	/**
-	 * @param int $errno Error number
-	 * @param string $error Error text
-	 * @param array $options
-	 *  - wasKnownStatementRollbackError: Return value for wasKnownStatementRollbackError()
-	 */
-	public function forceNextQueryError( $errno, $error, $options = [] ) {
-		$this->nextError = [ 'errno' => $errno, 'error' => $error ] + $options;
-	}
-
 	protected function addSql( $sql ) {
 		// clean up spaces before and after some words and the whole string
 		$this->lastSqls[] = trim( preg_replace(
@@ -121,28 +82,14 @@ class DatabaseTestHelper extends Database {
 	}
 
 	protected function checkFunctionName( $fname ) {
-		if ( $fname === 'Wikimedia\\Rdbms\\Database::close' ) {
-			return; // no $fname parameter
-		}
-
-		// Handle some internal calls from the Database class
-		$check = $fname;
-		if ( preg_match(
-			'/^Wikimedia\\\\Rdbms\\\\Database::(?:query|beginIfImplied) \((.+)\)$/',
-			$fname,
-			$m
-		) ) {
-			$check = $m[1];
-		}
-
-		if ( substr( $check, 0, strlen( $this->testName ) ) !== $this->testName ) {
+		if ( substr( $fname, 0, strlen( $this->testName ) ) !== $this->testName ) {
 			throw new MWException( 'function name does not start with test class. ' .
 				$fname . ' vs. ' . $this->testName . '. ' .
 				'Please provide __METHOD__ to database methods.' );
 		}
 	}
 
-	public function strencode( $s ) {
+	function strencode( $s ) {
 		// Choose apos to avoid handling of escaping double quotes in quoted text
 		return str_replace( "'", "\'", $s );
 	}
@@ -152,15 +99,16 @@ class DatabaseTestHelper extends Database {
 		return $s;
 	}
 
-	public function query( $sql, $fname = '', $flags = 0 ) {
+	public function query( $sql, $fname = '', $tempIgnore = false ) {
 		$this->checkFunctionName( $fname );
+		$this->addSql( $sql );
 
-		return parent::query( $sql, $fname, $flags );
+		return parent::query( $sql, $fname, $tempIgnore );
 	}
 
 	public function tableExists( $table, $fname = __METHOD__ ) {
 		$tableRaw = $this->tableName( $table, 'raw' );
-		if ( isset( $this->sessionTempTables[$tableRaw] ) ) {
+		if ( isset( $this->mSessionTempTables[$tableRaw] ) ) {
 			return true; // already known to exist
 		}
 
@@ -169,110 +117,95 @@ class DatabaseTestHelper extends Database {
 		return in_array( $table, (array)$this->tablesExists );
 	}
 
-	public function getType() {
+	// Redeclare parent method to make it public
+	public function nativeReplace( $table, $rows, $fname ) {
+		return parent::nativeReplace( $table, $rows, $fname );
+	}
+
+	function getType() {
 		return 'test';
 	}
 
-	public function open( $server, $user, $password, $dbName, $schema, $tablePrefix ) {
-		$this->conn = (object)[ 'test' ];
-
-		return true;
-	}
-
-	public function fetchObject( $res ) {
+	function open( $server, $user, $password, $dbName ) {
 		return false;
 	}
 
-	public function fetchRow( $res ) {
+	function fetchObject( $res ) {
 		return false;
 	}
 
-	public function numRows( $res ) {
+	function fetchRow( $res ) {
+		return false;
+	}
+
+	function numRows( $res ) {
 		return -1;
 	}
 
-	public function numFields( $res ) {
+	function numFields( $res ) {
 		return -1;
 	}
 
-	public function fieldName( $res, $n ) {
+	function fieldName( $res, $n ) {
 		return 'test';
 	}
 
-	public function insertId() {
+	function insertId() {
 		return -1;
 	}
 
-	public function dataSeek( $res, $row ) {
+	function dataSeek( $res, $row ) {
 		/* nop */
 	}
 
-	public function lastErrno() {
-		return $this->lastError ? $this->lastError['errno'] : -1;
-	}
-
-	public function lastError() {
-		return $this->lastError ? $this->lastError['error'] : 'test';
-	}
-
-	protected function wasKnownStatementRollbackError() {
-		return $this->lastError['wasKnownStatementRollbackError'] ?? false;
-	}
-
-	public function fieldInfo( $table, $field ) {
-		return false;
-	}
-
-	public function indexInfo( $table, $index, $fname = 'Database::indexInfo' ) {
-		return false;
-	}
-
-	public function fetchAffectedRowCount() {
+	function lastErrno() {
 		return -1;
 	}
 
-	public function getSoftwareLink() {
+	function lastError() {
 		return 'test';
 	}
 
-	public function getServerVersion() {
+	function fieldInfo( $table, $field ) {
+		return false;
+	}
+
+	function indexInfo( $table, $index, $fname = 'Database::indexInfo' ) {
+		return false;
+	}
+
+	function affectedRows() {
+		return -1;
+	}
+
+	function getSoftwareLink() {
 		return 'test';
 	}
 
-	public function getServerInfo() {
+	function getServerVersion() {
 		return 'test';
 	}
 
-	public function ping( &$rtt = null ) {
+	function getServerInfo() {
+		return 'test';
+	}
+
+	function isOpen() {
+		return true;
+	}
+
+	function ping( &$rtt = null ) {
 		$rtt = 0.0;
 		return true;
 	}
 
 	protected function closeConnection() {
-		return true;
-	}
-
-	public function setNextQueryAffectedRowCounts( array $counts ) {
-		$this->forcedAffectedCountQueue = $counts;
+		return false;
 	}
 
 	protected function doQuery( $sql ) {
-		$sql = preg_replace( '< /\* .+?  \*/>', '', $sql );
-		$this->addSql( $sql );
-
-		if ( $this->nextError ) {
-			$this->lastError = $this->nextError;
-			$this->nextError = null;
-			return false;
-		}
-
 		$res = $this->nextResult;
 		$this->nextResult = [];
-		$this->lastError = null;
-
-		if ( $this->forcedAffectedCountQueue ) {
-			$this->affectedRowCount = array_shift( $this->forcedAffectedCountQueue );
-		}
 
 		return new FakeResultWrapper( $res );
 	}
@@ -283,13 +216,5 @@ class DatabaseTestHelper extends Database {
 
 	public function setUnionSupportsOrderAndLimit( $v ) {
 		$this->unionSupportsOrderAndLimit = (bool)$v;
-	}
-
-	public function useIndexClause( $index ) {
-		return "FORCE INDEX (" . $this->indexName( $index ) . ")";
-	}
-
-	public function ignoreIndexClause( $index ) {
-		return "IGNORE INDEX (" . $this->indexName( $index ) . ")";
 	}
 }

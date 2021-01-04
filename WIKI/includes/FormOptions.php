@@ -38,25 +38,23 @@ class FormOptions implements ArrayAccess {
 	 */
 	/* @{ */
 	/** Mark value for automatic detection (for simple data types only) */
-	public const AUTO = -1;
+	const AUTO = -1;
 	/** String type, maps guessType() to WebRequest::getText() */
-	public const STRING = 0;
+	const STRING = 0;
 	/** Integer type, maps guessType() to WebRequest::getInt() */
-	public const INT = 1;
+	const INT = 1;
 	/** Float type, maps guessType() to WebRequest::getFloat()
-	 * @since 1.23
-	 */
-	public const FLOAT = 4;
+	 * @since 1.23 */
+	const FLOAT = 4;
 	/** Boolean type, maps guessType() to WebRequest::getBool() */
-	public const BOOL = 2;
+	const BOOL = 2;
 	/** Integer type or null, maps to WebRequest::getIntOrNull()
 	 * This is useful for the namespace selector.
 	 */
-	public const INTNULL = 3;
+	const INTNULL = 3;
 	/** Array type, maps guessType() to WebRequest::getArray()
-	 * @since 1.29
-	 */
-	public const ARR = 5;
+	 * @since 1.29 */
+	const ARR = 5;
 	/* @} */
 
 	/**
@@ -338,7 +336,7 @@ class FormOptions implements ArrayAccess {
 	 * available for accessing with getValue() or consumeValue() etc.
 	 *
 	 * @param WebRequest $r The request to fetch values from
-	 * @param array|null $optionKeys Which options to fetch the values for (default:
+	 * @param array $optionKeys Which options to fetch the values for (default:
 	 *     all of them). Note that passing an empty array will also result in
 	 *     values for all keys being fetched.
 	 * @throws MWException If the type of any option is invalid
@@ -383,10 +381,9 @@ class FormOptions implements ArrayAccess {
 
 	/** @name ArrayAccess functions
 	 * These functions implement the ArrayAccess PHP interface.
-	 * @see https://www.php.net/manual/en/class.arrayaccess.php
+	 * @see https://secure.php.net/manual/en/class.arrayaccess.php
 	 */
 	/* @{ */
-
 	/**
 	 * Whether the option exists.
 	 * @param string $name
@@ -421,6 +418,5 @@ class FormOptions implements ArrayAccess {
 	public function offsetUnset( $name ) {
 		$this->delete( $name );
 	}
-
 	/* @} */
 }

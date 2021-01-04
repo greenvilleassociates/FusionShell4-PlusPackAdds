@@ -1,9 +1,11 @@
 {
 	"@metadata": {
 		"authors": [
-			"Ernác",
-			"Iltever"
+			"Iltever",
+			"Ernác"
 		]
 	},
+	"nuke-toggleinvert": "Инвертле",
+	"nuke-select": "Сайлау: $1",
 	"nuke-linkoncontribs": "кёблюк кетериу"
 }

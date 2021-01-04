@@ -56,7 +56,7 @@ class GetConfiguration extends Maintenance {
 		$this->addOption( 'format', implode( ', ', self::$outFormats ), false, true );
 	}
 
-	public function validateParamsAndArgs() {
+	protected function validateParamsAndArgs() {
 		$error_out = false;
 
 		# Get the format and make sure it is set to a valid default value
@@ -64,7 +64,7 @@ class GetConfiguration extends Maintenance {
 
 		$validFormat = in_array( $format, self::$outFormats );
 		if ( !$validFormat ) {
-			$this->error( "--format set to an unrecognized format" );
+			$this->error( "--format set to an unrecognized format", 0 );
 			$error_out = true;
 		}
 
@@ -91,8 +91,7 @@ class GetConfiguration extends Maintenance {
 		if ( $this->regex ) {
 			$this->regex = '/' . $this->regex . '/';
 			if ( $this->hasOption( 'iregex' ) ) {
-				# case insensitive regex
-				$this->regex .= 'i';
+				$this->regex .= 'i'; # case insensitive regex
 			}
 		}
 
@@ -102,7 +101,7 @@ class GetConfiguration extends Maintenance {
 			foreach ( $this->settings_list as $name ) {
 				if ( !preg_match( '/^wg[A-Z]/', $name ) ) {
 					throw new MWException( "Variable '$name' does start with 'wg'." );
-				} elseif ( !array_key_exists( $name, $GLOBALS ) ) {
+				} elseif ( !isset( $GLOBALS[$name] ) ) {
 					throw new MWException( "Variable '$name' is not set." );
 				} elseif ( !$this->isAllowedVariable( $GLOBALS[$name] ) ) {
 					throw new MWException( "Variable '$name' includes non-array, non-scalar, items." );
@@ -166,8 +165,7 @@ class GetConfiguration extends Maintenance {
 	protected function formatVarDump( $res ) {
 		$ret = '';
 		foreach ( $res as $key => $value ) {
-			# intercept var_dump() output
-			ob_start();
+			ob_start(); # intercept var_dump() output
 			print "\${$key} = ";
 			var_dump( $value );
 			# grab var_dump() output and discard it from the output buffer
@@ -194,5 +192,5 @@ class GetConfiguration extends Maintenance {
 	}
 }
 
-$maintClass = GetConfiguration::class;
+$maintClass = "GetConfiguration";
 require_once RUN_MAINTENANCE_IF_MAIN;

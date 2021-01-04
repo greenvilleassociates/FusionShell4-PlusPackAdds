@@ -18,6 +18,7 @@
  * @author Daniel Friesen
  * @file
  */
+use Liuggio\StatsdClient\Factory\StatsdDataFactory;
 use MediaWiki\MediaWikiServices;
 
 /**
@@ -25,7 +26,6 @@ use MediaWiki\MediaWikiServices;
  * but allow individual pieces of context to be changed locally
  * eg: A ContextSource that can inherit from the main RequestContext but have
  *     a different Title instance set on it.
- * @newable
  * @since 1.19
  */
 class DerivativeContext extends ContextSource implements MutableContext {
@@ -75,7 +75,6 @@ class DerivativeContext extends ContextSource implements MutableContext {
 	private $timing;
 
 	/**
-	 * @stable to call
 	 * @param IContextSource $context Context to inherit from
 	 */
 	public function __construct( IContextSource $context ) {
@@ -83,20 +82,30 @@ class DerivativeContext extends ContextSource implements MutableContext {
 	}
 
 	/**
-	 * @param Config $config
+	 * Set the SiteConfiguration object
+	 *
+	 * @param Config $s
 	 */
-	public function setConfig( Config $config ) {
-		$this->config = $config;
+	public function setConfig( Config $s ) {
+		$this->config = $s;
 	}
 
 	/**
+	 * Get the Config object
+	 *
 	 * @return Config
 	 */
 	public function getConfig() {
-		return $this->config ?: $this->getContext()->getConfig();
+		if ( !is_null( $this->config ) ) {
+			return $this->config;
+		} else {
+			return $this->getContext()->getConfig();
+		}
 	}
 
 	/**
+	 * Get the stats object
+	 *
 	 * @deprecated since 1.27 use a StatsdDataFactory from MediaWikiServices (preferably injected)
 	 *
 	 * @return IBufferingStatsdDataFactory
@@ -106,38 +115,60 @@ class DerivativeContext extends ContextSource implements MutableContext {
 	}
 
 	/**
+	 * Get the timing object
+	 *
 	 * @return Timing
 	 */
 	public function getTiming() {
-		return $this->timing ?: $this->getContext()->getTiming();
+		if ( !is_null( $this->timing ) ) {
+			return $this->timing;
+		} else {
+			return $this->getContext()->getTiming();
+		}
 	}
 
 	/**
-	 * @param WebRequest $request
+	 * Set the WebRequest object
+	 *
+	 * @param WebRequest $r
 	 */
-	public function setRequest( WebRequest $request ) {
-		$this->request = $request;
+	public function setRequest( WebRequest $r ) {
+		$this->request = $r;
 	}
 
 	/**
+	 * Get the WebRequest object
+	 *
 	 * @return WebRequest
 	 */
 	public function getRequest() {
-		return $this->request ?: $this->getContext()->getRequest();
+		if ( !is_null( $this->request ) ) {
+			return $this->request;
+		} else {
+			return $this->getContext()->getRequest();
+		}
 	}
 
 	/**
-	 * @param Title $title
+	 * Set the Title object
+	 *
+	 * @param Title $t
 	 */
-	public function setTitle( Title $title ) {
-		$this->title = $title;
+	public function setTitle( Title $t ) {
+		$this->title = $t;
 	}
 
 	/**
+	 * Get the Title object
+	 *
 	 * @return Title|null
 	 */
 	public function getTitle() {
-		return $this->title ?: $this->getContext()->getTitle();
+		if ( !is_null( $this->title ) ) {
+			return $this->title;
+		} else {
+			return $this->getContext()->getTitle();
+		}
 	}
 
 	/**
@@ -151,21 +182,21 @@ class DerivativeContext extends ContextSource implements MutableContext {
 	public function canUseWikiPage() {
 		if ( $this->wikipage !== null ) {
 			return true;
-		}
-
-		if ( $this->title !== null ) {
+		} elseif ( $this->title !== null ) {
 			return $this->title->canExist();
+		} else {
+			return $this->getContext()->canUseWikiPage();
 		}
-
-		return $this->getContext()->canUseWikiPage();
 	}
 
 	/**
+	 * Set the WikiPage object
+	 *
 	 * @since 1.19
-	 * @param WikiPage $wikiPage
+	 * @param WikiPage $p
 	 */
-	public function setWikiPage( WikiPage $wikiPage ) {
-		$this->wikipage = $wikiPage;
+	public function setWikiPage( WikiPage $p ) {
+		$this->wikipage = $p;
 	}
 
 	/**
@@ -178,48 +209,70 @@ class DerivativeContext extends ContextSource implements MutableContext {
 	 * @return WikiPage
 	 */
 	public function getWikiPage() {
-		return $this->wikipage ?: $this->getContext()->getWikiPage();
+		if ( !is_null( $this->wikipage ) ) {
+			return $this->wikipage;
+		} else {
+			return $this->getContext()->getWikiPage();
+		}
 	}
 
 	/**
-	 * @param OutputPage $output
+	 * Set the OutputPage object
+	 *
+	 * @param OutputPage $o
 	 */
-	public function setOutput( OutputPage $output ) {
-		$this->output = $output;
+	public function setOutput( OutputPage $o ) {
+		$this->output = $o;
 	}
 
 	/**
+	 * Get the OutputPage object
+	 *
 	 * @return OutputPage
 	 */
 	public function getOutput() {
-		return $this->output ?: $this->getContext()->getOutput();
+		if ( !is_null( $this->output ) ) {
+			return $this->output;
+		} else {
+			return $this->getContext()->getOutput();
+		}
 	}
 
 	/**
-	 * @param User $user
+	 * Set the User object
+	 *
+	 * @param User $u
 	 */
-	public function setUser( User $user ) {
-		$this->user = $user;
+	public function setUser( User $u ) {
+		$this->user = $u;
 	}
 
 	/**
+	 * Get the User object
+	 *
 	 * @return User
 	 */
 	public function getUser() {
-		return $this->user ?: $this->getContext()->getUser();
+		if ( !is_null( $this->user ) ) {
+			return $this->user;
+		} else {
+			return $this->getContext()->getUser();
+		}
 	}
 
 	/**
-	 * @param Language|string $language Language instance or language code
+	 * Set the Language object
+	 *
+	 * @param Language|string $l Language instance or language code
 	 * @throws MWException
 	 * @since 1.19
 	 */
-	public function setLanguage( $language ) {
-		if ( $language instanceof Language ) {
-			$this->lang = $language;
-		} elseif ( is_string( $language ) ) {
-			$language = RequestContext::sanitizeLangCode( $language );
-			$obj = MediaWikiServices::getInstance()->getLanguageFactory()->getLanguage( $language );
+	public function setLanguage( $l ) {
+		if ( $l instanceof Language ) {
+			$this->lang = $l;
+		} elseif ( is_string( $l ) ) {
+			$l = RequestContext::sanitizeLangCode( $l );
+			$obj = Language::factory( $l );
 			$this->lang = $obj;
 		} else {
 			throw new MWException( __METHOD__ . " was passed an invalid type of data." );
@@ -227,26 +280,40 @@ class DerivativeContext extends ContextSource implements MutableContext {
 	}
 
 	/**
+	 * Get the Language object
+	 *
 	 * @return Language
 	 * @since 1.19
 	 */
 	public function getLanguage() {
-		return $this->lang ?: $this->getContext()->getLanguage();
+		if ( !is_null( $this->lang ) ) {
+			return $this->lang;
+		} else {
+			return $this->getContext()->getLanguage();
+		}
 	}
 
 	/**
-	 * @param Skin $skin
+	 * Set the Skin object
+	 *
+	 * @param Skin $s
 	 */
-	public function setSkin( Skin $skin ) {
-		$this->skin = clone $skin;
+	public function setSkin( Skin $s ) {
+		$this->skin = clone $s;
 		$this->skin->setContext( $this );
 	}
 
 	/**
+	 * Get the Skin object
+	 *
 	 * @return Skin
 	 */
 	public function getSkin() {
-		return $this->skin ?: $this->getContext()->getSkin();
+		if ( !is_null( $this->skin ) ) {
+			return $this->skin;
+		} else {
+			return $this->getContext()->getSkin();
+		}
 	}
 
 	/**
@@ -258,11 +325,12 @@ class DerivativeContext extends ContextSource implements MutableContext {
 	 *
 	 * @param string|string[]|MessageSpecifier $key Message key, or array of keys,
 	 *   or a MessageSpecifier.
-	 * @param mixed ...$params
+	 * @param mixed $args,... Arguments to wfMessage
 	 * @return Message
 	 */
-	public function msg( $key, ...$params ) {
-		// phpcs:ignore MediaWiki.Usage.ExtendClassUsage.FunctionVarUsage
-		return wfMessage( $key, ...$params )->setContext( $this );
+	public function msg( $key ) {
+		$args = func_get_args();
+
+		return call_user_func_array( 'wfMessage', $args )->setContext( $this );
 	}
 }

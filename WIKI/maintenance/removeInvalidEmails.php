@@ -2,8 +2,6 @@
 
 require_once __DIR__ . '/Maintenance.php';
 
-use MediaWiki\MediaWikiServices;
-
 /**
  * A script to remove emails that are invalid from
  * the user_email column of the user table. Emails
@@ -23,13 +21,11 @@ class RemoveInvalidEmails extends Maintenance {
 		$this->addOption( 'commit', 'Whether to actually update the database', false, false );
 		$this->setBatchSize( 500 );
 	}
-
 	public function execute() {
 		$this->commit = $this->hasOption( 'commit' );
 		$dbr = $this->getDB( DB_REPLICA );
 		$dbw = $this->getDB( DB_MASTER );
 		$lastId = 0;
-		$lbFactory = MediaWikiServices::getInstance()->getDBLoadBalancerFactory();
 		do {
 			$rows = $dbr->select(
 				'user',
@@ -40,7 +36,7 @@ class RemoveInvalidEmails extends Maintenance {
 					'user_email_authenticated IS NULL'
 				],
 				__METHOD__,
-				[ 'LIMIT' => $this->getBatchSize() ]
+				[ 'LIMIT' => $this->mBatchSize ]
 			);
 			$count = $rows->numRows();
 			$badIds = [];
@@ -67,7 +63,7 @@ class RemoveInvalidEmails extends Maintenance {
 					foreach ( $badIds as $badId ) {
 						User::newFromId( $badId )->invalidateCache();
 					}
-					$lbFactory->waitForReplication();
+					wfWaitForSlaves();
 				} else {
 					$this->output( "Would have removed $badCount emails from the database.\n" );
 
@@ -78,5 +74,5 @@ class RemoveInvalidEmails extends Maintenance {
 	}
 }
 
-$maintClass = RemoveInvalidEmails::class;
+$maintClass = 'RemoveInvalidEmails';
 require_once RUN_MAINTENANCE_IF_MAIN;

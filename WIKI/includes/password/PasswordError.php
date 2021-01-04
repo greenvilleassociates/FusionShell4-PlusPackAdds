@@ -18,12 +18,9 @@
  * @file
  */
 
-declare( strict_types = 1 );
-
 /**
  * Show an error when any operation involving passwords fails to run.
  *
- * @newable
  * @ingroup Exception
  */
 class PasswordError extends MWException {

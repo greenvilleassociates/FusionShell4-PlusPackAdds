@@ -49,13 +49,12 @@ use User;
  * @since 1.27
  */
 final class UserInfo {
-	/** @var bool */
 	private $verified = false;
 
 	/** @var User|null */
 	private $user = null;
 
-	private function __construct( ?User $user, $verified ) {
+	private function __construct( User $user = null, $verified ) {
 		if ( $user && $user->isAnon() && !User::isUsableName( $user->getName() ) ) {
 			$this->verified = true;
 			$this->user = null;

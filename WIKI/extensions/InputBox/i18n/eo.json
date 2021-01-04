@@ -2,7 +2,6 @@
 	"@metadata": {
 		"authors": [
 			"Michawiki",
-			"Mirin",
 			"Yekrats"
 		]
 	},
@@ -12,8 +11,6 @@
 	"inputbox-tryexact": "Provu ekzaktan trafon",
 	"inputbox-searchfulltext": "Serĉi plentekste",
 	"inputbox-createarticle": "Krei artikolon",
-	"inputbox-movearticle": "Movi paĝon",
-	"inputbox-postcomment": "Nova paragrafo",
 	"inputbox-postcommenttitle": "Nova sekcio",
 	"inputbox-ns-main": "Ĉefa"
 }

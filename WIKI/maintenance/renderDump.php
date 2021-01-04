@@ -40,8 +40,6 @@ class DumpRenderer extends Maintenance {
 
 	private $count = 0;
 	private $outputDirectory, $startTime;
-	/** @var string */
-	private $prefix;
 
 	public function __construct() {
 		parent::__construct();
@@ -58,10 +56,9 @@ class DumpRenderer extends Maintenance {
 		$this->startTime = microtime( true );
 
 		if ( $this->hasOption( 'parser' ) ) {
-			$this->prefix .= "-{$this->getOption( 'parser' )}";
-			// T236809: We'll need to provide an alternate ParserFactory
-			// service to make this work.
-			$this->fatalError( 'Parser class configuration temporarily disabled.' );
+			global $wgParserConf;
+			$wgParserConf['class'] = $this->getOption( 'parser' );
+			$this->prefix .= "-{$wgParserConf['class']}";
 		}
 
 		$source = new ImportStreamSource( $this->getStdin() );
@@ -69,9 +66,6 @@ class DumpRenderer extends Maintenance {
 
 		$importer->setRevisionCallback(
 			[ $this, 'handleRevision' ] );
-		$importer->setNoticeCallback( function ( $msg, $params ) {
-			echo wfMessage( $msg, $params )->text() . "\n";
-		} );
 
 		$importer->doImport();
 
@@ -85,9 +79,9 @@ class DumpRenderer extends Maintenance {
 
 	/**
 	 * Callback function for each revision, turn into HTML and save
-	 * @param WikiRevision $rev
+	 * @param Revision $rev
 	 */
-	public function handleRevision( WikiRevision $rev ) {
+	public function handleRevision( $rev ) {
 		$title = $rev->getTitle();
 		if ( !$title ) {
 			$this->error( "Got bogus revision with null title!" );
@@ -126,5 +120,5 @@ class DumpRenderer extends Maintenance {
 	}
 }
 
-$maintClass = DumpRenderer::class;
+$maintClass = "DumpRenderer";
 require_once RUN_MAINTENANCE_IF_MAIN;

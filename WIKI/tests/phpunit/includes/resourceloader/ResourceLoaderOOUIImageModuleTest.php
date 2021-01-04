@@ -1,8 +1,5 @@
 <?php
 
-use Psr\Container\ContainerInterface;
-use Wikimedia\ObjectFactory;
-
 /**
  * @group ResourceLoader
  */
@@ -13,25 +10,32 @@ class ResourceLoaderOOUIImageModuleTest extends ResourceLoaderTestCase {
 	 */
 	public function testNonDefaultSkin() {
 		$module = new ResourceLoaderOOUIImageModule( [
-			'class' => ResourceLoaderOOUIImageModule::class,
+			'class' => 'ResourceLoaderOOUIImageModule',
 			'name' => 'icons',
 			'rootPath' => 'tests/phpunit/data/resourceloader/oouiimagemodule',
 		] );
 
 		// Pretend that 'fakemonobook' is a real skin using the Apex theme
-		$skinFactory = new SkinFactory( new ObjectFactory(
-			$this->createMock( ContainerInterface::class )
-		) );
-		$skinFactory->register(
+		SkinFactory::getDefaultInstance()->register(
 			'fakemonobook',
 			'FakeMonoBook',
-			[]
+			function () {
+			}
 		);
-		$this->setService( 'SkinFactory', $skinFactory );
-
-		$reset = ExtensionRegistry::getInstance()->setAttributeForTest(
-			'SkinOOUIThemes', [ 'fakemonobook' => 'Apex' ]
-		);
+		$r = new ReflectionMethod( 'ExtensionRegistry', 'exportExtractedData' );
+		$r->setAccessible( true );
+		$r->invoke( ExtensionRegistry::getInstance(), [
+			'globals' => [],
+			'defines' => [],
+			'callbacks' => [],
+			'credits' => [],
+			'autoloaderPaths' => [],
+			'attributes' => [
+				'SkinOOUIThemes' => [
+					'fakemonobook' => 'Apex',
+				],
+			],
+		] );
 
 		$styles = $module->getStyles( $this->getResourceLoaderContext( [ 'skin' => 'fakemonobook' ] ) );
 		$this->assertRegExp(
@@ -52,9 +56,9 @@ class ResourceLoaderOOUIImageModuleTest extends ResourceLoaderTestCase {
 			'Generated styles use the default image (embed)'
 		);
 		$this->assertRegExp(
-			'/fallback/',
+			'/vector/',
 			$styles['all'],
-			'Generated styles use the default skin (link)'
+			'Generated styles use the default image (link)'
 		);
 	}
 

@@ -258,9 +258,7 @@ $magicWords = [
 	'formatdate'                => [ '0', 'kuupäevavormindus', 'formatdate', 'dateformat' ],
 ];
 
-$separatorTransformTable = [ ',' => "\u{00A0}", '.' => ',' ];
-$minimumGroupingDigits = 2;
-
+$separatorTransformTable = [ ',' => "\xc2\xa0", '.' => ',' ];
 $linkTrail = '/^([äöõšüža-z]+)(.*)$/sDu';
 
 $datePreferences = [

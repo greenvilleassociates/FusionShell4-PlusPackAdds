@@ -19,8 +19,6 @@
  *
  * @file
  */
-
-use Wikimedia\AtEase\AtEase;
 use Wikimedia\Timestamp\ConvertibleTimestamp;
 
 /**
@@ -37,30 +35,9 @@ class HTTPFileStreamer {
 	protected $streamMimeFunc;
 
 	// Do not send any HTTP headers unless requested by caller (e.g. body only)
-	public const STREAM_HEADLESS = 1;
+	const STREAM_HEADLESS = 1;
 	// Do not try to tear down any PHP output buffers
-	public const STREAM_ALLOW_OB = 2;
-
-	/**
-	 * Takes HTTP headers in a name => value format and converts them to the weird format
-	 * expected by stream().
-	 * @param string[] $headers
-	 * @return array[] [ $headers, $optHeaders ]
-	 * @since 1.34
-	 */
-	public static function preprocessHeaders( $headers ) {
-		$rawHeaders = [];
-		$optHeaders = [];
-		foreach ( $headers as $name => $header ) {
-			$nameLower = strtolower( $name );
-			if ( in_array( $nameLower, [ 'range', 'if-modified-since' ], true ) ) {
-				$optHeaders[$nameLower] = $header;
-			} else {
-				$rawHeaders[] = "$name: $header";
-			}
-		}
-		return [ $rawHeaders, $optHeaders ];
-	}
+	const STREAM_ALLOW_OB = 2;
 
 	/**
 	 * @param string $path Local filesystem path to a file
@@ -70,8 +47,12 @@ class HTTPFileStreamer {
 	 */
 	public function __construct( $path, array $params = [] ) {
 		$this->path = $path;
-		$this->obResetFunc = $params['obResetFunc'] ?? [ __CLASS__, 'resetOutputBuffers' ];
-		$this->streamMimeFunc = $params['streamMimeFunc'] ?? [ __CLASS__, 'contentTypeFromPath' ];
+		$this->obResetFunc = isset( $params['obResetFunc'] )
+			? $params['obResetFunc']
+			: [ __CLASS__, 'resetOutputBuffers' ];
+		$this->streamMimeFunc = isset( $params['streamMimeFunc'] )
+			? $params['streamMimeFunc']
+			: [ __CLASS__, 'contentTypeFromPath' ];
 	}
 
 	/**
@@ -83,6 +64,7 @@ class HTTPFileStreamer {
 	 * @param bool $sendErrors Send error messages if errors occur (like 404)
 	 * @param array $optHeaders HTTP request header map (e.g. "range") (use lowercase keys)
 	 * @param int $flags Bitfield of STREAM_* constants
+	 * @throws MWException
 	 * @return bool Success
 	 */
 	public function stream(
@@ -102,9 +84,9 @@ class HTTPFileStreamer {
 				is_int( $header ) ? HttpStatus::header( $header ) : header( $header );
 			};
 
-		AtEase::suppressWarnings();
+		MediaWiki\suppressWarnings();
 		$info = stat( $this->path );
-		AtEase::restoreWarnings();
+		MediaWiki\restoreWarnings();
 
 		if ( !is_array( $info ) ) {
 			if ( $sendErrors ) {
@@ -269,7 +251,7 @@ class HTTPFileStreamer {
 	 */
 	protected static function contentTypeFromPath( $filename ) {
 		$ext = strrchr( $filename, '.' );
-		$ext = $ext ? strtolower( substr( $ext, 1 ) ) : '';
+		$ext = $ext === false ? '' : strtolower( substr( $ext, 1 ) );
 
 		switch ( $ext ) {
 			case 'gif':

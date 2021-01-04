@@ -1,7 +1,7 @@
 <?php
 
 /**
- * See docs/magicword.md.
+ * See docs/magicword.txt.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -23,34 +23,27 @@
  */
 
 use MediaWiki\Logger\LoggerFactory;
-use MediaWiki\MediaWikiServices;
 
 /**
  * Class for handling an array of magic words
  * @ingroup Parser
  */
 class MagicWordArray {
-	/** @var string[] */
+	/** @var array */
 	public $names = [];
-
-	/** @var MagicWordFactory */
-	private $factory;
 
 	/** @var array */
 	private $hash;
 
-	/** @var string[]|null */
 	private $baseRegex;
 
 	private $regex;
 
 	/**
-	 * @param string[] $names
-	 * @param MagicWordFactory|null $factory
+	 * @param array $names
 	 */
-	public function __construct( $names = [], MagicWordFactory $factory = null ) {
+	public function __construct( $names = [] ) {
 		$this->names = $names;
-		$this->factory = $factory ?: MediaWikiServices::getInstance()->getMagicWordFactory();
 	}
 
 	/**
@@ -66,7 +59,7 @@ class MagicWordArray {
 	/**
 	 * Add a number of magic words by name
 	 *
-	 * @param string[] $names
+	 * @param array $names
 	 */
 	public function addArray( $names ) {
 		$this->names = array_merge( $this->names, array_values( $names ) );
@@ -78,14 +71,15 @@ class MagicWordArray {
 	 * @return array
 	 */
 	public function getHash() {
-		if ( $this->hash === null ) {
+		if ( is_null( $this->hash ) ) {
+			global $wgContLang;
 			$this->hash = [ 0 => [], 1 => [] ];
 			foreach ( $this->names as $name ) {
-				$magic = $this->factory->get( $name );
+				$magic = MagicWord::get( $name );
 				$case = intval( $magic->isCaseSensitive() );
 				foreach ( $magic->getSynonyms() as $syn ) {
 					if ( !$case ) {
-						$syn = $this->factory->getContentLanguage()->lc( $syn );
+						$syn = $wgContLang->lc( $syn );
 					}
 					$this->hash[$case][$syn] = $name;
 				}
@@ -96,14 +90,14 @@ class MagicWordArray {
 
 	/**
 	 * Get the base regex
-	 * @return string[]
+	 * @return array
 	 */
-	public function getBaseRegex() : array {
-		if ( $this->baseRegex === null ) {
+	public function getBaseRegex() {
+		if ( is_null( $this->baseRegex ) ) {
 			$this->baseRegex = [ 0 => '', 1 => '' ];
 			$allGroups = [];
 			foreach ( $this->names as $name ) {
-				$magic = $this->factory->get( $name );
+				$magic = MagicWord::get( $name );
 				$case = intval( $magic->isCaseSensitive() );
 				foreach ( $magic->getSynonyms() as $i => $syn ) {
 					// Group name must start with a non-digit in PCRE 8.34+
@@ -130,11 +124,10 @@ class MagicWordArray {
 
 	/**
 	 * Get an unanchored regex that does not match parameters
-	 * @return string[]
-	 * @suppress PhanTypeArraySuspiciousNullable False positive
+	 * @return array
 	 */
 	public function getRegex() {
-		if ( $this->regex === null ) {
+		if ( is_null( $this->regex ) ) {
 			$base = $this->getBaseRegex();
 			$this->regex = [ '', '' ];
 			if ( $this->baseRegex[0] !== '' ) {
@@ -150,7 +143,7 @@ class MagicWordArray {
 	/**
 	 * Get a regex for matching variables with parameters
 	 *
-	 * @return string[]
+	 * @return string
 	 */
 	public function getVariableRegex() {
 		return str_replace( "\\$1", "(.*?)", $this->getRegex() );
@@ -159,7 +152,7 @@ class MagicWordArray {
 	/**
 	 * Get a regex anchored to the start of the string that does not match parameters
 	 *
-	 * @return string[]
+	 * @return array
 	 */
 	public function getRegexStart() {
 		$base = $this->getBaseRegex();
@@ -176,7 +169,7 @@ class MagicWordArray {
 	/**
 	 * Get an anchored regex for matching variables with parameters
 	 *
-	 * @return string[]
+	 * @return array
 	 */
 	public function getVariableStartToEndRegex() {
 		$base = $this->getBaseRegex();
@@ -192,7 +185,7 @@ class MagicWordArray {
 
 	/**
 	 * @since 1.20
-	 * @return string[]
+	 * @return array
 	 */
 	public function getNames() {
 		return $this->names;
@@ -210,9 +203,7 @@ class MagicWordArray {
 	 */
 	public function parseMatch( $m ) {
 		reset( $m );
-		while ( ( $key = key( $m ) ) !== null ) {
-			$value = current( $m );
-			next( $m );
+		while ( list( $key, $value ) = each( $m ) ) {
 			if ( $key === 0 || $value === '' ) {
 				continue;
 			}
@@ -266,8 +257,12 @@ class MagicWordArray {
 		if ( isset( $hash[1][$text] ) ) {
 			return $hash[1][$text];
 		}
-		$lc = $this->factory->getContentLanguage()->lc( $text );
-		return $hash[0][$lc] ?? false;
+		global $wgContLang;
+		$lc = $wgContLang->lc( $text );
+		if ( isset( $hash[0][$lc] ) ) {
+			return $hash[0][$lc];
+		}
+		return false;
 	}
 
 	/**

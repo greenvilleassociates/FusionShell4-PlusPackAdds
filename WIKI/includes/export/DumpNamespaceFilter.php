@@ -35,10 +35,10 @@ class DumpNamespaceFilter extends DumpFilter {
 
 	/**
 	 * @param DumpOutput &$sink
-	 * @param string $param
+	 * @param array $param
 	 * @throws MWException
 	 */
-	public function __construct( &$sink, $param ) {
+	function __construct( &$sink, $param ) {
 		parent::__construct( $sink );
 
 		$constants = [
@@ -50,8 +50,8 @@ class DumpNamespaceFilter extends DumpFilter {
 			"NS_PROJECT_TALK"   => NS_PROJECT_TALK,
 			"NS_FILE"           => NS_FILE,
 			"NS_FILE_TALK"      => NS_FILE_TALK,
-			"NS_IMAGE"          => NS_FILE, // NS_IMAGE is an alias for NS_FILE
-			"NS_IMAGE_TALK"     => NS_FILE_TALK,
+			"NS_IMAGE"          => NS_IMAGE, // NS_IMAGE is an alias for NS_FILE
+			"NS_IMAGE_TALK"     => NS_IMAGE_TALK,
 			"NS_MEDIAWIKI"      => NS_MEDIAWIKI,
 			"NS_MEDIAWIKI_TALK" => NS_MEDIAWIKI_TALK,
 			"NS_TEMPLATE"       => NS_TEMPLATE,
@@ -61,7 +61,7 @@ class DumpNamespaceFilter extends DumpFilter {
 			"NS_CATEGORY"       => NS_CATEGORY,
 			"NS_CATEGORY_TALK"  => NS_CATEGORY_TALK ];
 
-		if ( $param[0] == '!' ) {
+		if ( $param { 0 } == '!' ) {
 			$this->invert = true;
 			$param = substr( $param, 1 );
 		}
@@ -84,7 +84,7 @@ class DumpNamespaceFilter extends DumpFilter {
 	 * @param object $page
 	 * @return bool
 	 */
-	protected function pass( $page ) {
+	function pass( $page ) {
 		$match = isset( $this->namespaces[$page->page_namespace] );
 		return $this->invert xor $match;
 	}

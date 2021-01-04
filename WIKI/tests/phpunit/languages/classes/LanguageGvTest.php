@@ -7,9 +7,6 @@
  * @file
  */
 
-/**
- * @group Language
- */
 class LanguageGvTest extends LanguageClassesTestCase {
 	/**
 	 * @dataProvider providePlural

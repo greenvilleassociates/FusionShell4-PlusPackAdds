@@ -20,14 +20,12 @@
  * @file
  */
 
-use Wikimedia\IPUtils;
-
 /**
  * An HTTP 1.0 client built for the purposes of purging Squid and Varnish.
  * Uses asynchronous I/O, allowing purges to be done in a highly parallel
  * manner.
  *
- * @deprecated Since 1.35 Use MultiHttpClient
+ * Could be replaced by curl_multi_exec() or some such.
  */
 class SquidPurgeClient {
 	/** @var string */
@@ -51,13 +49,13 @@ class SquidPurgeClient {
 	/** @var mixed */
 	protected $currentRequestIndex;
 
-	public const EINTR = SOCKET_EINTR;
-	public const EAGAIN = SOCKET_EAGAIN;
-	public const EINPROGRESS = SOCKET_EINPROGRESS;
-	public const BUFFER_SIZE = 8192;
+	const EINTR = 4;
+	const EAGAIN = 11;
+	const EINPROGRESS = 115;
+	const BUFFER_SIZE = 8192;
 
 	/**
-	 * @var resource|false|null The socket resource, or null for unconnected, or false
+	 * @var resource|null The socket resource, or null for unconnected, or false
 	 *   for disabled due to error.
 	 */
 	protected $socket;
@@ -70,11 +68,12 @@ class SquidPurgeClient {
 
 	/**
 	 * @param string $server
+	 * @param array $options
 	 */
-	public function __construct( $server ) {
+	public function __construct( $server, $options = [] ) {
 		$parts = explode( ':', $server, 2 );
 		$this->host = $parts[0];
-		$this->port = $parts[1] ?? 80;
+		$this->port = isset( $parts[1] ) ? $parts[1] : 80;
 	}
 
 	/**
@@ -96,9 +95,9 @@ class SquidPurgeClient {
 		}
 		$this->socket = socket_create( AF_INET, SOCK_STREAM, SOL_TCP );
 		socket_set_nonblock( $this->socket );
-		Wikimedia\suppressWarnings();
+		MediaWiki\suppressWarnings();
 		$ok = socket_connect( $this->socket, $ip, $this->port );
-		Wikimedia\restoreWarnings();
+		MediaWiki\restoreWarnings();
 		if ( !$ok ) {
 			$error = socket_last_error( $this->socket );
 			if ( $error !== self::EINPROGRESS ) {
@@ -149,17 +148,17 @@ class SquidPurgeClient {
 	 */
 	protected function getIP() {
 		if ( $this->ip === null ) {
-			if ( IPUtils::isIPv4( $this->host ) ) {
+			if ( IP::isIPv4( $this->host ) ) {
 				$this->ip = $this->host;
-			} elseif ( IPUtils::isIPv6( $this->host ) ) {
-				throw new MWException( '$wgCdnServers does not support IPv6' );
+			} elseif ( IP::isIPv6( $this->host ) ) {
+				throw new MWException( '$wgSquidServers does not support IPv6' );
 			} else {
-				Wikimedia\suppressWarnings();
+				MediaWiki\suppressWarnings();
 				$this->ip = gethostbyname( $this->host );
 				if ( $this->ip === $this->host ) {
 					$this->ip = false;
 				}
-				Wikimedia\restoreWarnings();
+				MediaWiki\restoreWarnings();
 			}
 		}
 		return $this->ip;
@@ -179,11 +178,11 @@ class SquidPurgeClient {
 	 */
 	public function close() {
 		if ( $this->socket ) {
-			Wikimedia\suppressWarnings();
+			MediaWiki\suppressWarnings();
 			socket_set_block( $this->socket );
 			socket_shutdown( $this->socket );
 			socket_close( $this->socket );
-			Wikimedia\restoreWarnings();
+			MediaWiki\restoreWarnings();
 		}
 		$this->socket = null;
 		$this->readBuffer = '';
@@ -193,11 +192,11 @@ class SquidPurgeClient {
 	/**
 	 * Queue a purge operation
 	 *
-	 * @param string $url Fully expanded URL (with host and protocol)
+	 * @param string $url
 	 */
 	public function queuePurge( $url ) {
 		global $wgSquidPurgeUseHostHeader;
-		$url = str_replace( "\n", '', $url ); // sanity
+		$url = CdnCacheUpdate::expand( str_replace( "\n", '', $url ) );
 		$request = [];
 		if ( $wgSquidPurgeUseHostHeader ) {
 			$url = wfParseUrl( $url );
@@ -212,7 +211,6 @@ class SquidPurgeClient {
 			$request[] = "PURGE $path HTTP/1.1";
 			$request[] = "Host: $host";
 		} else {
-			wfDeprecated( '$wgSquidPurgeUseHostHeader = false', '1.33' );
 			$request[] = "PURGE $url HTTP/1.0";
 		}
 		$request[] = "Connection: Keep-Alive";
@@ -247,16 +245,16 @@ class SquidPurgeClient {
 			return;
 		}
 
-		$flags = 0;
-
 		if ( strlen( $this->writeBuffer ) <= self::BUFFER_SIZE ) {
 			$buf = $this->writeBuffer;
+			$flags = MSG_EOR;
 		} else {
 			$buf = substr( $this->writeBuffer, 0, self::BUFFER_SIZE );
+			$flags = 0;
 		}
-		Wikimedia\suppressWarnings();
+		MediaWiki\suppressWarnings();
 		$bytesSent = socket_send( $socket, $buf, strlen( $buf ), $flags );
-		Wikimedia\restoreWarnings();
+		MediaWiki\restoreWarnings();
 
 		if ( $bytesSent === false ) {
 			$error = socket_last_error( $socket );
@@ -280,9 +278,9 @@ class SquidPurgeClient {
 		}
 
 		$buf = '';
-		Wikimedia\suppressWarnings();
+		MediaWiki\suppressWarnings();
 		$bytesRead = socket_recv( $socket, $buf, self::BUFFER_SIZE, 0 );
-		Wikimedia\restoreWarnings();
+		MediaWiki\restoreWarnings();
 		if ( $bytesRead === false ) {
 			$error = socket_last_error( $socket );
 			if ( $error != self::EAGAIN && $error != self::EINTR ) {
@@ -306,40 +304,40 @@ class SquidPurgeClient {
 	 */
 	protected function processReadBuffer() {
 		switch ( $this->readState ) {
-			case 'idle':
+		case 'idle':
+			return 'done';
+		case 'status':
+		case 'header':
+			$lines = explode( "\r\n", $this->readBuffer, 2 );
+			if ( count( $lines ) < 2 ) {
 				return 'done';
-			case 'status':
-			case 'header':
-				$lines = explode( "\r\n", $this->readBuffer, 2 );
-				if ( count( $lines ) < 2 ) {
-					return 'done';
-				}
-				if ( $this->readState == 'status' ) {
-					$this->processStatusLine( $lines[0] );
-				} else {
-					$this->processHeaderLine( $lines[0] );
-				}
-				$this->readBuffer = $lines[1];
-				return 'continue';
-			case 'body':
-				if ( $this->bodyRemaining !== null ) {
-					if ( $this->bodyRemaining > strlen( $this->readBuffer ) ) {
-						$this->bodyRemaining -= strlen( $this->readBuffer );
-						$this->readBuffer = '';
-						return 'done';
-					} else {
-						$this->readBuffer = substr( $this->readBuffer, $this->bodyRemaining );
-						$this->bodyRemaining = 0;
-						$this->nextRequest();
-						return 'continue';
-					}
-				} else {
-					// No content length, read all data to EOF
+			}
+			if ( $this->readState == 'status' ) {
+				$this->processStatusLine( $lines[0] );
+			} else { // header
+				$this->processHeaderLine( $lines[0] );
+			}
+			$this->readBuffer = $lines[1];
+			return 'continue';
+		case 'body':
+			if ( $this->bodyRemaining !== null ) {
+				if ( $this->bodyRemaining > strlen( $this->readBuffer ) ) {
+					$this->bodyRemaining -= strlen( $this->readBuffer );
 					$this->readBuffer = '';
 					return 'done';
+				} else {
+					$this->readBuffer = substr( $this->readBuffer, $this->bodyRemaining );
+					$this->bodyRemaining = 0;
+					$this->nextRequest();
+					return 'continue';
 				}
-			default:
-				throw new MWException( __METHOD__ . ': unexpected state' );
+			} else {
+				// No content length, read all data to EOF
+				$this->readBuffer = '';
+				return 'done';
+			}
+		default:
+			throw new MWException( __METHOD__ . ': unexpected state' );
 		}
 	}
 

@@ -23,8 +23,6 @@
 
 /**
  * Compact stacked vertical format for forms.
- *
- * @stable to extend
  */
 class VFormHTMLForm extends HTMLForm {
 	/**
@@ -38,6 +36,11 @@ class VFormHTMLForm extends HTMLForm {
 	 * @var string
 	 */
 	protected $displayFormat = 'vform';
+
+	public function isVForm() {
+		wfDeprecated( __METHOD__, '1.25' );
+		return true;
+	}
 
 	public static function loadInputFromParameters( $fieldname, $descriptor,
 		HTMLForm $parent = null

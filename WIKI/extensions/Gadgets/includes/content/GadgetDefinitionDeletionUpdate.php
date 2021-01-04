@@ -20,24 +20,26 @@
  * @file
  */
 
-use MediaWiki\Linker\LinkTarget;
-
 /**
  * DataUpdate to run whenever a page in the Gadget definition
  * is deleted.
  */
 class GadgetDefinitionDeletionUpdate extends DataUpdate {
 	/**
-	 * Page that was deleted
-	 * @var LinkTarget
+	 * Gadget id
+	 * @var string
 	 */
-	private $target;
+	private $id;
 
-	public function __construct( LinkTarget $target ) {
-		$this->target = $target;
+	public function __construct( $id ) {
+		$this->id = $id;
 	}
 
 	public function doUpdate() {
-		GadgetRepo::singleton()->handlePageDeletion( $this->target );
+		$repo = GadgetRepo::singleton();
+		if ( $repo instanceof GadgetDefinitionNamespaceRepo ) {
+			$repo->purgeGadgetIdsList();
+			$repo->purgeGadgetEntry( $this->id );
+		}
 	}
 }

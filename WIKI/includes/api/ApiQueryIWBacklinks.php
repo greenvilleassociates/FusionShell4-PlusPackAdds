@@ -2,6 +2,8 @@
 /**
  * API for MediaWiki 1.17+
  *
+ * Created on May 14, 2010
+ *
  * Copyright © 2010 Sam Reed
  * Copyright © 2006 Yuri Astrakhan "<Firstname><Lastname>@gmail.com"
  *
@@ -42,7 +44,7 @@ class ApiQueryIWBacklinks extends ApiQueryGeneratorBase {
 	}
 
 	/**
-	 * @param ApiPageSet|null $resultPageSet
+	 * @param ApiPageSet $resultPageSet
 	 * @return void
 	 */
 	public function run( $resultPageSet = null ) {
@@ -59,7 +61,7 @@ class ApiQueryIWBacklinks extends ApiQueryGeneratorBase {
 			);
 		}
 
-		if ( $params['continue'] !== null ) {
+		if ( !is_null( $params['continue'] ) ) {
 			$cont = explode( '|', $params['continue'] );
 			$this->dieContinueUsageIf( count( $cont ) != 3 );
 
@@ -67,7 +69,7 @@ class ApiQueryIWBacklinks extends ApiQueryGeneratorBase {
 			$op = $params['dir'] == 'descending' ? '<' : '>';
 			$prefix = $db->addQuotes( $cont[0] );
 			$title = $db->addQuotes( $cont[1] );
-			$from = (int)$cont[2];
+			$from = intval( $cont[2] );
 			$this->addWhere(
 				"iwl_prefix $op $prefix OR " .
 				"(iwl_prefix = $prefix AND " .
@@ -115,11 +117,6 @@ class ApiQueryIWBacklinks extends ApiQueryGeneratorBase {
 
 		$count = 0;
 		$result = $this->getResult();
-
-		if ( $resultPageSet === null ) {
-			$this->executeGenderCacheFromResultWrapper( $res, __METHOD__ );
-		}
-
 		foreach ( $res as $row ) {
 			if ( ++$count > $params['limit'] ) {
 				// We've reached the one extra which shows that there are
@@ -133,10 +130,10 @@ class ApiQueryIWBacklinks extends ApiQueryGeneratorBase {
 				break;
 			}
 
-			if ( $resultPageSet !== null ) {
+			if ( !is_null( $resultPageSet ) ) {
 				$pages[] = Title::newFromRow( $row );
 			} else {
-				$entry = [ 'pageid' => (int)$row->page_id ];
+				$entry = [ 'pageid' => $row->page_id ];
 
 				$title = Title::makeTitle( $row->page_namespace, $row->page_title );
 				ApiQueryBase::addTitleInfo( $entry, $title );
@@ -164,7 +161,7 @@ class ApiQueryIWBacklinks extends ApiQueryGeneratorBase {
 			}
 		}
 
-		if ( $resultPageSet === null ) {
+		if ( is_null( $resultPageSet ) ) {
 			$result->addIndexedTagName( [ 'query', $this->getModuleName() ], 'iw' );
 		} else {
 			$resultPageSet->populateFromTitles( $pages );

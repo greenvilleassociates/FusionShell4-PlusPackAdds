@@ -21,9 +21,6 @@
  * @ingroup SpecialPage
  */
 
-use MediaWiki\MediaWikiServices;
-use MediaWiki\Revision\SlotRecord;
-
 /**
  * Special page outputs information on sourcing a book with a particular ISBN
  * The parser creates links to this page when dealing with ISBNs in wikitext
@@ -37,7 +34,9 @@ class SpecialBookSources extends SpecialPage {
 	}
 
 	/**
-	 * @param string|null $isbn ISBN passed as a subpage parameter
+	 * Show the special page
+	 *
+	 * @param string $isbn ISBN passed as a subpage parameter
 	 */
 	public function execute( $isbn ) {
 		$out = $this->getOutput();
@@ -155,25 +154,25 @@ class SpecialBookSources extends SpecialPage {
 	private function showList( $isbn ) {
 		$out = $this->getOutput();
 
+		global $wgContLang;
+
 		$isbn = self::cleanIsbn( $isbn );
 		# Hook to allow extensions to insert additional HTML,
 		# e.g. for API-interacting plugins and so on
-		$this->getHookRunner()->onBookInformation( $isbn, $out );
+		Hooks::run( 'BookInformation', [ $isbn, $out ] );
 
 		# Check for a local page such as Project:Book_sources and use that if available
 		$page = $this->msg( 'booksources' )->inContentLanguage()->text();
 		$title = Title::makeTitleSafe( NS_PROJECT, $page ); # Show list in content language
 		if ( is_object( $title ) && $title->exists() ) {
-			$rev = MediaWikiServices::getInstance()
-				->getRevisionLookup()
-				->getRevisionByTitle( $title );
-			$content = $rev->getContent( SlotRecord::MAIN );
+			$rev = Revision::newFromTitle( $title, false, Revision::READ_NORMAL );
+			$content = $rev->getContent();
 
 			if ( $content instanceof TextContent ) {
 				// XXX: in the future, this could be stored as structured data, defining a list of book sources
 
-				$text = $content->getText();
-				$out->addWikiTextAsInterface( str_replace( 'MAGICNUMBER', $isbn, $text ) );
+				$text = $content->getNativeData();
+				$out->addWikiText( str_replace( 'MAGICNUMBER', $isbn, $text ) );
 
 				return true;
 			} else {
@@ -184,7 +183,7 @@ class SpecialBookSources extends SpecialPage {
 		# Fall back to the defaults given in the language file
 		$out->addWikiMsg( 'booksources-text' );
 		$out->addHTML( '<ul>' );
-		$items = MediaWikiServices::getInstance()->getContentLanguage()->getBookstoreList();
+		$items = $wgContLang->getBookstoreList();
 		foreach ( $items as $label => $url ) {
 			$out->addHTML( $this->makeListItem( $isbn, $label, $url ) );
 		}

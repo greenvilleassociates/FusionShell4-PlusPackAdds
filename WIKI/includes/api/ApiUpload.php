@@ -1,5 +1,9 @@
 <?php
 /**
+ *
+ *
+ * Created on Aug 21, 2008
+ *
  * Copyright © 2008 - 2010 Bryan Tong Minh <Bryan.TongMinh@Gmail.com>
  *
  * This program is free software; you can redistribute it and/or modify
@@ -24,20 +28,10 @@
  * @ingroup API
  */
 class ApiUpload extends ApiBase {
-
-	use ApiWatchlistTrait;
-
 	/** @var UploadBase|UploadFromChunks */
 	protected $mUpload = null;
 
 	protected $mParams;
-
-	public function __construct( ApiMain $mainModule, $moduleName, $modulePrefix = '' ) {
-		parent::__construct( $mainModule, $moduleName, $modulePrefix );
-
-		$this->watchlistExpiryEnabled = $this->getConfig()->get( 'WatchlistExpiry' );
-		$this->watchlistMaxDuration = $this->getConfig()->get( 'WatchlistExpiryMaxDuration' );
-	}
 
 	public function execute() {
 		// Check whether upload is enabled
@@ -84,7 +78,20 @@ class ApiUpload extends ApiBase {
 		}
 
 		// Check if the uploaded file is sane
-		$this->verifyUpload();
+		if ( $this->mParams['chunk'] ) {
+			$maxSize = UploadBase::getMaxUploadSize();
+			if ( $this->mParams['filesize'] > $maxSize ) {
+				$this->dieWithError( 'file-too-large' );
+			}
+			if ( !$this->mUpload->getTitle() ) {
+				$this->dieWithError( 'illegal-filename' );
+			}
+		} elseif ( $this->mParams['async'] && $this->mParams['filekey'] ) {
+			// defer verification to background process
+		} else {
+			wfDebug( __METHOD__ . " about to verify\n" );
+			$this->verifyUpload();
+		}
 
 		// Check if the user has the rights to modify or overwrite the requested title
 		// (This check is irrelevant if stashing is already requested, since the errors
@@ -106,7 +113,6 @@ class ApiUpload extends ApiBase {
 
 		// Add 'imageinfo' in a separate addValue() call. File metadata can be unreasonably large,
 		// so otherwise when it exceeded $wgAPIMaxResultSize, no result would be returned (T143993).
-		// @phan-suppress-next-line PhanTypeArraySuspiciousNullable False positive
 		if ( $result['result'] === 'Success' ) {
 			$imageinfo = $this->mUpload->getImageInfo( $this->getResult() );
 			$this->getResult()->addValue( $this->getModuleName(), 'imageinfo', $imageinfo );
@@ -179,33 +185,6 @@ class ApiUpload extends ApiBase {
 	}
 
 	/**
-	 * @since 1.35
-	 * @see $wgMinUploadChunkSize
-	 * @param Config $config Site configuration for MinUploadChunkSize
-	 * @return int
-	 */
-	public static function getMinUploadChunkSize( Config $config ) {
-		$configured = $config->get( 'MinUploadChunkSize' );
-
-		// Leave some room for other POST parameters
-		$postMax = (
-			wfShorthandToInteger(
-				ini_get( 'post_max_size' ),
-				PHP_INT_MAX
-			) ?: PHP_INT_MAX
-		) - 1024;
-
-		// Ensure the minimum chunk size is less than PHP upload limits
-		// or the maximum upload size.
-		return min(
-			$configured,
-			UploadBase::getMaxUploadSize( 'file' ),
-			UploadBase::getMaxPhpUploadSize(),
-			$postMax
-		);
-	}
-
-	/**
 	 * Get the result of a chunk upload.
 	 * @param array $warnings Array of Api upload warnings
 	 * @return array
@@ -221,7 +200,7 @@ class ApiUpload extends ApiBase {
 		$chunkPath = $request->getFileTempname( 'chunk' );
 		$chunkSize = $request->getUpload( 'chunk' )->getSize();
 		$totalSoFar = $this->mParams['offset'] + $chunkSize;
-		$minChunkSize = self::getMinUploadChunkSize( $this->getConfig() );
+		$minChunkSize = $this->getConfig()->get( 'MinUploadChunkSize' );
 
 		// Sanity check sizing
 		if ( $totalSoFar > $this->mParams['filesize'] ) {
@@ -331,7 +310,7 @@ class ApiUpload extends ApiBase {
 	 *   - When 'optional', only add a 'stashfailed' key to the data and return null.
 	 *     Use this when some error happened for a non-stash upload and we're stashing the file
 	 *     only to save the client the trouble of re-uploading it.
-	 * @param array|null &$data API result to which to add the information
+	 * @param array &$data API result to which to add the information
 	 * @return string|null File key
 	 */
 	private function performStash( $failureMode, &$data = null ) {
@@ -345,7 +324,7 @@ class ApiUpload extends ApiBase {
 			}
 		} catch ( Exception $e ) {
 			$debugMessage = 'Stashing temporary file failed: ' . get_class( $e ) . ' ' . $e->getMessage();
-			wfDebug( __METHOD__ . ' ' . $debugMessage );
+			wfDebug( __METHOD__ . ' ' . $debugMessage . "\n" );
 			$status = Status::newFatal( $this->getErrorFormatter()->getMessageFromException(
 				$e, [ 'wrap' => new ApiMessage( 'apierror-stashexception', 'stashfailed' ) ]
 			) );
@@ -364,7 +343,7 @@ class ApiUpload extends ApiBase {
 			// Statuses for it. Just extract the exception details and parse them ourselves.
 			list( $exceptionType, $message ) = $status->getMessage()->getParams();
 			$debugMessage = 'Stashing temporary file failed: ' . $exceptionType . ' ' . $message;
-			wfDebug( __METHOD__ . ' ' . $debugMessage );
+			wfDebug( __METHOD__ . ' ' . $debugMessage . "\n" );
 		}
 
 		// Bad status
@@ -428,7 +407,6 @@ class ApiUpload extends ApiBase {
 	 * otherwise true
 	 *
 	 * @return bool
-	 * @suppress PhanTypeArraySuspiciousNullable False positives
 	 */
 	protected function selectUploadModule() {
 		$request = $this->getMain()->getRequest();
@@ -443,7 +421,7 @@ class ApiUpload extends ApiBase {
 		if ( $this->mParams['filekey'] && $this->mParams['checkstatus'] ) {
 			$progress = UploadBase::getSessionStatus( $this->getUser(), $this->mParams['filekey'] );
 			if ( !$progress ) {
-				$this->dieWithError( 'apierror-upload-missingresult', 'missingresult' );
+				$this->dieWithError( 'api-upload-missingresult', 'missingresult' );
 			} elseif ( !$progress['status']->isGood() ) {
 				$this->dieStatusWithCode( $progress['status'], 'stashfailed' );
 			}
@@ -474,7 +452,7 @@ class ApiUpload extends ApiBase {
 		}
 
 		// The following modules all require the filename parameter to be set
-		if ( $this->mParams['filename'] === null ) {
+		if ( is_null( $this->mParams['filename'] ) ) {
 			$this->dieWithError( [ 'apierror-missingparam', 'filename' ] );
 		}
 
@@ -568,7 +546,7 @@ class ApiUpload extends ApiBase {
 		}
 
 		// Check blocks
-		if ( $user->isBlockedFromUpload() ) {
+		if ( $user->isBlocked() ) {
 			$this->dieBlocked( $user->getBlock() );
 		}
 
@@ -582,35 +560,9 @@ class ApiUpload extends ApiBase {
 	 * Performs file verification, dies on error.
 	 */
 	protected function verifyUpload() {
-		if ( $this->mParams['chunk'] ) {
-			$maxSize = UploadBase::getMaxUploadSize();
-			if ( $this->mParams['filesize'] > $maxSize ) {
-				$this->dieWithError( 'file-too-large' );
-			}
-			if ( !$this->mUpload->getTitle() ) {
-				$this->dieWithError( 'illegal-filename' );
-			}
-			// file will be assembled after having uploaded the last chunk,
-			// so we can only validate the name at this point
-			$verification = $this->mUpload->validateName();
-			if ( $verification === true ) {
-				return;
-			}
-		} elseif ( $this->mParams['async'] && $this->mParams['filekey'] ) {
-			// file will be assembled in a background process, so we
-			// can only validate the name at this point
-			// file verification will happen in background process
-			$verification = $this->mUpload->validateName();
-			if ( $verification === true ) {
-				return;
-			}
-		} else {
-			wfDebug( __METHOD__ . " about to verify" );
-
-			$verification = $this->mUpload->verifyUpload();
-			if ( $verification['status'] === UploadBase::OK ) {
-				return;
-			}
+		$verification = $this->mUpload->verifyUpload();
+		if ( $verification['status'] === UploadBase::OK ) {
+			return;
 		}
 
 		$this->checkVerification( $verification );
@@ -688,7 +640,6 @@ class ApiUpload extends ApiBase {
 				}
 				ApiResult::setIndexedTagName( $details, 'detail' );
 				$msg->setApiData( $msg->getApiData() + [ 'details' => $details ] );
-				// @phan-suppress-next-line PhanTypeMismatchArgument
 				$this->dieWithError( $msg );
 				break;
 
@@ -711,9 +662,7 @@ class ApiUpload extends ApiBase {
 	 * @return array
 	 */
 	protected function getApiWarnings() {
-		$warnings = UploadBase::makeWarningsSerializable(
-			$this->mUpload->checkWarnings( $this->getUser() )
-		);
+		$warnings = $this->mUpload->checkWarnings();
 
 		return $this->transformWarnings( $warnings );
 	}
@@ -725,8 +674,9 @@ class ApiUpload extends ApiBase {
 
 			if ( isset( $warnings['duplicate'] ) ) {
 				$dupes = [];
+				/** @var File $dupe */
 				foreach ( $warnings['duplicate'] as $dupe ) {
-					$dupes[] = $dupe['fileName'];
+					$dupes[] = $dupe->getName();
 				}
 				ApiResult::setIndexedTagName( $dupes, 'duplicate' );
 				$warnings['duplicate'] = $dupes;
@@ -735,24 +685,29 @@ class ApiUpload extends ApiBase {
 			if ( isset( $warnings['exists'] ) ) {
 				$warning = $warnings['exists'];
 				unset( $warnings['exists'] );
-				$localFile = $warning['normalizedFile'] ?? $warning['file'];
-				$warnings[$warning['warning']] = $localFile['fileName'];
+				/** @var LocalFile $localFile */
+				$localFile = isset( $warning['normalizedFile'] )
+					? $warning['normalizedFile']
+					: $warning['file'];
+				$warnings[$warning['warning']] = $localFile->getName();
 			}
 
 			if ( isset( $warnings['no-change'] ) ) {
+				/** @var File $file */
 				$file = $warnings['no-change'];
 				unset( $warnings['no-change'] );
 
 				$warnings['nochange'] = [
-					'timestamp' => wfTimestamp( TS_ISO_8601, $file['timestamp'] )
+					'timestamp' => wfTimestamp( TS_ISO_8601, $file->getTimestamp() )
 				];
 			}
 
 			if ( isset( $warnings['duplicate-version'] ) ) {
 				$dupes = [];
+				/** @var File $dupe */
 				foreach ( $warnings['duplicate-version'] as $dupe ) {
 					$dupes[] = [
-						'timestamp' => wfTimestamp( TS_ISO_8601, $dupe['timestamp'] )
+						'timestamp' => wfTimestamp( TS_ISO_8601, $dupe->getTimestamp() )
 					];
 				}
 				unset( $warnings['duplicate-version'] );
@@ -773,26 +728,26 @@ class ApiUpload extends ApiBase {
 	 */
 	protected function handleStashException( $e ) {
 		switch ( get_class( $e ) ) {
-			case UploadStashFileNotFoundException::class:
+			case 'UploadStashFileNotFoundException':
 				$wrap = 'apierror-stashedfilenotfound';
 				break;
-			case UploadStashBadPathException::class:
+			case 'UploadStashBadPathException':
 				$wrap = 'apierror-stashpathinvalid';
 				break;
-			case UploadStashFileException::class:
+			case 'UploadStashFileException':
 				$wrap = 'apierror-stashfilestorage';
 				break;
-			case UploadStashZeroLengthFileException::class:
+			case 'UploadStashZeroLengthFileException':
 				$wrap = 'apierror-stashzerolength';
 				break;
-			case UploadStashNotLoggedInException::class:
+			case 'UploadStashNotLoggedInException':
 				return StatusValue::newFatal( ApiMessage::create(
 					[ 'apierror-mustbeloggedin', $this->msg( 'action-upload' ) ], 'stashnotloggedin'
 				) );
-			case UploadStashWrongOwnerException::class:
+			case 'UploadStashWrongOwnerException':
 				$wrap = 'apierror-stashwrongowner';
 				break;
-			case UploadStashNoSuchKeyException::class:
+			case 'UploadStashNoSuchKeyException':
 				$wrap = 'apierror-stashnosuchfilekey';
 				break;
 			default:
@@ -813,31 +768,28 @@ class ApiUpload extends ApiBase {
 	 */
 	protected function performUpload( $warnings ) {
 		// Use comment as initial page text by default
-		if ( $this->mParams['text'] === null ) {
+		if ( is_null( $this->mParams['text'] ) ) {
 			$this->mParams['text'] = $this->mParams['comment'];
 		}
 
 		/** @var LocalFile $file */
 		$file = $this->mUpload->getLocalFile();
-		$user = $this->getUser();
-		$title = $file->getTitle();
 
-		// for preferences mode, we want to watch if 'watchdefault' is set,
+		// For preferences mode, we want to watch if 'watchdefault' is set,
 		// or if the *file* doesn't exist, and either 'watchuploads' or
 		// 'watchcreations' is set. But getWatchlistValue()'s automatic
 		// handling checks if the *title* exists or not, so we need to check
 		// all three preferences manually.
 		$watch = $this->getWatchlistValue(
-			$this->mParams['watchlist'], $title, $user, 'watchdefault'
+			$this->mParams['watchlist'], $file->getTitle(), 'watchdefault'
 		);
 
 		if ( !$watch && $this->mParams['watchlist'] == 'preferences' && !$file->exists() ) {
 			$watch = (
-				$this->getWatchlistValue( 'preferences', $title, $user, 'watchuploads' ) ||
-				$this->getWatchlistValue( 'preferences', $title, $user, 'watchcreations' )
+				$this->getWatchlistValue( 'preferences', $file->getTitle(), 'watchuploads' ) ||
+				$this->getWatchlistValue( 'preferences', $file->getTitle(), 'watchcreations' )
 			);
 		}
-		$watchlistExpiry = $this->getExpiryFromParams( $this->mParams );
 
 		// Deprecated parameters
 		if ( $this->mParams['watch'] ) {
@@ -852,7 +804,6 @@ class ApiUpload extends ApiBase {
 		}
 
 		// No errors, no warnings: do the upload
-		$result = [];
 		if ( $this->mParams['async'] ) {
 			$progress = UploadBase::getSessionStatus( $this->getUser(), $this->mParams['filekey'] );
 			if ( $progress && $progress['result'] === 'Poll' ) {
@@ -872,7 +823,6 @@ class ApiUpload extends ApiBase {
 					'tags' => $this->mParams['tags'],
 					'text' => $this->mParams['text'],
 					'watch' => $watch,
-					'watchlistexpiry' => $watchlistExpiry,
 					'session' => $this->getContext()->exportSession()
 				]
 			) );
@@ -880,14 +830,8 @@ class ApiUpload extends ApiBase {
 			$result['stage'] = 'queued';
 		} else {
 			/** @var Status $status */
-			$status = $this->mUpload->performUpload(
-				$this->mParams['comment'],
-				$this->mParams['text'],
-				$watch,
-				$this->getUser(),
-				$this->mParams['tags'],
-				$watchlistExpiry
-			);
+			$status = $this->mUpload->performUpload( $this->mParams['comment'],
+				$this->mParams['text'], $watch, $this->getUser(), $this->mParams['tags'] );
 
 			if ( !$status->isGood() ) {
 				$this->dieRecoverableError( $status->getErrors() );
@@ -930,17 +874,14 @@ class ApiUpload extends ApiBase {
 				ApiBase::PARAM_DFLT => false,
 				ApiBase::PARAM_DEPRECATED => true,
 			],
-		];
-
-		// Params appear in the docs in the order they are defined,
-		// which is why this is here and not at the bottom.
-		$params += $this->getWatchlistParams( [
-			'watch',
-			'preferences',
-			'nochange',
-		] );
-
-		$params += [
+			'watchlist' => [
+				ApiBase::PARAM_DFLT => 'preferences',
+				ApiBase::PARAM_TYPE => [
+					'watch',
+					'preferences',
+					'nochange'
+				],
+			],
 			'ignorewarnings' => false,
 			'file' => [
 				ApiBase::PARAM_TYPE => 'upload',

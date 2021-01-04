@@ -4,9 +4,9 @@
  * @group Media
  * @covers PNGMetadataExtractor
  */
-class PNGMetadataExtractorTest extends MediaWikiIntegrationTestCase {
+class PNGMetadataExtractorTest extends MediaWikiTestCase {
 
-	protected function setUp() : void {
+	protected function setUp() {
 		parent::setUp();
 		$this->filePath = __DIR__ . '/../../data/media/';
 	}
@@ -66,15 +66,33 @@ class PNGMetadataExtractorTest extends MediaWikiIntegrationTestCase {
 	}
 
 	/**
+	 * Test extraction of pHYs tags, which can tell what the
+	 * actual resolution of the image is (aka in dots per meter).
+	 */
+	/*
+	public function testPngPhysTag() {
+		$meta = PNGMetadataExtractor::getMetadata( $this->filePath .
+			'Png-native-test.png' );
+
+		$this->assertArrayHasKey( 'text', $meta );
+		$meta = $meta['text'];
+
+		$this->assertEquals( '2835/100', $meta['XResolution'] );
+		$this->assertEquals( '2835/100', $meta['YResolution'] );
+		$this->assertEquals( 3, $meta['ResolutionUnit'] ); // 3 = cm
+	}
+	*/
+
+	/**
 	 * Given a normal static PNG, check the animation metadata returned.
 	 */
 	public function testStaticPngAnimationMetadata() {
 		$meta = PNGMetadataExtractor::getMetadata( $this->filePath .
 			'Png-native-test.png' );
 
-		$this->assertSame( 0, $meta['frameCount'] );
-		$this->assertSame( 1, $meta['loopCount'] );
-		$this->assertSame( 0.0, $meta['duration'] );
+		$this->assertEquals( 0, $meta['frameCount'] );
+		$this->assertEquals( 1, $meta['loopCount'] );
+		$this->assertEquals( 0, $meta['duration'] );
 	}
 
 	/**
@@ -87,8 +105,8 @@ class PNGMetadataExtractorTest extends MediaWikiIntegrationTestCase {
 
 		$this->assertEquals( 20, $meta['frameCount'] );
 		// Note loop count of 0 = infinity
-		$this->assertSame( 0, $meta['loopCount'] );
-		$this->assertEqualsWithDelta( 1.5, $meta['duration'], 0.00001, '' );
+		$this->assertEquals( 0, $meta['loopCount'] );
+		$this->assertEquals( 1.5, $meta['duration'], '', 0.00001 );
 	}
 
 	public function testPngBitDepth8() {
@@ -101,7 +119,7 @@ class PNGMetadataExtractorTest extends MediaWikiIntegrationTestCase {
 	public function testPngBitDepth1() {
 		$meta = PNGMetadataExtractor::getMetadata( $this->filePath .
 			'1bit-png.png' );
-		$this->assertSame( 1, $meta['bitDepth'] );
+		$this->assertEquals( 1, $meta['bitDepth'] );
 	}
 
 	public function testPngIndexColour() {

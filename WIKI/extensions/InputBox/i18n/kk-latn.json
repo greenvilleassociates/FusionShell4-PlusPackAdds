@@ -1,7 +1,5 @@
 {
-	"@metadata": {
-		"authors": []
-	},
+	"@metadata": [],
 	"inputbox-error-no-type": "Jasalatın engizw jolağınıñ türin keltirmepsiz.",
 	"inputbox-error-bad-type": "Engizw jolaqtıñ «$1» türi tanılmadı. Tek «create», «comment», «search» ne «search2» degen türlerdi keltiriñiz.",
 	"inputbox-tryexact": "Däl säýkesin sınap köriñiz",

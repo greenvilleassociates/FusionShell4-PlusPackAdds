@@ -18,7 +18,7 @@ class PostgreSqlLockManager extends DBLockManager {
 
 	protected function doGetLocksOnServer( $lockSrv, array $paths, $type ) {
 		$status = StatusValue::newGood();
-		if ( $paths === [] ) {
+		if ( !count( $paths ) ) {
 			return $status; // nothing to lock
 		}
 

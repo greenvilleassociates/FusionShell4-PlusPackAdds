@@ -8,46 +8,48 @@
 		"Niklas Laxström",
 		"Roan Kattouw"
 	],
-	"requires": {
-		"MediaWiki": ">= 1.31.0"
-	},
 	"url": "https://www.mediawiki.org/wiki/Extension:LocalisationUpdate",
 	"descriptionmsg": "localisationupdate-desc",
-	"license-name": "GPL-2.0-or-later",
+	"license-name": "GPL-2.0+",
 	"type": "other",
 	"MessagesDirs": {
 		"LocalisationUpdate": [
 			"i18n"
 		]
 	},
-	"AutoloadNamespaces": {
-		"LocalisationUpdate\\": "includes/"
+	"AutoloadClasses": {
+		"LocalisationUpdate": "LocalisationUpdate.class.php",
+		"LocalisationUpdate\\Updater": "Updater.php",
+		"QuickArrayReader": "QuickArrayReader.php",
+		"LocalisationUpdate\\Fetcher": "fetcher/Fetcher.php",
+		"LocalisationUpdate\\FetcherFactory": "fetcher/FetcherFactory.php",
+		"LocalisationUpdate\\FileSystemFetcher": "fetcher/FileSystemFetcher.php",
+		"LocalisationUpdate\\GitHubFetcher": "fetcher/GitHubFetcher.php",
+		"LocalisationUpdate\\HttpFetcher": "fetcher/HttpFetcher.php",
+		"LocalisationUpdate\\Finder": "finder/Finder.php",
+		"LocalisationUpdate\\JSONReader": "reader/JSONReader.php",
+		"LocalisationUpdate\\PHPReader": "reader/PHPReader.php",
+		"LocalisationUpdate\\Reader": "reader/Reader.php",
+		"LocalisationUpdate\\ReaderFactory": "reader/ReaderFactory.php"
 	},
 	"Hooks": {
-		"LocalisationCacheRecache": "LocalisationUpdate\\LocalisationUpdate::onRecache",
-		"LocalisationCacheRecacheFallback": "LocalisationUpdate\\LocalisationUpdate::onRecacheFallback"
+		"LocalisationCacheRecache": [
+			"LocalisationUpdate::onRecache"
+		],
+		"LocalisationCacheRecacheFallback": [
+			"LocalisationUpdate::onRecacheFallback"
+		]
 	},
 	"config": {
-		"LocalisationUpdateDirectory": {
-			"value": false
-		},
-		"LocalisationUpdateRepository": {
-			"value": "github"
-		},
+		"LocalisationUpdateDirectory": false,
+		"LocalisationUpdateRepository": "github",
 		"LocalisationUpdateRepositories": {
-			"value": {
-				"github": {
-					"mediawiki": "https://raw.github.com/wikimedia/mediawiki/master/%PATH%",
-					"extension": "https://raw.github.com/wikimedia/mediawiki-extensions-%NAME%/master/%PATH%",
-					"skin": "https://raw.github.com/wikimedia/mediawiki-skins-%NAME%/master/%PATH%"
-				}
-			}
-		},
-		"LocalisationUpdateHttpRequestOptions": {
-			"value": {
-				"followRedirects": true
+			"github": {
+				"mediawiki": "https://raw.github.com/wikimedia/mediawiki/master/%PATH%",
+				"extension": "https://raw.github.com/wikimedia/mediawiki-extensions-%NAME%/master/%PATH%",
+				"skin": "https://raw.github.com/wikimedia/mediawiki-skins-%NAME%/master/%PATH%"
 			}
 		}
 	},
-	"manifest_version": 2
+	"manifest_version": 1
 }

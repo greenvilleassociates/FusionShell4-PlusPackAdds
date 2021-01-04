@@ -1,8 +1,8 @@
 {
 	"@metadata": {
 		"authors": [
-			"Arash71",
 			"Hosseinblue",
+			"Arash71",
 			"Lakzon"
 		]
 	},
@@ -17,6 +17,6 @@
 	"vector-view-edit": "دەسکاری",
 	"vector-view-history": "سئرکردن تاریخچۀ-ویرگار",
 	"vector-view-view": "خووەنن",
-	"vector-view-viewsource": "بنچەک(منبع) بۊن(سەیرکە)",
+	"vector-view-viewsource": "سئرکردن بِنچۀک/مۀنبۀع",
 	"vector-more-actions": "ویشتر/فرۀتر"
 }

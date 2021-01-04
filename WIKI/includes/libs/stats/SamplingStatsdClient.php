@@ -20,9 +20,9 @@
  * @file
  */
 
+use Liuggio\StatsdClient\StatsdClient;
 use Liuggio\StatsdClient\Entity\StatsdData;
 use Liuggio\StatsdClient\Entity\StatsdDataInterface;
-use Liuggio\StatsdClient\StatsdClient;
 
 /**
  * A statsd client that applies the sampling rate to the data items before sending them.
@@ -84,7 +84,7 @@ class SamplingStatsdClient extends StatsdClient {
 			$data = [ $data ];
 		}
 		if ( !$data ) {
-			return 0;
+			return;
 		}
 		foreach ( $data as $item ) {
 			if ( !( $item instanceof StatsdDataInterface ) ) {
@@ -109,7 +109,7 @@ class SamplingStatsdClient extends StatsdClient {
 		try {
 			$fp = $this->getSender()->open();
 			if ( !$fp ) {
-				return 0;
+				return;
 			}
 			foreach ( $data as $message ) {
 				$written += $this->getSender()->write( $fp, $message );

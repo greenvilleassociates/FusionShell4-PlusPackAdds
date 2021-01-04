@@ -1,8 +1,8 @@
 {
 	"@metadata": {
 		"authors": [
-			"Danvintius Bookix",
-			"Don Alessandro"
+			"Don Alessandro",
+			"Danvintius Bookix"
 		]
 	},
 	"vector-action-addsection": "Мевзу къош",
@@ -16,5 +16,5 @@
 	"vector-view-history": "Кечмишини косьтер",
 	"vector-view-view": "Окъу",
 	"vector-view-viewsource": "Менба кодуны косьтер",
-	"vector-more-actions": "Башкъа арекетлер"
+	"vector-more-actions": "Буюк"
 }

@@ -26,22 +26,29 @@ use MediaWiki\Linker\LinkRenderer;
 class CategoryPager extends AlphabeticPager {
 
 	/**
+	 * @var LinkRenderer
+	 */
+	protected $linkRenderer;
+
+	/**
 	 * @param IContextSource $context
 	 * @param string $from
 	 * @param LinkRenderer $linkRenderer
 	 */
 	public function __construct( IContextSource $context, $from, LinkRenderer $linkRenderer
 	) {
-		parent::__construct( $context, $linkRenderer );
+		parent::__construct( $context );
 		$from = str_replace( ' ', '_', $from );
 		if ( $from !== '' ) {
 			$from = Title::capitalize( $from, NS_CATEGORY );
 			$this->setOffset( $from );
 			$this->setIncludeOffset( true );
 		}
+
+		$this->linkRenderer = $linkRenderer;
 	}
 
-	public function getQueryInfo() {
+	function getQueryInfo() {
 		return [
 			'tables' => [ 'category' ],
 			'fields' => [ 'cat_title', 'cat_pages' ],
@@ -49,11 +56,11 @@ class CategoryPager extends AlphabeticPager {
 		];
 	}
 
-	public function getIndexField() {
+	function getIndexField() {
 		return 'cat_title';
 	}
 
-	public function getDefaultQuery() {
+	function getDefaultQuery() {
 		parent::getDefaultQuery();
 		unset( $this->mDefaultQuery['from'] );
 
@@ -75,10 +82,10 @@ class CategoryPager extends AlphabeticPager {
 		return parent::getBody();
 	}
 
-	public function formatRow( $result ) {
+	function formatRow( $result ) {
 		$title = new TitleValue( NS_CATEGORY, $result->cat_title );
 		$text = $title->getText();
-		$link = $this->getLinkRenderer()->makeLink( $title, $text );
+		$link = $this->linkRenderer->makeLink( $title, $text );
 
 		$count = $this->msg( 'nmembers' )->numParams( $result->cat_pages )->escaped();
 		return Html::rawElement( 'li', null, $this->getLanguage()->specialList( $link, $count ) ) . "\n";

@@ -52,7 +52,7 @@ class Timing implements LoggerAwareInterface {
 
 	public function __construct( array $params = [] ) {
 		$this->clearMarks();
-		$this->setLogger( $params['logger'] ?? new NullLogger() );
+		$this->setLogger( isset( $params['logger'] ) ? $params['logger'] : new NullLogger() );
 	}
 
 	/**
@@ -83,7 +83,7 @@ class Timing implements LoggerAwareInterface {
 	}
 
 	/**
-	 * @param string|null $markName The name of the mark that should
+	 * @param string $markName The name of the mark that should
 	 *  be cleared. If not specified, all marks will be cleared.
 	 */
 	public function clearMarks( $markName = null ) {
@@ -94,7 +94,9 @@ class Timing implements LoggerAwareInterface {
 				'requestStart' => [
 					'name'      => 'requestStart',
 					'entryType' => 'mark',
-					'startTime' => $_SERVER['REQUEST_TIME_FLOAT'],
+					'startTime' => isset( $_SERVER['REQUEST_TIME_FLOAT'] )
+						? $_SERVER['REQUEST_TIME_FLOAT']
+						: $_SERVER['REQUEST_TIME'],
 					'duration'  => 0,
 				],
 			];
@@ -117,7 +119,7 @@ class Timing implements LoggerAwareInterface {
 	 *
 	 * @param string $measureName
 	 * @param string $startMark
-	 * @param string|null $endMark
+	 * @param string $endMark
 	 * @return array|bool The measure that has been created, or false if either
 	 *  the start mark or the end mark do not exist.
 	 */
@@ -155,7 +157,7 @@ class Timing implements LoggerAwareInterface {
 	 */
 	private function sortEntries() {
 		uasort( $this->entries, function ( $a, $b ) {
-			return $a['startTime'] <=> $b['startTime'];
+			return 10000 * ( $a['startTime'] - $b['startTime'] );
 		} );
 	}
 
@@ -188,6 +190,6 @@ class Timing implements LoggerAwareInterface {
 	 * @return array|null Entry named $name or null if it does not exist.
 	 */
 	public function getEntryByName( $name ) {
-		return $this->entries[$name] ?? null;
+		return isset( $this->entries[$name] ) ? $this->entries[$name] : null;
 	}
 }

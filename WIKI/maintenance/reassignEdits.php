@@ -20,7 +20,7 @@
  * @file
  * @ingroup Maintenance
  * @author Rob Church <robchur@gmail.com>
- * @license GPL-2.0-or-later
+ * @licence GNU General Public Licence 2.0 or later
  */
 
 require_once __DIR__ . '/Maintenance.php';
@@ -67,8 +67,8 @@ class ReassignEdits extends Maintenance {
 	/**
 	 * Reassign edits from one user to another
 	 *
-	 * @param User &$from User to take edits from
-	 * @param User &$to User to assign edits to
+	 * @param User $from User to take edits from
+	 * @param User $to User to assign edits to
 	 * @param bool $rc Update the recent changes table
 	 * @param bool $report Don't change things; just echo numbers
 	 * @return int Number of entries changed, or that would be changed
@@ -79,28 +79,22 @@ class ReassignEdits extends Maintenance {
 
 		# Count things
 		$this->output( "Checking current edits..." );
-		$revQueryInfo = ActorMigration::newMigration()->getWhere( $dbw, 'rev_user', $from );
 		$res = $dbw->select(
-			[ 'revision' ] + $revQueryInfo['tables'],
+			'revision',
 			'COUNT(*) AS count',
-			$revQueryInfo['conds'],
-			__METHOD__,
-			[],
-			$revQueryInfo['joins']
+			$this->userConditions( $from, 'rev_user', 'rev_user_text' ),
+			__METHOD__
 		);
 		$row = $dbw->fetchObject( $res );
 		$cur = $row->count;
 		$this->output( "found {$cur}.\n" );
 
 		$this->output( "Checking deleted edits..." );
-		$arQueryInfo = ActorMigration::newMigration()->getWhere( $dbw, 'ar_user', $from, false );
 		$res = $dbw->select(
-			[ 'archive' ] + $arQueryInfo['tables'],
+			'archive',
 			'COUNT(*) AS count',
-			$arQueryInfo['conds'],
-			__METHOD__,
-			[],
-			$arQueryInfo['joins']
+			$this->userConditions( $from, 'ar_user', 'ar_user_text' ),
+			__METHOD__
 		);
 		$row = $dbw->fetchObject( $res );
 		$del = $row->count;
@@ -109,14 +103,11 @@ class ReassignEdits extends Maintenance {
 		# Don't count recent changes if we're not supposed to
 		if ( $rc ) {
 			$this->output( "Checking recent changes..." );
-			$rcQueryInfo = ActorMigration::newMigration()->getWhere( $dbw, 'rc_user', $from, false );
 			$res = $dbw->select(
-				[ 'recentchanges' ] + $rcQueryInfo['tables'],
+				'recentchanges',
 				'COUNT(*) AS count',
-				$rcQueryInfo['conds'],
-				__METHOD__,
-				[],
-				$rcQueryInfo['joins']
+				$this->userConditions( $from, 'rc_user', 'rc_user_text' ),
+				__METHOD__
 			);
 			$row = $dbw->fetchObject( $res );
 			$rec = $row->count;
@@ -132,24 +123,17 @@ class ReassignEdits extends Maintenance {
 			if ( $total ) {
 				# Reassign edits
 				$this->output( "\nReassigning current edits..." );
-				$dbw->update(
-					'revision_actor_temp',
-					[ 'revactor_actor' => $to->getActorId( $dbw ) ],
-					[ 'revactor_actor' => $from->getActorId() ],
-					__METHOD__
-				);
+				$dbw->update( 'revision', $this->userSpecification( $to, 'rev_user', 'rev_user_text' ),
+					$this->userConditions( $from, 'rev_user', 'rev_user_text' ), __METHOD__ );
 				$this->output( "done.\nReassigning deleted edits..." );
-				$dbw->update( 'archive',
-					[ 'ar_actor' => $to->getActorId( $dbw ) ],
-					[ $arQueryInfo['conds'] ], __METHOD__ );
+				$dbw->update( 'archive', $this->userSpecification( $to, 'ar_user', 'ar_user_text' ),
+					$this->userConditions( $from, 'ar_user', 'ar_user_text' ), __METHOD__ );
 				$this->output( "done.\n" );
 				# Update recent changes if required
 				if ( $rc ) {
 					$this->output( "Updating recent changes..." );
-					$dbw->update( 'recentchanges',
-						[ 'rc_actor' => $to->getActorId( $dbw ) ],
-						// @phan-suppress-next-line PhanTypeArraySuspiciousNullable False positive
-						[ $rcQueryInfo['conds'] ], __METHOD__ );
+					$dbw->update( 'recentchanges', $this->userSpecification( $to, 'rc_user', 'rc_user_text' ),
+						$this->userConditions( $from, 'rc_user', 'rc_user_text' ), __METHOD__ );
 					$this->output( "done.\n" );
 				}
 			}
@@ -161,6 +145,34 @@ class ReassignEdits extends Maintenance {
 	}
 
 	/**
+	 * Return the most efficient set of user conditions
+	 * i.e. a user => id mapping, or a user_text => text mapping
+	 *
+	 * @param User $user User for the condition
+	 * @param string $idfield Field name containing the identifier
+	 * @param string $utfield Field name containing the user text
+	 * @return array
+	 */
+	private function userConditions( &$user, $idfield, $utfield ) {
+		return $user->getId()
+			? [ $idfield => $user->getId() ]
+			: [ $utfield => $user->getName() ];
+	}
+
+	/**
+	 * Return user specifications
+	 * i.e. user => id, user_text => text
+	 *
+	 * @param User $user User for the spec
+	 * @param string $idfield Field name containing the identifier
+	 * @param string $utfield Field name containing the user text
+	 * @return array
+	 */
+	private function userSpecification( &$user, $idfield, $utfield ) {
+		return [ $idfield => $user->getId(), $utfield => $user->getName() ];
+	}
+
+	/**
 	 * Initialise the user object
 	 *
 	 * @param string $username Username or IP address
@@ -168,12 +180,13 @@ class ReassignEdits extends Maintenance {
 	 */
 	private function initialiseUser( $username ) {
 		if ( User::isIP( $username ) ) {
-			$user = User::newFromName( $username, false );
-			$user->getActorId();
+			$user = new User();
+			$user->setId( 0 );
+			$user->setName( $username );
 		} else {
 			$user = User::newFromName( $username );
 			if ( !$user ) {
-				$this->fatalError( "Invalid username" );
+				$this->error( "Invalid username", true );
 			}
 		}
 		$user->load();
@@ -182,5 +195,5 @@ class ReassignEdits extends Maintenance {
 	}
 }
 
-$maintClass = ReassignEdits::class;
+$maintClass = "ReassignEdits";
 require_once RUN_MAINTENANCE_IF_MAIN;

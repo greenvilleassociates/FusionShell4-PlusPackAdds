@@ -21,12 +21,7 @@
  * @author Niklas Laxström
  * @ingroup Cache
  */
-
-use MediaWiki\Linker\LinkTarget;
 use MediaWiki\MediaWikiServices;
-use MediaWiki\User\UserIdentity;
-use MediaWiki\User\UserOptionsLookup;
-use Wikimedia\Rdbms\ILoadBalancer;
 
 /**
  * Caches user genders when needed to use correct namespace aliases.
@@ -39,32 +34,11 @@ class GenderCache {
 	protected $misses = 0;
 	protected $missLimit = 1000;
 
-	/** @var NamespaceInfo */
-	private $nsInfo;
-
-	/** @var ILoadBalancer|null */
-	private $loadBalancer;
-
-	/** @var UserOptionsLookup */
-	private $userOptionsLookup;
-
-	public function __construct(
-		NamespaceInfo $nsInfo = null,
-		ILoadBalancer $loadBalancer = null,
-		UserOptionsLookup $userOptionsLookup = null
-	) {
-		$this->nsInfo = $nsInfo ?? MediaWikiServices::getInstance()->getNamespaceInfo();
-		$this->loadBalancer = $loadBalancer;
-		$this->userOptionsLookup = $userOptionsLookup ?? MediaWikiServices::getInstance()->getUserOptionsLookup();
-	}
-
 	/**
-	 * @see MediaWikiServices::getInstance()->getGenderCache()
-	 * @deprecated in 1.28 (soft), 1.35 (hard)
+	 * @deprecated in 1.28 see MediaWikiServices::getInstance()->getGenderCache()
 	 * @return GenderCache
 	 */
 	public static function singleton() {
-		wfDeprecated( __METHOD__, '1.28' );
 		return MediaWikiServices::getInstance()->getGenderCache();
 	}
 
@@ -74,7 +48,7 @@ class GenderCache {
 	 */
 	protected function getDefault() {
 		if ( $this->default === null ) {
-			$this->default = $this->userOptionsLookup->getDefaultOption( 'gender' );
+			$this->default = User::getDefaultOption( 'gender' );
 		}
 
 		return $this->default;
@@ -82,14 +56,14 @@ class GenderCache {
 
 	/**
 	 * Returns the gender for given username.
-	 * @param string|UserIdentity $username
+	 * @param string|User $username Username
 	 * @param string $caller The calling method
 	 * @return string
 	 */
 	public function getGenderOf( $username, $caller = '' ) {
 		global $wgUser;
 
-		if ( $username instanceof UserIdentity ) {
+		if ( $username instanceof User ) {
 			$username = $username->getName();
 		}
 
@@ -98,7 +72,7 @@ class GenderCache {
 			if ( $this->misses >= $this->missLimit && $wgUser->getName() !== $username ) {
 				if ( $this->misses === $this->missLimit ) {
 					$this->misses++;
-					wfDebug( __METHOD__ . ": too many misses, returning default onwards" );
+					wfDebug( __METHOD__ . ": too many misses, returning default onwards\n" );
 				}
 
 				return $this->getDefault();
@@ -111,7 +85,7 @@ class GenderCache {
 		/* Undefined if there is a valid username which for some reason doesn't
 		 * exist in the database.
 		 */
-		return $this->cache[$username] ?? $this->getDefault();
+		return isset( $this->cache[$username] ) ? $this->cache[$username] : $this->getDefault();
 	}
 
 	/**
@@ -123,7 +97,7 @@ class GenderCache {
 	public function doLinkBatch( $data, $caller = '' ) {
 		$users = [];
 		foreach ( $data as $ns => $pagenames ) {
-			if ( !$this->nsInfo->hasGenderDistinction( $ns ) ) {
+			if ( !MWNamespace::hasGenderDistinction( $ns ) ) {
 				continue;
 			}
 			foreach ( array_keys( $pagenames ) as $username ) {
@@ -135,16 +109,20 @@ class GenderCache {
 	}
 
 	/**
-	 * Wrapper for doQuery that processes a title array.
+	 * Wrapper for doQuery that processes a title or string array.
 	 *
 	 * @since 1.20
-	 * @param LinkTarget[] $titles
+	 * @param array $titles Array of Title objects or strings
 	 * @param string $caller The calling method
 	 */
 	public function doTitlesArray( $titles, $caller = '' ) {
 		$users = [];
-		foreach ( $titles as $titleObj ) {
-			if ( !$this->nsInfo->hasGenderDistinction( $titleObj->getNamespace() ) ) {
+		foreach ( $titles as $title ) {
+			$titleObj = is_string( $title ) ? Title::newFromText( $title ) : $title;
+			if ( !$titleObj ) {
+				continue;
+			}
+			if ( !MWNamespace::hasGenderDistinction( $titleObj->getNamespace() ) ) {
 				continue;
 			}
 			$users[] = $titleObj->getText();
@@ -155,7 +133,7 @@ class GenderCache {
 
 	/**
 	 * Preloads genders for given list of users.
-	 * @param string[]|string $users Usernames
+	 * @param array|string $users Usernames
 	 * @param string $caller The calling method
 	 */
 	public function doQuery( $users, $caller = '' ) {
@@ -179,13 +157,7 @@ class GenderCache {
 			return;
 		}
 
-		// Only query database, when load balancer is provided by service wiring
-		// This maybe not happen when running as part of the installer
-		if ( $this->loadBalancer === null ) {
-			return;
-		}
-
-		$dbr = $this->loadBalancer->getConnectionRef( DB_REPLICA );
+		$dbr = wfGetDB( DB_REPLICA );
 		$table = [ 'user', 'user_properties' ];
 		$fields = [ 'user_name', 'up_value' ];
 		$conds = [ 'user_name' => $usersToCheck ];
@@ -199,7 +171,7 @@ class GenderCache {
 		$res = $dbr->select( $table, $fields, $conds, $comment, [], $joins );
 
 		foreach ( $res as $row ) {
-			$this->cache[$row->user_name] = $row->up_value ?: $default;
+			$this->cache[$row->user_name] = $row->up_value ? $row->up_value : $default;
 		}
 	}
 

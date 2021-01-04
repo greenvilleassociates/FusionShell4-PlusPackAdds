@@ -134,17 +134,11 @@ class OrderedStreamingForkController extends ForkController {
 	 */
 	protected function consumeNoFork() {
 		while ( !feof( $this->input ) ) {
-			$data = fgets( $this->input );
-			if ( substr( $data, -1 ) === "\n" ) {
-				// Strip any final new line used to delimit lines of input.
-				// The last line of input might not have it, though.
-				$data = substr( $data, 0, -1 );
+			$line = trim( fgets( $this->input ) );
+			if ( $line ) {
+				$result = call_user_func( $this->workCallback, $line );
+				fwrite( $this->output, "$result\n" );
 			}
-			if ( $data === '' ) {
-				continue;
-			}
-			$result = call_user_func( $this->workCallback, $data );
-			fwrite( $this->output, "$result\n" );
 		}
 	}
 
@@ -166,12 +160,8 @@ class OrderedStreamingForkController extends ForkController {
 					$this->updateAvailableSockets( $sockets, $used, $sockets ? 0 : 5 );
 				} while ( !$sockets );
 			}
-			if ( substr( $data, -1 ) === "\n" ) {
-				// Strip any final new line used to delimit lines of input.
-				// The last line of input might not have it, though.
-				$data = substr( $data, 0, -1 );
-			}
-			if ( $data === '' ) {
+			$data = trim( $data );
+			if ( !$data ) {
 				continue;
 			}
 			$socket = array_pop( $sockets );

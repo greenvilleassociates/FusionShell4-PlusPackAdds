@@ -1,13 +1,11 @@
 {
 	"@metadata": {
 		"authors": [
+			"Malafaya",
 			"Cgboeree",
-			"Katxis",
-			"Mafcadio",
-			"Malafaya"
+			"Katxis"
 		]
 	},
-	"citethispage": "Refere a esta paje",
 	"citethispage-link": "Refere a esta paje",
 	"tooltip-citethispage": "Informa sur modos de refere a esta paje",
 	"citethispage-change-target": "Paje:"

@@ -28,8 +28,6 @@ use MediaWiki\Session\SessionManager;
 /**
  * WebRequest clone which takes values from a provided array.
  *
- * @newable
- *
  * @ingroup HTTP
  */
 class FauxRequest extends WebRequest {
@@ -38,8 +36,6 @@ class FauxRequest extends WebRequest {
 	protected $cookies = [];
 
 	/**
-	 * @stable to call
-	 *
 	 * @param array $data Array of *non*-urlencoded key => value pairs, the
 	 *   fake GET/POST values
 	 * @param bool $wasPosted Whether to treat the data as POST
@@ -93,6 +89,13 @@ class FauxRequest extends WebRequest {
 	/**
 	 * @return array
 	 */
+	public function getValues() {
+		return $this->data;
+	}
+
+	/**
+	 * @return array
+	 */
 	public function getQueryValues() {
 		if ( $this->wasPosted ) {
 			return [];
@@ -118,7 +121,7 @@ class FauxRequest extends WebRequest {
 			$prefix = $wgCookiePrefix;
 		}
 		$name = $prefix . $key;
-		return $this->cookies[$name] ?? $default;
+		return isset( $this->cookies[$name] ) ? $this->cookies[$name] : $default;
 	}
 
 	/**
@@ -222,6 +225,15 @@ class FauxRequest extends WebRequest {
 	 */
 	public function getRawInput() {
 		return '';
+	}
+
+	/**
+	 * @codeCoverageIgnore
+	 * @param array $extWhitelist
+	 * @return bool
+	 */
+	public function checkUrlExtension( $extWhitelist = [] ) {
+		return true;
 	}
 
 	/**

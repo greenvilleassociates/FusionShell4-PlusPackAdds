@@ -24,9 +24,6 @@
  * @ingroup Maintenance
  */
 
-use MediaWiki\Linker\LinkTarget;
-use MediaWiki\MediaWikiServices;
-
 require_once __DIR__ . '/Maintenance.php';
 
 /**
@@ -42,20 +39,9 @@ class BackupReader extends Maintenance {
 	public $uploads = false;
 	protected $uploadCount = 0;
 	public $imageBasePath = false;
-	/** @var array|false */
 	public $nsFilter = false;
-	/** @var bool|resource */
-	public $stderr;
-	/** @var callable|null */
-	protected $importCallback;
-	/** @var callable|null */
-	protected $logItemCallback;
-	/** @var callable|null */
-	protected $uploadCallback;
-	/** @var int */
-	protected $startTime;
 
-	public function __construct() {
+	function __construct() {
 		parent::__construct();
 		$gz = in_array( 'compress.zlib', stream_get_wrappers() )
 			? 'ok'
@@ -96,29 +82,21 @@ TEXT
 		);
 		$this->addOption( 'image-base-path', 'Import files from a specified path', false, true );
 		$this->addOption( 'skip-to', 'Start from nth page by skipping first n-1 pages', false, true );
-		$this->addOption( 'username-prefix', 'Prefix for interwiki usernames', false, true );
-		$this->addOption( 'no-local-users',
-			'Treat all usernames as interwiki. ' .
-			'The default is to assign edits to local users where they exist.',
-			false, false
-		);
 		$this->addArg( 'file', 'Dump file to import [else use stdin]', false );
 	}
 
 	public function execute() {
 		if ( wfReadOnly() ) {
-			$this->fatalError( "Wiki is in read-only mode; you'll need to disable it for import to work." );
+			$this->error( "Wiki is in read-only mode; you'll need to disable it for import to work.", true );
 		}
 
 		$this->reportingInterval = intval( $this->getOption( 'report', 100 ) );
 		if ( !$this->reportingInterval ) {
-			// avoid division by zero
-			$this->reportingInterval = 100;
+			$this->reportingInterval = 100; // avoid division by zero
 		}
 
 		$this->dryRun = $this->hasOption( 'dry-run' );
-		$this->uploads = $this->hasOption( 'uploads' );
-
+		$this->uploads = $this->hasOption( 'uploads' ); // experimental!
 		if ( $this->hasOption( 'image-base-path' ) ) {
 			$this->imageBasePath = $this->getOption( 'image-base-path' );
 		}
@@ -126,8 +104,8 @@ TEXT
 			$this->setNsfilter( explode( '|', $this->getOption( 'namespaces' ) ) );
 		}
 
-		if ( $this->hasArg( 0 ) ) {
-			$this->importFromFile( $this->getArg( 0 ) );
+		if ( $this->hasArg() ) {
+			$this->importFromFile( $this->getArg() );
 		} else {
 			$this->importFromStdin();
 		}
@@ -137,7 +115,7 @@ TEXT
 		$this->output( "and initSiteStats.php to update page and revision counts\n" );
 	}
 
-	private function setNsfilter( array $namespaces ) {
+	function setNsfilter( array $namespaces ) {
 		if ( count( $namespaces ) == 0 ) {
 			$this->nsFilter = false;
 
@@ -147,25 +125,35 @@ TEXT
 	}
 
 	private function getNsIndex( $namespace ) {
-		$contLang = MediaWikiServices::getInstance()->getContentLanguage();
-		$result = $contLang->getNsIndex( $namespace );
+		global $wgContLang;
+		$result = $wgContLang->getNsIndex( $namespace );
 		if ( $result !== false ) {
 			return $result;
 		}
 		$ns = intval( $namespace );
-		if ( strval( $ns ) === $namespace && $contLang->getNsText( $ns ) !== false ) {
+		if ( strval( $ns ) === $namespace && $wgContLang->getNsText( $ns ) !== false ) {
 			return $ns;
 		}
-		$this->fatalError( "Unknown namespace text / index specified: $namespace" );
+		$this->error( "Unknown namespace text / index specified: $namespace", true );
 	}
 
 	/**
-	 * @param LinkTarget|null $title
-	 * @throws MWException
+	 * @param Title|Revision $obj
 	 * @return bool
 	 */
-	private function skippedNamespace( $title ) {
-		if ( $title === null ) {
+	private function skippedNamespace( $obj ) {
+		$title = null;
+		if ( $obj instanceof Title ) {
+			$title = $obj;
+		} elseif ( $obj instanceof Revision ) {
+			$title = $obj->getTitle();
+		} elseif ( $obj instanceof WikiRevision ) {
+			$title = $obj->title;
+		} else {
+			throw new MWException( "Cannot get namespace of object in " . __METHOD__ );
+		}
+
+		if ( is_null( $title ) ) {
 			// Probably a log entry
 			return false;
 		}
@@ -175,14 +163,14 @@ TEXT
 		return is_array( $this->nsFilter ) && !in_array( $ns, $this->nsFilter );
 	}
 
-	public function reportPage( $page ) {
+	function reportPage( $page ) {
 		$this->pageCount++;
 	}
 
 	/**
-	 * @param WikiRevision $rev
+	 * @param Revision $rev
 	 */
-	public function handleRevision( WikiRevision $rev ) {
+	function handleRevision( $rev ) {
 		$title = $rev->getTitle();
 		if ( !$title ) {
 			$this->progress( "Got bogus revision with null title!" );
@@ -203,12 +191,12 @@ TEXT
 	}
 
 	/**
-	 * @param WikiRevision $revision
+	 * @param Revision $revision
 	 * @return bool
 	 */
-	public function handleUpload( WikiRevision $revision ) {
+	function handleUpload( $revision ) {
 		if ( $this->uploads ) {
-			if ( $this->skippedNamespace( $revision->getTitle() ) ) {
+			if ( $this->skippedNamespace( $revision ) ) {
 				return false;
 			}
 			$this->uploadCount++;
@@ -227,11 +215,8 @@ TEXT
 		return false;
 	}
 
-	/**
-	 * @param WikiRevision $rev
-	 */
-	public function handleLogItem( WikiRevision $rev ) {
-		if ( $this->skippedNamespace( $rev->getTitle() ) ) {
+	function handleLogItem( $rev ) {
+		if ( $this->skippedNamespace( $rev ) ) {
 			return;
 		}
 		$this->revCount++;
@@ -242,13 +227,13 @@ TEXT
 		}
 	}
 
-	private function report( $final = false ) {
+	function report( $final = false ) {
 		if ( $final xor ( $this->pageCount % $this->reportingInterval == 0 ) ) {
 			$this->showReport();
 		}
 	}
 
-	private function showReport() {
+	function showReport() {
 		if ( !$this->mQuiet ) {
 			$delta = microtime( true ) - $this->startTime;
 			if ( $delta ) {
@@ -265,14 +250,14 @@ TEXT
 				$this->progress( "$this->revCount ($revrate revs/sec)" );
 			}
 		}
-		MediaWikiServices::getInstance()->getDBLoadBalancerFactory()->waitForReplication();
+		wfWaitForSlaves();
 	}
 
-	private function progress( $string ) {
+	function progress( $string ) {
 		fwrite( $this->stderr, $string . "\n" );
 	}
 
-	private function importFromFile( $filename ) {
+	function importFromFile( $filename ) {
 		if ( preg_match( '/\.gz$/', $filename ) ) {
 			$filename = 'compress.zlib://' . $filename;
 		} elseif ( preg_match( '/\.bz2$/', $filename ) ) {
@@ -286,7 +271,7 @@ TEXT
 		return $this->importFromHandle( $file );
 	}
 
-	private function importFromStdin() {
+	function importFromStdin() {
 		$file = fopen( 'php://stdin', 'rt' );
 		if ( self::posix_isatty( $file ) ) {
 			$this->maybeHelp( true );
@@ -295,7 +280,7 @@ TEXT
 		return $this->importFromHandle( $file );
 	}
 
-	private function importFromHandle( $handle ) {
+	function importFromHandle( $handle ) {
 		$this->startTime = microtime( true );
 
 		$source = new ImportStreamSource( $handle );
@@ -310,17 +295,11 @@ TEXT
 		if ( $this->hasOption( 'no-updates' ) ) {
 			$importer->setNoUpdates( true );
 		}
-		if ( $this->hasOption( 'username-prefix' ) ) {
-			$importer->setUsernamePrefix(
-				$this->getOption( 'username-prefix' ),
-				!$this->hasOption( 'no-local-users' )
-			);
-		}
 		if ( $this->hasOption( 'rootpage' ) ) {
 			$statusRootPage = $importer->setTargetRootPage( $this->getOption( 'rootpage' ) );
 			if ( !$statusRootPage->isGood() ) {
 				// Die here so that it doesn't print "Done!"
-				$this->fatalError( $statusRootPage->getMessage( false, false, 'en' )->text() );
+				$this->error( $statusRootPage->getMessage()->text(), 1 );
 				return false;
 			}
 		}
@@ -330,9 +309,6 @@ TEXT
 			$this->pageCount = $nthPage - 1;
 		}
 		$importer->setPageCallback( [ $this, 'reportPage' ] );
-		$importer->setNoticeCallback( function ( $msg, $params ) {
-			echo wfMessage( $msg, $params )->text() . "\n";
-		} );
 		$this->importCallback = $importer->setRevisionCallback(
 			[ $this, 'handleRevision' ] );
 		$this->uploadCallback = $importer->setUploadCallback(
@@ -354,5 +330,5 @@ TEXT
 	}
 }
 
-$maintClass = BackupReader::class;
+$maintClass = 'BackupReader';
 require_once RUN_MAINTENANCE_IF_MAIN;

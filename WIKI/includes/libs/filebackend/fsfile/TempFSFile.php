@@ -1,7 +1,4 @@
 <?php
-
-use MediaWiki\FileBackend\FSFile\TempFSFileFactory;
-
 /**
  * Location holder of files stored temporarily
  *
@@ -24,8 +21,6 @@ use MediaWiki\FileBackend\FSFile\TempFSFileFactory;
  * @ingroup FileBackend
  */
 
-use Wikimedia\AtEase\AtEase;
-
 /**
  * This class is used to hold the location and do limited manipulation
  * of files stored temporarily (this will be whatever wfTempDir() returns)
@@ -39,19 +34,12 @@ class TempFSFile extends FSFile {
 	/** @var array Map of (path => 1) for paths to delete on shutdown */
 	protected static $pathsCollect = null;
 
-	/**
-	 * Do not call directly. Use TempFSFileFactory
-	 *
-	 * @param string $path
-	 */
 	public function __construct( $path ) {
 		parent::__construct( $path );
 
 		if ( self::$pathsCollect === null ) {
-			// @codeCoverageIgnoreStart
 			self::$pathsCollect = [];
 			register_shutdown_function( [ __CLASS__, 'purgeAllOnShutdown' ] );
-			// @codeCoverageIgnoreEnd
 		}
 	}
 
@@ -59,23 +47,40 @@ class TempFSFile extends FSFile {
 	 * Make a new temporary file on the file system.
 	 * Temporary files may be purged when the file object falls out of scope.
 	 *
-	 * @deprecated since 1.34, use TempFSFileFactory directly
-	 *
 	 * @param string $prefix
 	 * @param string $extension Optional file extension
 	 * @param string|null $tmpDirectory Optional parent directory
 	 * @return TempFSFile|null
 	 */
 	public static function factory( $prefix, $extension = '', $tmpDirectory = null ) {
-		return ( new TempFSFileFactory( $tmpDirectory ) )->newTempFSFile( $prefix, $extension );
+		$ext = ( $extension != '' ) ? ".{$extension}" : '';
+
+		$attempts = 5;
+		while ( $attempts-- ) {
+			$hex = sprintf( '%06x%06x', mt_rand( 0, 0xffffff ), mt_rand( 0, 0xffffff ) );
+			if ( !is_string( $tmpDirectory ) ) {
+				$tmpDirectory = self::getUsableTempDirectory();
+			}
+			$path = wfTempDir() . '/' . $prefix . $hex . $ext;
+			MediaWiki\suppressWarnings();
+			$newFileHandle = fopen( $path, 'x' );
+			MediaWiki\restoreWarnings();
+			if ( $newFileHandle ) {
+				fclose( $newFileHandle );
+				$tmpFile = new self( $path );
+				$tmpFile->autocollect();
+				// Safely instantiated, end loop.
+				return $tmpFile;
+			}
+		}
+
+		// Give up
+		return null;
 	}
 
 	/**
-	 * @todo Is there any useful way to test this? Would it be useful to make this non-static on
-	 * TempFSFileFactory?
-	 *
 	 * @return string Filesystem path to a temporary directory
-	 * @throws RuntimeException if no writable temporary directory can be found
+	 * @throws RuntimeException
 	 */
 	public static function getUsableTempDirectory() {
 		$tmpDir = array_map( 'getenv', [ 'TMPDIR', 'TMP', 'TEMP' ] );
@@ -92,9 +97,9 @@ class TempFSFile extends FSFile {
 		// the current process.
 		// The user is included as if various scripts are run by different users they will likely
 		// not be able to access each others temporary files.
-		if ( PHP_OS_FAMILY === 'Windows' ) {
+		if ( strtoupper( substr( PHP_OS, 0, 3 ) ) === 'WIN' ) {
 			$tmp = sys_get_temp_dir() . DIRECTORY_SEPARATOR . 'mwtmp-' . get_current_user();
-			if ( !is_dir( $tmp ) ) {
+			if ( !file_exists( $tmp ) ) {
 				mkdir( $tmp );
 			}
 			if ( is_dir( $tmp ) && is_writable( $tmp ) ) {
@@ -114,9 +119,9 @@ class TempFSFile extends FSFile {
 	 */
 	public function purge() {
 		$this->canDelete = false; // done
-		AtEase::suppressWarnings();
+		MediaWiki\suppressWarnings();
 		$ok = unlink( $this->path );
-		AtEase::restoreWarnings();
+		MediaWiki\restoreWarnings();
 
 		unset( self::$pathsCollect[$this->path] );
 
@@ -171,21 +176,19 @@ class TempFSFile extends FSFile {
 	 * Try to make sure that all files are purged on error
 	 *
 	 * This method should only be called internally
-	 *
-	 * @codeCoverageIgnore
 	 */
 	public static function purgeAllOnShutdown() {
-		foreach ( self::$pathsCollect as $path => $unused ) {
-			AtEase::suppressWarnings();
+		foreach ( self::$pathsCollect as $path ) {
+			MediaWiki\suppressWarnings();
 			unlink( $path );
-			AtEase::restoreWarnings();
+			MediaWiki\restoreWarnings();
 		}
 	}
 
 	/**
 	 * Cleans up after the temporary file by deleting it
 	 */
-	public function __destruct() {
+	function __destruct() {
 		if ( $this->canDelete ) {
 			$this->purge();
 		}

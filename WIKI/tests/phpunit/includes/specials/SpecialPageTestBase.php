@@ -5,38 +5,36 @@
  *
  * @since 1.26
  *
- * @license GPL-2.0-or-later
+ * @licence GNU GPL v2+
  * @author Jeroen De Dauw < jeroendedauw@gmail.com >
  * @author Daniel Kinzler
  * @author Addshore
- * @author Thiemo Kreuz
+ * @author Thiemo Mättig
  */
-abstract class SpecialPageTestBase extends MediaWikiIntegrationTestCase {
+abstract class SpecialPageTestBase extends MediaWikiTestCase {
 
 	private $obLevel;
 
-	protected function setUp() : void {
+	protected function setUp() {
 		parent::setUp();
 
 		$this->obLevel = ob_get_level();
 	}
 
-	protected function tearDown() : void {
+	protected function tearDown() {
 		$obLevel = ob_get_level();
 
 		while ( ob_get_level() > $this->obLevel ) {
 			ob_end_clean();
 		}
 
-		try {
-			if ( $obLevel !== $this->obLevel ) {
-				$this->fail(
-					"Test changed output buffer level: was {$this->obLevel} before test, but $obLevel after test."
-				);
-			}
-		} finally {
-			parent::tearDown();
+		if ( $obLevel !== $this->obLevel ) {
+			$this->fail(
+				"Test changed output buffer level: was {$this->obLevel} before test, but $obLevel after test."
+			);
 		}
+
+		parent::tearDown();
 	}
 
 	/**

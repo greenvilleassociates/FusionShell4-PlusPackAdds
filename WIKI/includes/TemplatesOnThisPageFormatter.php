@@ -20,7 +20,6 @@
 
 use MediaWiki\Linker\LinkRenderer;
 use MediaWiki\Linker\LinkTarget;
-use MediaWiki\MediaWikiServices;
 
 /**
  * Handles formatting for the "templates used on this page"
@@ -67,7 +66,11 @@ class TemplatesOnThisPageFormatter {
 		}
 
 		# Do a batch existence check
-		( new LinkBatch( $templates ) )->execute();
+		$batch = new LinkBatch;
+		foreach ( $templates as $title ) {
+			$batch->addObj( $title );
+		}
+		$batch->execute();
 
 		# Construct the HTML
 		$outText = '<div class="mw-templatesUsedExplanation">';
@@ -159,13 +162,11 @@ class TemplatesOnThisPageFormatter {
 	 * Return a link to the edit page, with the text
 	 * saying "view source" if the user can't edit the page
 	 *
-	 * @param LinkTarget $titleObj
+	 * @param Title $titleObj
 	 * @return string
 	 */
-	private function buildEditLink( LinkTarget $titleObj ) {
-		if ( MediaWikiServices::getInstance()->getPermissionManager()
-				->quickUserCan( 'edit', $this->context->getUser(), $titleObj )
-		) {
+	private function buildEditLink( Title $titleObj ) {
+		if ( $titleObj->quickUserCan( 'edit', $this->context->getUser() ) ) {
 			$linkMsg = 'editlink';
 		} else {
 			$linkMsg = 'viewsourcelink';

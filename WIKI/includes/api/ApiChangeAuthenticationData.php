@@ -21,7 +21,6 @@
  */
 
 use MediaWiki\Auth\AuthManager;
-use MediaWiki\MediaWikiServices;
 
 /**
  * Change authentication data with AuthManager
@@ -39,8 +38,8 @@ class ApiChangeAuthenticationData extends ApiBase {
 			$this->dieWithError( 'apierror-mustbeloggedin-changeauthenticationdata', 'notloggedin' );
 		}
 
-		$manager = MediaWikiServices::getInstance()->getAuthManager();
-		$helper = new ApiAuthManagerHelper( $this, $manager );
+		$helper = new ApiAuthManagerHelper( $this );
+		$manager = AuthManager::singleton();
 
 		// Check security-sensitive operation status
 		$helper->securitySensitiveOperation( 'ChangeCredentials' );
@@ -57,7 +56,7 @@ class ApiChangeAuthenticationData extends ApiBase {
 
 		// Make the change
 		$status = $manager->allowsAuthenticationDataChange( $req, true );
-		$this->getHookRunner()->onChangeAuthenticationDataAudit( $req, $status );
+		Hooks::run( 'ChangeAuthenticationDataAudit', [ $req, $status ] );
 		if ( !$status->isGood() ) {
 			$this->dieStatus( $status );
 		}

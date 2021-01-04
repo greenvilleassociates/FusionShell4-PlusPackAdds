@@ -27,12 +27,9 @@
 
 /**
  * Basic pager interface.
- *
- * @unstable for implementation, extensions should extend IndexPager or one of its subclasses.
  * @ingroup Pager
  */
 interface Pager {
-	public function getNavigationBar();
-
-	public function getBody();
+	function getNavigationBar();
+	function getBody();
 }

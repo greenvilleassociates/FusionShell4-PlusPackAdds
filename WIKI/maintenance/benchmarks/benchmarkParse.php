@@ -25,8 +25,6 @@
 require __DIR__ . '/../Maintenance.php';
 
 use MediaWiki\MediaWikiServices;
-use MediaWiki\Revision\RevisionRecord;
-use MediaWiki\Revision\SlotRecord;
 
 /**
  * Maintenance script to benchmark how long it takes to parse a given title at an optionally
@@ -48,7 +46,7 @@ class BenchmarkParse extends Maintenance {
 	/** @var array Cache that maps a Title DB key to revision ID for the requested timestamp */
 	private $idCache = [];
 
-	public function __construct() {
+	function __construct() {
 		parent::__construct();
 		$this->addDescription( 'Benchmark parse operation' );
 		$this->addArg( 'title', 'The name of the page to parse' );
@@ -67,7 +65,7 @@ class BenchmarkParse extends Maintenance {
 			false, false );
 	}
 
-	public function execute() {
+	function execute() {
 		if ( $this->hasOption( 'tpl-time' ) ) {
 			$this->templateTimestamp = wfTimestamp( TS_MW, strtotime( $this->getOption( 'tpl-time' ) ) );
 			Hooks::register( 'BeforeParserFetchTemplateAndtitle', [ $this, 'onFetchTemplate' ] );
@@ -77,13 +75,12 @@ class BenchmarkParse extends Maintenance {
 		// Set as a member variable to avoid function calls when we're timing the parse
 		$this->linkCache = MediaWikiServices::getInstance()->getLinkCache();
 
-		$title = Title::newFromText( $this->getArg( 0 ) );
+		$title = Title::newFromText( $this->getArg() );
 		if ( !$title ) {
 			$this->error( "Invalid title" );
 			exit( 1 );
 		}
 
-		$revLookup = MediaWikiServices::getInstance()->getRevisionLookup();
 		if ( $this->hasOption( 'page-time' ) ) {
 			$pageTimestamp = wfTimestamp( TS_MW, strtotime( $this->getOption( 'page-time' ) ) );
 			$id = $this->getRevIdForTime( $title, $pageTimestamp );
@@ -92,9 +89,9 @@ class BenchmarkParse extends Maintenance {
 				exit( 1 );
 			}
 
-			$revision = $revLookup->getRevisionById( $id );
+			$revision = Revision::newFromId( $id );
 		} else {
-			$revision = $revLookup->getRevisionByTitle( $title );
+			$revision = Revision::newFromTitle( $title );
 		}
 
 		if ( !$revision ) {
@@ -109,7 +106,7 @@ class BenchmarkParse extends Maintenance {
 
 		$loops = $this->getOption( 'loops', 1 );
 		if ( $loops < 1 ) {
-			$this->fatalError( 'Invalid number of loops specified' );
+			$this->error( 'Invalid number of loops specified', true );
 		}
 		$startUsage = getrusage();
 		$startTime = microtime( true );
@@ -135,7 +132,7 @@ class BenchmarkParse extends Maintenance {
 	 * @param string $timestamp
 	 * @return bool|string Revision ID, or false if not found or error
 	 */
-	private function getRevIdForTime( Title $title, $timestamp ) {
+	function getRevIdForTime( Title $title, $timestamp ) {
 		$dbr = $this->getDB( DB_REPLICA );
 
 		$id = $dbr->selectField(
@@ -148,7 +145,7 @@ class BenchmarkParse extends Maintenance {
 			],
 			__METHOD__,
 			[ 'ORDER BY' => 'rev_timestamp DESC', 'LIMIT' => 1 ],
-			[ 'revision' => [ 'JOIN', 'rev_page=page_id' ] ]
+			[ 'revision' => [ 'INNER JOIN', 'rev_page=page_id' ] ]
 		);
 
 		return $id;
@@ -157,13 +154,11 @@ class BenchmarkParse extends Maintenance {
 	/**
 	 * Parse the text from a given Revision
 	 *
-	 * @param RevisionRecord $revision
+	 * @param Revision $revision
 	 */
-	private function runParser( RevisionRecord $revision ) {
-		$content = $revision->getContent( SlotRecord::MAIN );
-		$title = Title::newFromLinkTarget( $revision->getPageAsLinkTarget() );
-
-		$content->getParserOutput( $title, $revision->getId() );
+	function runParser( Revision $revision ) {
+		$content = $revision->getContent();
+		$content->getParserOutput( $revision->getTitle(), $revision->getId() );
 		if ( $this->clearLinkCache ) {
 			$this->linkCache->clear();
 		}
@@ -179,7 +174,7 @@ class BenchmarkParse extends Maintenance {
 	 * @param string|bool &$id
 	 * @return bool
 	 */
-	private function onFetchTemplate( Parser $parser, Title $title, &$skip, &$id ) {
+	function onFetchTemplate( Parser $parser, Title $title, &$skip, &$id ) {
 		$pdbk = $title->getPrefixedDBkey();
 		if ( !isset( $this->idCache[$pdbk] ) ) {
 			$proposedId = $this->getRevIdForTime( $title, $this->templateTimestamp );
@@ -193,5 +188,5 @@ class BenchmarkParse extends Maintenance {
 	}
 }
 
-$maintClass = BenchmarkParse::class;
+$maintClass = 'BenchmarkParse';
 require RUN_MAINTENANCE_IF_MAIN;

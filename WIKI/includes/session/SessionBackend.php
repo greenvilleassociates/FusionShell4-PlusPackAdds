@@ -24,12 +24,9 @@
 namespace MediaWiki\Session;
 
 use CachedBagOStuff;
-use MediaWiki\HookContainer\HookContainer;
-use MediaWiki\HookContainer\HookRunner;
 use Psr\Log\LoggerInterface;
 use User;
 use WebRequest;
-use Wikimedia\AtEase\AtEase;
 
 /**
  * This is the actual workhorse for Session.
@@ -53,25 +50,15 @@ final class SessionBackend {
 	/** @var SessionId */
 	private $id;
 
-	/** @var bool */
 	private $persist = false;
-
-	/** @var bool */
 	private $remember = false;
-
-	/** @var bool */
 	private $forceHTTPS = false;
 
 	/** @var array|null */
 	private $data = null;
 
-	/** @var bool */
 	private $forcePersist = false;
-
-	/** @var bool */
 	private $metaDirty = false;
-
-	/** @var bool */
 	private $dataDirty = false;
 
 	/** @var string Used to detect subarray modifications */
@@ -83,16 +70,12 @@ final class SessionBackend {
 	/** @var LoggerInterface */
 	private $logger;
 
-	/** @var HookRunner */
-	private $hookRunner;
-
 	/** @var int */
 	private $lifetime;
 
 	/** @var User */
 	private $user;
 
-	/** @var int */
 	private $curIndex = 0;
 
 	/** @var WebRequest[] Session requests */
@@ -104,34 +87,24 @@ final class SessionBackend {
 	/** @var array|null provider-specified metadata */
 	private $providerMetadata = null;
 
-	/** @var int */
 	private $expires = 0;
-
-	/** @var int */
 	private $loggedOut = 0;
-
-	/** @var int */
 	private $delaySave = 0;
 
-	/** @var bool */
 	private $usePhpSessionHandling = true;
-	/** @var bool */
 	private $checkPHPSessionRecursionGuard = false;
 
-	/** @var bool */
 	private $shutdown = false;
 
 	/**
-	 * @param SessionId $id
+	 * @param SessionId $id Session ID object
 	 * @param SessionInfo $info Session info to populate from
 	 * @param CachedBagOStuff $store Backend data store
 	 * @param LoggerInterface $logger
-	 * @param HookContainer $hookContainer
 	 * @param int $lifetime Session data lifetime in seconds
 	 */
 	public function __construct(
-		SessionId $id, SessionInfo $info, CachedBagOStuff $store, LoggerInterface $logger,
-		HookContainer $hookContainer, $lifetime
+		SessionId $id, SessionInfo $info, CachedBagOStuff $store, LoggerInterface $logger, $lifetime
 	) {
 		$phpSessionHandling = \RequestContext::getMain()->getConfig()->get( 'PHPSessionHandling' );
 		$this->usePhpSessionHandling = $phpSessionHandling !== 'disable';
@@ -152,7 +125,6 @@ final class SessionBackend {
 		$this->user = $info->getUserInfo() ? $info->getUserInfo()->getUser() : new User;
 		$this->store = $store;
 		$this->logger = $logger;
-		$this->hookRunner = new HookRunner( $hookContainer );
 		$this->lifetime = $lifetime;
 		$this->provider = $info->getProvider();
 		$this->persist = $info->wasPersisted();
@@ -206,7 +178,7 @@ final class SessionBackend {
 
 	/**
 	 * Deregister a Session
-	 * @internal For use by \MediaWiki\Session\Session::__destruct() only
+	 * @private For use by \MediaWiki\Session\Session::__destruct() only
 	 * @param int $index
 	 */
 	public function deregisterSession( $index ) {
@@ -219,7 +191,7 @@ final class SessionBackend {
 
 	/**
 	 * Shut down a session
-	 * @internal For use by \MediaWiki\Session\SessionManager::shutdown() only
+	 * @private For use by \MediaWiki\Session\SessionManager::shutdown() only
 	 */
 	public function shutdown() {
 		$this->save( true );
@@ -236,7 +208,7 @@ final class SessionBackend {
 
 	/**
 	 * Fetch the SessionId object
-	 * @internal For internal use by WebRequest
+	 * @private For internal use by WebRequest
 	 * @return SessionId
 	 */
 	public function getSessionId() {
@@ -271,7 +243,7 @@ final class SessionBackend {
 
 			if ( $restart ) {
 				session_id( (string)$this->id );
-				AtEase::quietCall( 'session_start' );
+				\MediaWiki\quietCall( 'session_start' );
 			}
 
 			$this->autosave();
@@ -279,8 +251,6 @@ final class SessionBackend {
 			// Delete the data for the old session ID now
 			$this->store->delete( $this->store->makeKey( 'MWSession', $oldId ) );
 		}
-
-		return $this->id;
 	}
 
 	/**
@@ -487,7 +457,7 @@ final class SessionBackend {
 
 	/**
 	 * Set the "logged out" timestamp
-	 * @param int|null $ts
+	 * @param int $ts
 	 */
 	public function setLoggedOutTimestamp( $ts = null ) {
 		$ts = (int)$ts;
@@ -505,7 +475,7 @@ final class SessionBackend {
 
 	/**
 	 * Fetch provider metadata
-	 * @note For use by SessionProvider subclasses only
+	 * @protected For use by SessionProvider subclasses only
 	 * @return array|null
 	 */
 	public function getProviderMetadata() {
@@ -514,7 +484,7 @@ final class SessionBackend {
 
 	/**
 	 * Set provider metadata
-	 * @note For use by SessionProvider subclasses only
+	 * @protected For use by SessionProvider subclasses only
 	 * @param array|null $metadata
 	 */
 	public function setProviderMetadata( $metadata ) {
@@ -539,7 +509,7 @@ final class SessionBackend {
 	 * Note the caller is responsible for calling $this->dirty() if anything in
 	 * the array is changed.
 	 *
-	 * @internal For use by \MediaWiki\Session\Session only.
+	 * @private For use by \MediaWiki\Session\Session only.
 	 * @return array
 	 */
 	public function &getData() {
@@ -571,7 +541,7 @@ final class SessionBackend {
 
 	/**
 	 * Mark data as dirty
-	 * @internal For use by \MediaWiki\Session\Session only.
+	 * @private For use by \MediaWiki\Session\Session only.
 	 */
 	public function dirty() {
 		$this->dataDirty = true;
@@ -642,7 +612,7 @@ final class SessionBackend {
 	 * Save the session
 	 *
 	 * Update both the backend data and the associated WebRequest(s) to
-	 * reflect the state of the SessionBackend. This might include
+	 * reflect the state of the the SessionBackend. This might include
 	 * persisting or unpersisting the session.
 	 *
 	 * @param bool $closing Whether the session is being closed
@@ -748,7 +718,7 @@ final class SessionBackend {
 			'persisted' => $this->persist,
 		];
 
-		$this->hookRunner->onSessionMetadata( $this, $metadata, $this->requests );
+		\Hooks::run( 'SessionMetadata', [ $this, &$metadata, $this->requests ] );
 
 		foreach ( $origMetadata as $k => $v ) {
 			if ( $metadata[$k] !== $v ) {
@@ -794,7 +764,7 @@ final class SessionBackend {
 						'session' => $this->id,
 				] );
 				session_id( (string)$this->id );
-				AtEase::quietCall( 'session_start' );
+				\MediaWiki\quietCall( 'session_start' );
 			}
 		}
 	}

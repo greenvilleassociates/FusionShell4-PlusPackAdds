@@ -1,32 +1,19 @@
 <?php
 /**
  * Definition of a mapping for the search index field.
- * @unstable for implementation, extensions should subclass the SearchIndexFieldDefinition.
  * @since 1.28
  */
 interface SearchIndexField {
-	/*
+	/**
 	 * Field types
 	 */
-	/**
-	 * TEXT fields are suitable for natural language and may be subject to
-	 * analysis such as stemming.
-	 *
-	 * Read more:
-	 * https://wikimediafoundation.org/2018/08/07/anatomy-search-token-affection/
-	 * https://wikimediafoundation.org/2018/09/13/anatomy-search-variation-under-nature/
-	 */
-	public const INDEX_TYPE_TEXT = 'text';
-	/**
-	 * KEYWORD fields are indexed without any processing, so are appropriate
-	 * for e.g. URLs.  The content will often consist of a single token.
-	 */
-	public const INDEX_TYPE_KEYWORD = 'keyword';
-	public const INDEX_TYPE_INTEGER = 'integer';
-	public const INDEX_TYPE_NUMBER = 'number';
-	public const INDEX_TYPE_DATETIME = 'datetime';
-	public const INDEX_TYPE_NESTED = 'nested';
-	public const INDEX_TYPE_BOOL = 'bool';
+	const INDEX_TYPE_TEXT = 0;
+	const INDEX_TYPE_KEYWORD = 1;
+	const INDEX_TYPE_INTEGER = 2;
+	const INDEX_TYPE_NUMBER = 3;
+	const INDEX_TYPE_DATETIME = 4;
+	const INDEX_TYPE_NESTED = 5;
+	const INDEX_TYPE_BOOL = 6;
 
 	/**
 	 * SHORT_TEXT is meant to be used with short text made of mostly ascii
@@ -34,7 +21,7 @@ interface SearchIndexField {
 	 * is used and aggressive splitting to increase recall.
 	 * E.g suited for mime/type
 	 */
-	public const INDEX_TYPE_SHORT_TEXT = 'short_text';
+	const INDEX_TYPE_SHORT_TEXT = 7;
 
 	/**
 	 * Generic field flags.
@@ -42,24 +29,24 @@ interface SearchIndexField {
 	/**
 	 * This field is case-insensitive.
 	 */
-	public const FLAG_CASEFOLD = 1;
+	const FLAG_CASEFOLD = 1;
 
 	/**
 	 * This field contains secondary information, which is
 	 * already present in other fields, but can be used for
 	 * scoring.
 	 */
-	public const FLAG_SCORING = 2;
+	const FLAG_SCORING = 2;
 
 	/**
 	 * This field does not need highlight handling.
 	 */
-	public const FLAG_NO_HIGHLIGHT = 4;
+	const FLAG_NO_HIGHLIGHT = 4;
 
 	/**
 	 * Do not index this field, just store it.
 	 */
-	public const FLAG_NO_INDEX = 8;
+	const FLAG_NO_INDEX = 8;
 
 	/**
 	 * Get mapping for specific search engine

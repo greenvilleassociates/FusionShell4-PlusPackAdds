@@ -22,12 +22,10 @@ use Wikimedia\Timestamp\TimestampException;
 
 /**
  * Pager for filtering by a range of dates.
- * @stable to extend
  * @ingroup Pager
  */
 abstract class RangeChronologicalPager extends ReverseChronologicalPager {
 
-	/** @var string[] */
 	protected $rangeConds = [];
 
 	/**
@@ -35,8 +33,6 @@ abstract class RangeChronologicalPager extends ReverseChronologicalPager {
 	 * We want the revisions between the two timestamps.
 	 * Also supports only having a start or end timestamp.
 	 * Assumes that the start timestamp comes before the end timestamp.
-	 *
-	 * @stable to override
 	 *
 	 * @param string $startStamp Timestamp of the beginning of the date range (or empty)
 	 * @param string $endStamp Timestamp of the end of the date range (or empty)
@@ -49,12 +45,14 @@ abstract class RangeChronologicalPager extends ReverseChronologicalPager {
 		try {
 			if ( $startStamp !== '' ) {
 				$startTimestamp = MWTimestamp::getInstance( $startStamp );
+				$startTimestamp->setTimezone( $this->getConfig()->get( 'Localtimezone' ) );
 				$startOffset = $this->mDb->timestamp( $startTimestamp->getTimestamp() );
 				$this->rangeConds[] = $this->mIndexField . '>=' . $this->mDb->addQuotes( $startOffset );
 			}
 
 			if ( $endStamp !== '' ) {
 				$endTimestamp = MWTimestamp::getInstance( $endStamp );
+				$endTimestamp->setTimezone( $this->getConfig()->get( 'Localtimezone' ) );
 				$endOffset = $this->mDb->timestamp( $endTimestamp->getTimestamp() );
 				$this->rangeConds[] = $this->mIndexField . '<=' . $this->mDb->addQuotes( $endOffset );
 
@@ -74,8 +72,6 @@ abstract class RangeChronologicalPager extends ReverseChronologicalPager {
 	/**
 	 * Takes ReverseChronologicalPager::getDateCond parameters and repurposes
 	 * them to work with timestamp-based getDateRangeCond.
-	 *
-	 * @stable to override
 	 *
 	 * @param int $year Year up to which we want revisions
 	 * @param int $month Month up to which we want revisions
@@ -97,18 +93,16 @@ abstract class RangeChronologicalPager extends ReverseChronologicalPager {
 	/**
 	 * Build variables to use by the database wrapper.
 	 *
-	 * @stable to override
-	 *
 	 * @param string $offset Index offset, inclusive
 	 * @param int $limit Exact query limit
-	 * @param bool $order IndexPager::QUERY_ASCENDING or IndexPager::QUERY_DESCENDING
+	 * @param bool $descending Query direction, false for ascending, true for descending
 	 * @return array
 	 */
-	protected function buildQueryInfo( $offset, $limit, $order ) {
+	protected function buildQueryInfo( $offset, $limit, $descending ) {
 		list( $tables, $fields, $conds, $fname, $options, $join_conds ) = parent::buildQueryInfo(
 			$offset,
 			$limit,
-			$order
+			$descending
 		);
 
 		if ( $this->rangeConds ) {

@@ -119,12 +119,10 @@ $dateFormats = [
 ];
 
 $fallback8bitEncoding = 'iso-8859-2';
-
 $separatorTransformTable = [
-	',' => "\u{00A0}", // T4749
+	',' => "\xc2\xa0", // T4749
 	'.' => ','
 ];
-$minimumGroupingDigits = 2;
 
 $linkTrail = '/^([a-zęóąśłżźćńĘÓĄŚŁŻŹĆŃ]+)(.*)$/sDu';
 

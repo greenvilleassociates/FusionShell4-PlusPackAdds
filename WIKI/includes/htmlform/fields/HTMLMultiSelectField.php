@@ -2,13 +2,9 @@
 
 /**
  * Multi-select field
- *
- * @stable to extend
  */
 class HTMLMultiSelectField extends HTMLFormField implements HTMLNestedFilterable {
 	/**
-	 * @stable to call
-	 *
 	 * @param array $params
 	 *   In adition to the usual HTMLFormField parameters, this can take the following fields:
 	 *   - dropdown: If given, the options will be displayed inside a dropdown with a text field that
@@ -26,7 +22,8 @@ class HTMLMultiSelectField extends HTMLFormField implements HTMLNestedFilterable
 			$this->mParams['disabled-options'] = [];
 		}
 
-		if ( isset( $params['dropdown'] ) ) {
+		// For backwards compatibility, also handle the old way with 'cssclass' => 'mw-chosen'
+		if ( isset( $params['dropdown'] ) || strpos( $this->mClass, 'mw-chosen' ) !== false ) {
 			$this->mClass .= ' mw-htmlform-dropdown';
 		}
 
@@ -35,10 +32,6 @@ class HTMLMultiSelectField extends HTMLFormField implements HTMLNestedFilterable
 		}
 	}
 
-	/**
-	 * @inheritDoc
-	 * @stable to override
-	 */
 	public function validate( $value, $alldata ) {
 		$p = parent::validate( $value, $alldata );
 
@@ -62,10 +55,6 @@ class HTMLMultiSelectField extends HTMLFormField implements HTMLNestedFilterable
 		}
 	}
 
-	/**
-	 * @inheritDoc
-	 * @stable to override
-	 */
 	public function getInputHTML( $value ) {
 		if ( isset( $this->mParams['dropdown'] ) ) {
 			$this->mParent->getOutput()->addModules( 'jquery.chosen' );
@@ -77,15 +66,6 @@ class HTMLMultiSelectField extends HTMLFormField implements HTMLNestedFilterable
 		return $html;
 	}
 
-	/**
-	 * @stable to override
-	 *
-	 * @param array $options
-	 * @param mixed $value
-	 *
-	 * @return string
-	 * @throws MWException
-	 */
 	public function formatOptions( $options, $value ) {
 		$html = '';
 
@@ -122,10 +102,10 @@ class HTMLMultiSelectField extends HTMLFormField implements HTMLNestedFilterable
 		if ( $this->mParent instanceof OOUIHTMLForm ) {
 			throw new MWException( 'HTMLMultiSelectField#getOneCheckbox() is not supported' );
 		} else {
-			$elementFunc = [ Html::class, $this->mOptionsLabelsNotFromMessage ? 'rawElement' : 'element' ];
+			$elementFunc = [ 'Html', $this->mOptionsLabelsNotFromMessage ? 'rawElement' : 'element' ];
 			$checkbox =
 				Xml::check( "{$this->mName}[]", $checked, $attribs ) .
-				"\u{00A0}" .
+				'&#160;' .
 				call_user_func( $elementFunc,
 					'label',
 					[ 'for' => $attribs['id'] ],
@@ -142,131 +122,74 @@ class HTMLMultiSelectField extends HTMLFormField implements HTMLNestedFilterable
 
 	/**
 	 * Get options and make them into arrays suitable for OOUI.
-	 * @stable to override
-	 * @throws MWException
+	 * @return array Options for inclusion in a select or whatever.
 	 */
 	public function getOptionsOOUI() {
-		// Sections make this difficult. See getInputOOUI().
-		throw new MWException( 'HTMLMultiSelectField#getOptionsOOUI() is not supported' );
+		$options = parent::getOptionsOOUI();
+		foreach ( $options as &$option ) {
+			$option['disabled'] = in_array( $option['data'], $this->mParams['disabled-options'], true );
+		}
+		return $options;
 	}
 
 	/**
 	 * Get the OOUI version of this field.
 	 *
-	 * Returns OOUI\CheckboxMultiselectInputWidget for fields that only have one section,
-	 * string otherwise.
-	 *
-	 * @stable to override
 	 * @since 1.28
 	 * @param string[] $value
-	 * @return string|OOUI\CheckboxMultiselectInputWidget
-	 * @suppress PhanParamSignatureMismatch
+	 * @return OOUI\CheckboxMultiselectInputWidget
 	 */
 	public function getInputOOUI( $value ) {
 		$this->mParent->getOutput()->addModules( 'oojs-ui-widgets' );
 
-		$hasSections = false;
-		$optionsOouiSections = [];
-		$options = $this->getOptions();
-		// If the options are supposed to be split into sections, each section becomes a separate
-		// CheckboxMultiselectInputWidget.
-		foreach ( $options as $label => $section ) {
-			if ( is_array( $section ) ) {
-				$optionsOouiSections[ $label ] = Xml::listDropDownOptionsOoui( $section );
-				unset( $options[$label] );
-				$hasSections = true;
-			}
-		}
-		// If anything remains in the array, they are sectionless options. Put them in a separate widget
-		// at the beginning.
-		if ( $options ) {
-			$optionsOouiSections = array_merge(
-				[ '' => Xml::listDropDownOptionsOoui( $options ) ],
-				$optionsOouiSections
-			);
-		}
-		'@phan-var array[][] $optionsOouiSections';
+		$attr = [];
+		$attr['id'] = $this->mID;
+		$attr['name'] = "{$this->mName}[]";
 
-		$out = [];
-		foreach ( $optionsOouiSections as $sectionLabel => $optionsOoui ) {
-			$attr = [];
-			$attr['name'] = "{$this->mName}[]";
+		$attr['value'] = $value;
+		$attr['options'] = $this->getOptionsOOUI();
 
-			$attr['value'] = $value;
-
-			$options = $optionsOoui;
-			foreach ( $options as &$option ) {
-				$option['disabled'] = in_array( $option['data'], $this->mParams['disabled-options'], true );
-			}
-			if ( $this->mOptionsLabelsNotFromMessage ) {
-				foreach ( $options as &$option ) {
-					$option['label'] = new OOUI\HtmlSnippet( $option['label'] );
-				}
-			}
-			unset( $option );
-			$attr['options'] = $options;
-
-			$attr += OOUI\Element::configFromHtmlAttributes(
-				$this->getAttributes( [ 'disabled', 'tabindex' ] )
-			);
-
-			if ( $this->mClass !== '' ) {
-				$attr['classes'] = [ $this->mClass ];
-			}
-
-			$widget = new OOUI\CheckboxMultiselectInputWidget( $attr );
-			if ( $sectionLabel ) {
-				$out[] = new OOUI\FieldsetLayout( [
-					'items' => [ $widget ],
-					'label' => new OOUI\HtmlSnippet( $sectionLabel ),
-				] );
-			} else {
-				$out[] = $widget;
+		if ( $this->mOptionsLabelsNotFromMessage ) {
+			foreach ( $attr['options'] as &$option ) {
+				$option['label'] = new OOUI\HtmlSnippet( $option['label'] );
 			}
 		}
 
-		if ( !$hasSections && $out ) {
-			// Directly return the only OOUI\CheckboxMultiselectInputWidget.
-			// This allows it to be made infusable and later tweaked by JS code.
-			return $out[ 0 ];
+		$attr += OOUI\Element::configFromHtmlAttributes(
+			$this->getAttributes( [ 'disabled', 'tabindex' ] )
+		);
+
+		if ( $this->mClass !== '' ) {
+			$attr['classes'] = [ $this->mClass ];
 		}
 
-		return implode( '', $out );
+		return new OOUI\CheckboxMultiselectInputWidget( $attr );
 	}
 
 	/**
-	 * @stable to override
 	 * @param WebRequest $request
 	 *
 	 * @return string|array
 	 */
 	public function loadDataFromRequest( $request ) {
-		$fromRequest = $request->getArray( $this->mName, [] );
-		// Fetch the value in either one of the two following case:
-		// - we have a valid submit attempt (form was just submitted)
-		// - we have a value (an URL manually built by the user, or GET form with no wpFormIdentifier)
-		if ( $this->isSubmitAttempt( $request ) || $fromRequest ) {
+		if ( $this->isSubmitAttempt( $request ) ) {
 			// Checkboxes are just not added to the request arrays if they're not checked,
 			// so it's perfectly possible for there not to be an entry at all
-			return $fromRequest;
+			return $request->getArray( $this->mName, [] );
 		} else {
 			// That's ok, the user has not yet submitted the form, so show the defaults
 			return $this->getDefault();
 		}
 	}
 
-	/**
-	 * @inheritDoc
-	 * @stable to override
-	 */
 	public function getDefault() {
-		return $this->mDefault ?? [];
+		if ( isset( $this->mDefault ) ) {
+			return $this->mDefault;
+		} else {
+			return [];
+		}
 	}
 
-	/**
-	 * @inheritDoc
-	 * @stable to override
-	 */
 	public function filterDataForSubmit( $data ) {
 		$data = HTMLFormField::forceToStringRecursive( $data );
 		$options = HTMLFormField::flattenOptions( $this->getOptions() );
@@ -279,10 +202,6 @@ class HTMLMultiSelectField extends HTMLFormField implements HTMLNestedFilterable
 		return $res;
 	}
 
-	/**
-	 * @inheritDoc
-	 * @stable to override
-	 */
 	protected function needsLabel() {
 		return false;
 	}

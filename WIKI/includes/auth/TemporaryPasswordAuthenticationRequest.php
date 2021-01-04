@@ -25,7 +25,6 @@ use MediaWiki\MediaWikiServices;
 
 /**
  * This represents the intention to set a temporary password for the user.
- * @stable to extend
  * @ingroup Auth
  * @since 1.27
  */
@@ -39,10 +38,6 @@ class TemporaryPasswordAuthenticationRequest extends AuthenticationRequest {
 	/** @var string Username or IP address of the caller */
 	public $caller;
 
-	/**
-	 * @inheritDoc
-	 * @stable to override
-	 */
 	public function getFieldInfo() {
 		return [
 			'mailpassword' => [
@@ -54,7 +49,6 @@ class TemporaryPasswordAuthenticationRequest extends AuthenticationRequest {
 	}
 
 	/**
-	 * @stable to call
 	 * @param string|null $password
 	 */
 	public function __construct( $password = null ) {
@@ -75,8 +69,11 @@ class TemporaryPasswordAuthenticationRequest extends AuthenticationRequest {
 		$minLength = $config->get( 'MinimalPasswordLength' );
 		$policy = $config->get( 'PasswordPolicy' );
 		foreach ( $policy['policies'] as $p ) {
-			foreach ( [ 'MinimalPasswordLength', 'MinimumPasswordLengthToLogin' ] as $check ) {
-				$minLength = max( $minLength, $p[$check]['value'] ?? $p[$check] ?? 0 );
+			if ( isset( $p['MinimalPasswordLength'] ) ) {
+				$minLength = max( $minLength, $p['MinimalPasswordLength'] );
+			}
+			if ( isset( $p['MinimalPasswordLengthToLogin'] ) ) {
+				$minLength = max( $minLength, $p['MinimalPasswordLengthToLogin'] );
 			}
 		}
 
@@ -94,10 +91,6 @@ class TemporaryPasswordAuthenticationRequest extends AuthenticationRequest {
 		return $request;
 	}
 
-	/**
-	 * @inheritDoc
-	 * @stable to override
-	 */
 	public function describeCredentials() {
 		return [
 			'provider' => wfMessage( 'authmanager-provider-temporarypassword' ),

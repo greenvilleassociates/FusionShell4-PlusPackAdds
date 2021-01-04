@@ -21,11 +21,6 @@
  * @ingroup SpecialPage
  */
 
-use MediaWiki\Block\DatabaseBlock;
-use MediaWiki\MediaWikiServices;
-use Wikimedia\IPUtils;
-use Wikimedia\Rdbms\IDatabase;
-
 /**
  * A special page that lists existing blocks
  *
@@ -36,20 +31,20 @@ class SpecialBlockList extends SpecialPage {
 
 	protected $options;
 
-	protected $blockType;
-
-	public function __construct() {
+	function __construct() {
 		parent::__construct( 'BlockList' );
 	}
 
 	/**
-	 * @param string|null $par Title fragment
+	 * Main execution point
+	 *
+	 * @param string $par Title fragment
 	 */
 	public function execute( $par ) {
 		$this->setHeaders();
 		$this->outputHeader();
-		$this->addHelpLink( 'Help:Blocking_users' );
 		$out = $this->getOutput();
+		$lang = $this->getLanguage();
 		$out->setPageTitle( $this->msg( 'ipblocklist' ) );
 		$out->addModuleStyles( [ 'mediawiki.special' ] );
 
@@ -58,7 +53,6 @@ class SpecialBlockList extends SpecialPage {
 		$this->target = trim( $request->getVal( 'wpTarget', $par ) );
 
 		$this->options = $request->getArray( 'wpOptions', [] );
-		$this->blockType = $request->getVal( 'blockType' );
 
 		$action = $request->getText( 'action' );
 
@@ -85,37 +79,27 @@ class SpecialBlockList extends SpecialPage {
 			'Options' => [
 				'type' => 'multiselect',
 				'options-messages' => [
-					'blocklist-tempblocks' => 'tempblocks',
-					'blocklist-indefblocks' => 'indefblocks',
 					'blocklist-userblocks' => 'userblocks',
+					'blocklist-tempblocks' => 'tempblocks',
 					'blocklist-addressblocks' => 'addressblocks',
 					'blocklist-rangeblocks' => 'rangeblocks',
 				],
 				'flatlist' => true,
 			],
-		];
-
-		$fields['BlockType'] = [
-			'type' => 'select',
-			'label-message' => 'blocklist-type',
-			'options' => [
-				$this->msg( 'blocklist-type-opt-all' )->escaped() => '',
-				$this->msg( 'blocklist-type-opt-sitewide' )->escaped() => 'sitewide',
-				$this->msg( 'blocklist-type-opt-partial' )->escaped() => 'partial',
+			'Limit' => [
+				'type' => 'limitselect',
+				'label-message' => 'table_pager_limit_label',
+				'options' => [
+					$lang->formatNum( 20 ) => 20,
+					$lang->formatNum( 50 ) => 50,
+					$lang->formatNum( 100 ) => 100,
+					$lang->formatNum( 250 ) => 250,
+					$lang->formatNum( 500 ) => 500,
+				],
+				'name' => 'limit',
+				'default' => $pager->getLimit(),
 			],
-			'name' => 'blockType',
-			'cssclass' => 'mw-field-block-type',
 		];
-
-		$fields['Limit'] = [
-			'type' => 'limitselect',
-			'label-message' => 'table_pager_limit_label',
-			'options' => $pager->getLimitSelectList(),
-			'name' => 'limit',
-			'default' => $pager->getLimit(),
-			'cssclass' => 'mw-field-limit mw-has-field-block-type',
-		];
-
 		$context = new DerivativeContext( $this->getContext() );
 		$context->setTitle( $this->getPageTitle() ); // Remove subpage
 		$form = HTMLForm::factory( 'ooui', $fields, $context );
@@ -124,6 +108,7 @@ class SpecialBlockList extends SpecialPage {
 			->setFormIdentifier( 'blocklist' )
 			->setWrapperLegendMsg( 'ipblocklist-legend' )
 			->setSubmitTextMsg( 'ipblocklist-submit' )
+			->setSubmitProgressive()
 			->prepareForm()
 			->displayForm( false );
 
@@ -136,38 +121,34 @@ class SpecialBlockList extends SpecialPage {
 	 */
 	protected function getBlockListPager() {
 		$conds = [];
-		$db = $this->getDB();
 		# Is the user allowed to see hidden blocks?
-		if ( !MediaWikiServices::getInstance()
-			->getPermissionManager()
-			->userHasRight( $this->getUser(), 'hideuser' )
-		) {
+		if ( !$this->getUser()->isAllowed( 'hideuser' ) ) {
 			$conds['ipb_deleted'] = 0;
 		}
 
 		if ( $this->target !== '' ) {
-			list( $target, $type ) = DatabaseBlock::parseTarget( $this->target );
+			list( $target, $type ) = Block::parseTarget( $this->target );
 
 			switch ( $type ) {
-				case DatabaseBlock::TYPE_ID:
-				case DatabaseBlock::TYPE_AUTO:
+				case Block::TYPE_ID:
+				case Block::TYPE_AUTO:
 					$conds['ipb_id'] = $target;
 					break;
 
-				case DatabaseBlock::TYPE_IP:
-				case DatabaseBlock::TYPE_RANGE:
-					list( $start, $end ) = IPUtils::parseRange( $target );
-					$conds[] = $db->makeList(
+				case Block::TYPE_IP:
+				case Block::TYPE_RANGE:
+					list( $start, $end ) = IP::parseRange( $target );
+					$conds[] = wfGetDB( DB_REPLICA )->makeList(
 						[
 							'ipb_address' => $target,
-							DatabaseBlock::getRangeCond( $start, $end )
+							Block::getRangeCond( $start, $end )
 						],
 						LIST_OR
 					);
 					$conds['ipb_auto'] = 0;
 					break;
 
-				case DatabaseBlock::TYPE_USER:
+				case Block::TYPE_USER:
 					$conds['ipb_address'] = $target->getName();
 					$conds['ipb_auto'] = 0;
 					break;
@@ -178,28 +159,14 @@ class SpecialBlockList extends SpecialPage {
 		if ( in_array( 'userblocks', $this->options ) ) {
 			$conds['ipb_user'] = 0;
 		}
+		if ( in_array( 'tempblocks', $this->options ) ) {
+			$conds['ipb_expiry'] = 'infinity';
+		}
 		if ( in_array( 'addressblocks', $this->options ) ) {
 			$conds[] = "ipb_user != 0 OR ipb_range_end > ipb_range_start";
 		}
 		if ( in_array( 'rangeblocks', $this->options ) ) {
 			$conds[] = "ipb_range_end = ipb_range_start";
-		}
-
-		$hideTemp = in_array( 'tempblocks', $this->options );
-		$hideIndef = in_array( 'indefblocks', $this->options );
-		if ( $hideTemp && $hideIndef ) {
-			// If both types are hidden, ensure query doesn't produce any results
-			$conds[] = '1=0';
-		} elseif ( $hideTemp ) {
-			$conds['ipb_expiry'] = $db->getInfinity();
-		} elseif ( $hideIndef ) {
-			$conds[] = "ipb_expiry != " . $db->addQuotes( $db->getInfinity() );
-		}
-
-		if ( $this->blockType === 'sitewide' ) {
-			$conds['ipb_sitewide'] = 1;
-		} elseif ( $this->blockType === 'partial' ) {
-			$conds['ipb_sitewide'] = 0;
 		}
 
 		return new BlockListPager( $this, $conds );
@@ -214,7 +181,7 @@ class SpecialBlockList extends SpecialPage {
 
 		# Check for other blocks, i.e. global/tor blocks
 		$otherBlockLink = [];
-		$this->getHookRunner()->onOtherBlockLogLink( $otherBlockLink, $this->target );
+		Hooks::run( 'OtherBlockLogLink', [ &$otherBlockLink, $this->target ] );
 
 		# Show additional header for the local block only when other blocks exists.
 		# Not necessary in a standard installation without such extensions enabled
@@ -254,14 +221,5 @@ class SpecialBlockList extends SpecialPage {
 
 	protected function getGroupName() {
 		return 'users';
-	}
-
-	/**
-	 * Return a IDatabase object for reading
-	 *
-	 * @return IDatabase
-	 */
-	protected function getDB() {
-		return wfGetDB( DB_REPLICA );
 	}
 }

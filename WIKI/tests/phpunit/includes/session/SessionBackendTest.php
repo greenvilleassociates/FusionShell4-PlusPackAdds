@@ -2,12 +2,8 @@
 
 namespace MediaWiki\Session;
 
-use Config;
-use MediaWiki\HookContainer\HookContainer;
-use MediaWiki\MediaWikiServices;
-use MediaWikiIntegrationTestCase;
+use MediaWikiTestCase;
 use User;
-use Wikimedia\AtEase\AtEase;
 use Wikimedia\TestingAccessWrapper;
 
 /**
@@ -15,36 +11,20 @@ use Wikimedia\TestingAccessWrapper;
  * @group Database
  * @covers MediaWiki\Session\SessionBackend
  */
-class SessionBackendTest extends MediaWikiIntegrationTestCase {
-	private const SESSIONID = 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
+class SessionBackendTest extends MediaWikiTestCase {
+	const SESSIONID = 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
 
-	/** @var SessionManager */
 	protected $manager;
-
-	/** @var Config */
 	protected $config;
-
-	/** @var SessionProvider */
 	protected $provider;
-
-	/** @var TestBagOStuff */
 	protected $store;
 
 	protected $onSessionMetadataCalled = false;
 
 	/**
-	 * @return HookContainer
-	 */
-	private function getHookContainer() {
-		// Need a real HookContainer to support modification of $wgHooks in the test
-		return MediaWikiServices::getInstance()->getHookContainer();
-	}
-
-	/**
 	 * Returns a non-persistent backend that thinks it has at least one session active
 	 * @param User|null $user
 	 * @param string $id
-	 * @return SessionBackend
 	 */
 	protected function getBackend( User $user = null, $id = null ) {
 		if ( !$this->config ) {
@@ -65,15 +45,12 @@ class SessionBackendTest extends MediaWikiIntegrationTestCase {
 			] );
 		}
 
-		$hookContainer = $this->getHookContainer();
-
 		if ( !$this->provider ) {
 			$this->provider = new \DummySessionProvider();
 		}
 		$this->provider->setLogger( $logger );
 		$this->provider->setConfig( $this->config );
 		$this->provider->setManager( $this->manager );
-		$this->provider->setHookContainer( $hookContainer );
 
 		$info = new SessionInfo( SessionInfo::MIN_PRIORITY, [
 			'provider' => $this->provider,
@@ -84,7 +61,7 @@ class SessionBackendTest extends MediaWikiIntegrationTestCase {
 		] );
 		$id = new SessionId( $info->getId() );
 
-		$backend = new SessionBackend( $id, $info, $this->store, $logger, $hookContainer, 10 );
+		$backend = new SessionBackend( $id, $info, $this->store, $logger, 10 );
 		$priv = TestingAccessWrapper::newFromObject( $backend );
 		$priv->persist = false;
 		$priv->requests = [ 100 => new \FauxRequest() ];
@@ -112,9 +89,8 @@ class SessionBackendTest extends MediaWikiIntegrationTestCase {
 		] );
 		$id = new SessionId( $info->getId() );
 		$logger = new \Psr\Log\NullLogger();
-		$hookContainer = $this->getHookContainer();
 		try {
-			new SessionBackend( $id, $info, $this->store, $logger, $hookContainer, 10 );
+			new SessionBackend( $id, $info, $this->store, $logger, 10 );
 			$this->fail( 'Expected exception not thrown' );
 		} catch ( \InvalidArgumentException $ex ) {
 			$this->assertSame(
@@ -130,7 +106,7 @@ class SessionBackendTest extends MediaWikiIntegrationTestCase {
 		] );
 		$id = new SessionId( $info->getId() );
 		try {
-			new SessionBackend( $id, $info, $this->store, $logger, $hookContainer, 10 );
+			new SessionBackend( $id, $info, $this->store, $logger, 10 );
 			$this->fail( 'Expected exception not thrown' );
 		} catch ( \InvalidArgumentException $ex ) {
 			$this->assertSame( 'Cannot create session without a provider', $ex->getMessage() );
@@ -145,7 +121,7 @@ class SessionBackendTest extends MediaWikiIntegrationTestCase {
 		] );
 		$id = new SessionId( '!' . $info->getId() );
 		try {
-			new SessionBackend( $id, $info, $this->store, $logger, $hookContainer, 10 );
+			new SessionBackend( $id, $info, $this->store, $logger, 10 );
 			$this->fail( 'Expected exception not thrown' );
 		} catch ( \InvalidArgumentException $ex ) {
 			$this->assertSame(
@@ -162,18 +138,18 @@ class SessionBackendTest extends MediaWikiIntegrationTestCase {
 			'idIsSafe' => true,
 		] );
 		$id = new SessionId( $info->getId() );
-		$backend = new SessionBackend( $id, $info, $this->store, $logger, $hookContainer, 10 );
+		$backend = new SessionBackend( $id, $info, $this->store, $logger, 10 );
 		$this->assertSame( self::SESSIONID, $backend->getId() );
 		$this->assertSame( $id, $backend->getSessionId() );
 		$this->assertSame( $this->provider, $backend->getProvider() );
-		$this->assertInstanceOf( User::class, $backend->getUser() );
+		$this->assertInstanceOf( 'User', $backend->getUser() );
 		$this->assertSame( 'UTSysop', $backend->getUser()->getName() );
 		$this->assertSame( $info->wasPersisted(), $backend->isPersistent() );
 		$this->assertSame( $info->wasRemembered(), $backend->shouldRememberUser() );
 		$this->assertSame( $info->forceHTTPS(), $backend->shouldForceHTTPS() );
 
 		$expire = time() + 100;
-		$this->store->setSessionMeta( self::SESSIONID, [ 'expires' => $expire ] );
+		$this->store->setSessionMeta( self::SESSIONID, [ 'expires' => $expire ], 2 );
 
 		$info = new SessionInfo( SessionInfo::MIN_PRIORITY, [
 			'provider' => $this->provider,
@@ -184,11 +160,11 @@ class SessionBackendTest extends MediaWikiIntegrationTestCase {
 			'idIsSafe' => true,
 		] );
 		$id = new SessionId( $info->getId() );
-		$backend = new SessionBackend( $id, $info, $this->store, $logger, $hookContainer, 10 );
+		$backend = new SessionBackend( $id, $info, $this->store, $logger, 10 );
 		$this->assertSame( self::SESSIONID, $backend->getId() );
 		$this->assertSame( $id, $backend->getSessionId() );
 		$this->assertSame( $this->provider, $backend->getProvider() );
-		$this->assertInstanceOf( User::class, $backend->getUser() );
+		$this->assertInstanceOf( 'User', $backend->getUser() );
 		$this->assertTrue( $backend->getUser()->isAnon() );
 		$this->assertSame( $info->wasPersisted(), $backend->isPersistent() );
 		$this->assertSame( $info->wasRemembered(), $backend->shouldRememberUser() );
@@ -211,7 +187,7 @@ class SessionBackendTest extends MediaWikiIntegrationTestCase {
 
 		$this->assertInstanceOf( Session::class, $session1 );
 		$this->assertInstanceOf( Session::class, $session2 );
-		$this->assertCount( 2, $priv->requests );
+		$this->assertSame( 2, count( $priv->requests ) );
 
 		$index = TestingAccessWrapper::newFromObject( $session1 )->index;
 
@@ -221,7 +197,7 @@ class SessionBackendTest extends MediaWikiIntegrationTestCase {
 		$this->assertSame( 'Example', $backend->suggestLoginUsername( $index ) );
 
 		$session1 = null;
-		$this->assertCount( 1, $priv->requests );
+		$this->assertSame( 1, count( $priv->requests ) );
 		$this->assertArrayHasKey( $backend->getId(), $manager->allSessionBackends );
 		$this->assertSame( $backend, $manager->allSessionBackends[$backend->getId()] );
 		try {
@@ -238,7 +214,7 @@ class SessionBackendTest extends MediaWikiIntegrationTestCase {
 		}
 
 		$session2 = null;
-		$this->assertSame( [], $priv->requests );
+		$this->assertSame( 0, count( $priv->requests ) );
 		$this->assertArrayNotHasKey( $backend->getId(), $manager->allSessionBackends );
 		$this->assertArrayHasKey( $backend->getId(), $manager->allSessionIds );
 	}
@@ -282,7 +258,7 @@ class SessionBackendTest extends MediaWikiIntegrationTestCase {
 	public function testResetId() {
 		$id = session_id();
 
-		$builder = $this->getMockBuilder( \DummySessionProvider::class )
+		$builder = $this->getMockBuilder( 'DummySessionProvider' )
 			->setMethods( [ 'persistsSessionId', 'sessionIdWasReset' ] );
 
 		$this->provider = $builder->getMock();
@@ -309,7 +285,7 @@ class SessionBackendTest extends MediaWikiIntegrationTestCase {
 		$backend->resetId();
 		$this->assertNotEquals( self::SESSIONID, $backend->getId() );
 		$this->assertSame( $backend->getId(), $sessionId->getId() );
-		$this->assertIsArray( $this->store->getSession( $backend->getId() ) );
+		$this->assertInternalType( 'array', $this->store->getSession( $backend->getId() ) );
 		$this->assertFalse( $this->store->getSession( self::SESSIONID ) );
 		$this->assertSame( $id, session_id() );
 		$this->assertArrayNotHasKey( self::SESSIONID, $manager->allSessionBackends );
@@ -318,7 +294,7 @@ class SessionBackendTest extends MediaWikiIntegrationTestCase {
 	}
 
 	public function testPersist() {
-		$this->provider = $this->getMockBuilder( \DummySessionProvider::class )
+		$this->provider = $this->getMockBuilder( 'DummySessionProvider' )
 			->setMethods( [ 'persistSession' ] )->getMock();
 		$this->provider->expects( $this->once() )->method( 'persistSession' );
 		$backend = $this->getBackend();
@@ -338,7 +314,7 @@ class SessionBackendTest extends MediaWikiIntegrationTestCase {
 	}
 
 	public function testUnpersist() {
-		$this->provider = $this->getMockBuilder( \DummySessionProvider::class )
+		$this->provider = $this->getMockBuilder( 'DummySessionProvider' )
 			->setMethods( [ 'unpersistSession' ] )->getMock();
 		$this->provider->expects( $this->once() )->method( 'unpersistSession' );
 		$backend = $this->getBackend();
@@ -391,7 +367,7 @@ class SessionBackendTest extends MediaWikiIntegrationTestCase {
 	public function testSetUser() {
 		$user = static::getTestSysop()->getUser();
 
-		$this->provider = $this->getMockBuilder( \DummySessionProvider::class )
+		$this->provider = $this->getMockBuilder( 'DummySessionProvider' )
 			->setMethods( [ 'canChangeUser' ] )->getMock();
 		$this->provider->expects( $this->any() )->method( 'canChangeUser' )
 			->will( $this->returnValue( false ) );
@@ -522,7 +498,7 @@ class SessionBackendTest extends MediaWikiIntegrationTestCase {
 			->setMethods( [ 'onSessionMetadata' ] )->getMock();
 		$neverHook->expects( $this->never() )->method( 'onSessionMetadata' );
 
-		$builder = $this->getMockBuilder( \DummySessionProvider::class )
+		$builder = $this->getMockBuilder( 'DummySessionProvider' )
 			->setMethods( [ 'persistSession', 'unpersistSession' ] );
 
 		$neverProvider = $builder->getMock();
@@ -586,10 +562,10 @@ class SessionBackendTest extends MediaWikiIntegrationTestCase {
 		$backend->save();
 		$this->assertTrue( $this->onSessionMetadataCalled );
 		$blob = $this->store->getSession( self::SESSIONID );
-		$this->assertIsArray( $blob );
+		$this->assertInternalType( 'array', $blob );
 		$this->assertArrayHasKey( 'metadata', $blob );
 		$metadata = $blob['metadata'];
-		$this->assertIsArray( $metadata );
+		$this->assertInternalType( 'array', $metadata );
 		$this->assertArrayHasKey( '???', $metadata );
 		$this->assertSame( '!!!', $metadata['???'] );
 		$this->assertFalse( $this->store->getSessionFromBackend( self::SESSIONID ),
@@ -638,10 +614,10 @@ class SessionBackendTest extends MediaWikiIntegrationTestCase {
 		$backend->save();
 		$this->assertTrue( $this->onSessionMetadataCalled );
 		$blob = $this->store->getSession( self::SESSIONID );
-		$this->assertIsArray( $blob );
+		$this->assertInternalType( 'array', $blob );
 		$this->assertArrayHasKey( 'metadata', $blob );
 		$metadata = $blob['metadata'];
-		$this->assertIsArray( $metadata );
+		$this->assertInternalType( 'array', $metadata );
 		$this->assertArrayHasKey( '???', $metadata );
 		$this->assertSame( '!!!', $metadata['???'] );
 		$this->assertNotSame( false, $this->store->getSessionFromBackend( self::SESSIONID ),
@@ -664,10 +640,10 @@ class SessionBackendTest extends MediaWikiIntegrationTestCase {
 		$backend->save();
 		$this->assertTrue( $this->onSessionMetadataCalled );
 		$blob = $this->store->getSession( self::SESSIONID );
-		$this->assertIsArray( $blob );
+		$this->assertInternalType( 'array', $blob );
 		$this->assertArrayHasKey( 'metadata', $blob );
 		$metadata = $blob['metadata'];
-		$this->assertIsArray( $metadata );
+		$this->assertInternalType( 'array', $metadata );
 		$this->assertArrayHasKey( '???', $metadata );
 		$this->assertSame( '!!!', $metadata['???'] );
 		$this->assertNotSame( false, $this->store->getSessionFromBackend( self::SESSIONID ),
@@ -689,10 +665,10 @@ class SessionBackendTest extends MediaWikiIntegrationTestCase {
 		$backend->save();
 		$this->assertTrue( $this->onSessionMetadataCalled );
 		$blob = $this->store->getSession( self::SESSIONID );
-		$this->assertIsArray( $blob );
+		$this->assertInternalType( 'array', $blob );
 		$this->assertArrayHasKey( 'metadata', $blob );
 		$metadata = $blob['metadata'];
-		$this->assertIsArray( $metadata );
+		$this->assertInternalType( 'array', $metadata );
 		$this->assertArrayHasKey( '???', $metadata );
 		$this->assertSame( '!!!', $metadata['???'] );
 		$this->assertNotSame( false, $this->store->getSessionFromBackend( self::SESSIONID ),
@@ -714,10 +690,10 @@ class SessionBackendTest extends MediaWikiIntegrationTestCase {
 		$backend->save();
 		$this->assertTrue( $this->onSessionMetadataCalled );
 		$blob = $this->store->getSession( self::SESSIONID );
-		$this->assertIsArray( $blob );
+		$this->assertInternalType( 'array', $blob );
 		$this->assertArrayHasKey( 'metadata', $blob );
 		$metadata = $blob['metadata'];
-		$this->assertIsArray( $metadata );
+		$this->assertInternalType( 'array', $metadata );
 		$this->assertArrayHasKey( '???', $metadata );
 		$this->assertSame( '!!!', $metadata['???'] );
 		$this->assertNotSame( false, $this->store->getSessionFromBackend( self::SESSIONID ),
@@ -770,7 +746,7 @@ class SessionBackendTest extends MediaWikiIntegrationTestCase {
 		$testData = [ 'foo' => 'foo!', 'bar', [ 'baz', null ] ];
 
 		// Not persistent
-		$this->provider = $this->getMockBuilder( \DummySessionProvider::class )
+		$this->provider = $this->getMockBuilder( 'DummySessionProvider' )
 			->setMethods( [ 'persistSession' ] )->getMock();
 		$this->provider->expects( $this->never() )->method( 'persistSession' );
 		$this->onSessionMetadataCalled = false;
@@ -787,16 +763,16 @@ class SessionBackendTest extends MediaWikiIntegrationTestCase {
 		$backend->renew();
 		$this->assertTrue( $this->onSessionMetadataCalled );
 		$blob = $this->store->getSession( self::SESSIONID );
-		$this->assertIsArray( $blob );
+		$this->assertInternalType( 'array', $blob );
 		$this->assertArrayHasKey( 'metadata', $blob );
 		$metadata = $blob['metadata'];
-		$this->assertIsArray( $metadata );
+		$this->assertInternalType( 'array', $metadata );
 		$this->assertArrayHasKey( '???', $metadata );
 		$this->assertSame( '!!!', $metadata['???'] );
 		$this->assertNotEquals( 0, $wrap->expires );
 
 		// Persistent
-		$this->provider = $this->getMockBuilder( \DummySessionProvider::class )
+		$this->provider = $this->getMockBuilder( 'DummySessionProvider' )
 			->setMethods( [ 'persistSession' ] )->getMock();
 		$this->provider->expects( $this->atLeastOnce() )->method( 'persistSession' );
 		$this->onSessionMetadataCalled = false;
@@ -814,16 +790,16 @@ class SessionBackendTest extends MediaWikiIntegrationTestCase {
 		$backend->renew();
 		$this->assertTrue( $this->onSessionMetadataCalled );
 		$blob = $this->store->getSession( self::SESSIONID );
-		$this->assertIsArray( $blob );
+		$this->assertInternalType( 'array', $blob );
 		$this->assertArrayHasKey( 'metadata', $blob );
 		$metadata = $blob['metadata'];
-		$this->assertIsArray( $metadata );
+		$this->assertInternalType( 'array', $metadata );
 		$this->assertArrayHasKey( '???', $metadata );
 		$this->assertSame( '!!!', $metadata['???'] );
 		$this->assertNotEquals( 0, $wrap->expires );
 
 		// Not persistent, not expiring
-		$this->provider = $this->getMockBuilder( \DummySessionProvider::class )
+		$this->provider = $this->getMockBuilder( 'DummySessionProvider' )
 			->setMethods( [ 'persistSession' ] )->getMock();
 		$this->provider->expects( $this->never() )->method( 'persistSession' );
 		$this->onSessionMetadataCalled = false;
@@ -915,7 +891,7 @@ class SessionBackendTest extends MediaWikiIntegrationTestCase {
 		$manager->globalSessionRequest = $request;
 
 		session_id( self::SESSIONID );
-		AtEase::quietCall( 'session_start' );
+		\MediaWiki\quietCall( 'session_start' );
 		$_SESSION['foo'] = __METHOD__;
 		$backend->resetId();
 		$this->assertNotEquals( self::SESSIONID, $backend->getId() );
@@ -953,10 +929,9 @@ class SessionBackendTest extends MediaWikiIntegrationTestCase {
 		$manager->globalSessionRequest = $request;
 
 		session_id( self::SESSIONID . 'x' );
-		AtEase::quietCall( 'session_start' );
+		\MediaWiki\quietCall( 'session_start' );
 		$backend->unpersist();
 		$this->assertSame( self::SESSIONID . 'x', session_id() );
-		session_write_close();
 
 		session_id( self::SESSIONID );
 		$wrap->persist = true;
@@ -965,7 +940,7 @@ class SessionBackendTest extends MediaWikiIntegrationTestCase {
 	}
 
 	public function testGetAllowedUserRights() {
-		$this->provider = $this->getMockBuilder( \DummySessionProvider::class )
+		$this->provider = $this->getMockBuilder( 'DummySessionProvider' )
 			->setMethods( [ 'getAllowedUserRights' ] )
 			->getMock();
 		$this->provider->expects( $this->any() )->method( 'getAllowedUserRights' )

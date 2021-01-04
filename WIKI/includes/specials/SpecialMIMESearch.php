@@ -27,10 +27,10 @@
  * 'img_major_mime' and 'img_minor_mime' fields in the image table.
  * @ingroup SpecialPage
  */
-class SpecialMIMESearch extends QueryPage {
+class MIMEsearchPage extends QueryPage {
 	protected $major, $minor, $mime;
 
-	public function __construct( $name = 'MIMEsearch' ) {
+	function __construct( $name = 'MIMEsearch' ) {
 		parent::__construct( $name );
 	}
 
@@ -38,15 +38,15 @@ class SpecialMIMESearch extends QueryPage {
 		return false;
 	}
 
-	public function isSyndicated() {
+	function isSyndicated() {
 		return false;
 	}
 
-	public function isCacheable() {
+	function isCacheable() {
 		return false;
 	}
 
-	protected function linkParameters() {
+	function linkParameters() {
 		return [ 'mime' => "{$this->major}/{$this->minor}" ];
 	}
 
@@ -56,9 +56,8 @@ class SpecialMIMESearch extends QueryPage {
 			// Allow wildcard searching
 			$minorType['img_minor_mime'] = $this->minor;
 		}
-		$imgQuery = LocalFile::getQueryInfo();
 		$qi = [
-			'tables' => $imgQuery['tables'],
+			'tables' => [ 'image' ],
 			'fields' => [
 				'namespace' => NS_FILE,
 				'title' => 'img_name',
@@ -68,7 +67,7 @@ class SpecialMIMESearch extends QueryPage {
 				'img_size',
 				'img_width',
 				'img_height',
-				'img_user_text' => $imgQuery['fields']['img_user_text'],
+				'img_user_text',
 				'img_timestamp'
 			],
 			'conds' => [
@@ -90,7 +89,6 @@ class SpecialMIMESearch extends QueryPage {
 					MEDIATYPE_3D,
 				],
 			] + $minorType,
-			'join_conds' => $imgQuery['joins'],
 		];
 
 		return $qi;
@@ -105,15 +103,14 @@ class SpecialMIMESearch extends QueryPage {
 	 * is what we ideally want, so everything works out fine anyhow.
 	 * @return array
 	 */
-	protected function getOrderFields() {
+	function getOrderFields() {
 		return [];
 	}
 
 	/**
 	 * Generate and output the form
-	 * @return string
 	 */
-	protected function getPageHeader() {
+	function getPageHeader() {
 		$formDescriptor = [
 			'mime' => [
 				'type' => 'combobox',
@@ -131,7 +128,6 @@ class SpecialMIMESearch extends QueryPage {
 			->setMethod( 'get' )
 			->prepareForm()
 			->displayForm( false );
-		return '';
 	}
 
 	protected function getSuggestionsForTypes() {
@@ -162,8 +158,7 @@ class SpecialMIMESearch extends QueryPage {
 	}
 
 	public function execute( $par ) {
-		$this->addHelpLink( 'Help:Managing_files' );
-		$this->mime = $par ?: $this->getRequest()->getText( 'mime' );
+		$this->mime = $par ? $par : $this->getRequest()->getText( 'mime' );
 		$this->mime = trim( $this->mime );
 		list( $this->major, $this->minor ) = File::splitMime( $this->mime );
 
@@ -184,14 +179,15 @@ class SpecialMIMESearch extends QueryPage {
 	 * @param object $result Result row
 	 * @return string
 	 */
-	public function formatResult( $skin, $result ) {
+	function formatResult( $skin, $result ) {
+		global $wgContLang;
+
 		$linkRenderer = $this->getLinkRenderer();
 		$nt = Title::makeTitle( $result->namespace, $result->title );
-
-		$text = $this->getLanguageConverter()->convertHtml( $nt->getText() );
+		$text = $wgContLang->convert( $nt->getText() );
 		$plink = $linkRenderer->makeLink(
 			Title::newFromText( $nt->getPrefixedText() ),
-			new HtmlArmor( $text )
+			$text
 		);
 
 		$download = Linker::makeMediaLinkObj( $nt, $this->msg( 'download' )->escaped() );

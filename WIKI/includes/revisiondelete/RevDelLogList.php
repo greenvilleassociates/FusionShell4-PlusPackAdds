@@ -19,7 +19,6 @@
  * @ingroup RevisionDelete
  */
 
-use MediaWiki\Revision\RevisionRecord;
 use Wikimedia\Rdbms\IDatabase;
 
 /**
@@ -64,26 +63,27 @@ class RevDelLogList extends RevDelList {
 	public function doQuery( $db ) {
 		$ids = array_map( 'intval', $this->ids );
 
-		$commentQuery = CommentStore::getStore()->getJoin( 'log_comment' );
-		$actorQuery = ActorMigration::newMigration()->getJoin( 'log_user' );
+		$commentQuery = CommentStore::newKey( 'log_comment' )->getJoin();
 
 		return $db->select(
-			[ 'logging' ] + $commentQuery['tables'] + $actorQuery['tables'],
+			[ 'logging' ] + $commentQuery['tables'],
 			[
 				'log_id',
 				'log_type',
 				'log_action',
 				'log_timestamp',
+				'log_user',
+				'log_user_text',
 				'log_namespace',
 				'log_title',
 				'log_page',
 				'log_params',
 				'log_deleted'
-			] + $commentQuery['fields'] + $actorQuery['fields'],
+			] + $commentQuery['fields'],
 			[ 'log_id' => $ids ],
 			__METHOD__,
 			[ 'ORDER BY' => 'log_id DESC' ],
-			$commentQuery['joins'] + $actorQuery['joins']
+			$commentQuery['joins']
 		);
 	}
 
@@ -92,7 +92,7 @@ class RevDelLogList extends RevDelList {
 	}
 
 	public function getSuppressBit() {
-		return RevisionRecord::DELETED_RESTRICTED;
+		return Revision::DELETED_RESTRICTED;
 	}
 
 	public function getLogAction() {

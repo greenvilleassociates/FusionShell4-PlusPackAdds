@@ -137,16 +137,14 @@ class SpecialRandomInCategory extends FormSpecialPage {
 
 		$title = $this->getRandomTitle();
 
-		if ( $title === null ) {
+		if ( is_null( $title ) ) {
 			$msg = $this->msg( 'randomincategory-nopages',
 				$this->category->getText() );
 
 			return Status::newFatal( $msg );
 		}
 
-		$query = $this->getRequest()->getValues();
-		unset( $query['title'] );
-		$this->getOutput()->redirect( $title->getFullURL( $query ) );
+		$this->getOutput()->redirect( $title->getFullURL() );
 	}
 
 	/**
@@ -168,21 +166,21 @@ class SpecialRandomInCategory extends FormSpecialPage {
 			$up = false;
 		}
 
-		$row = $this->selectRandomPageFromDB( $rand, $offset, $up, __METHOD__ );
+		$row = $this->selectRandomPageFromDB( $rand, $offset, $up );
 
 		// Try again without the timestamp offset (wrap around the end)
 		if ( !$row ) {
-			$row = $this->selectRandomPageFromDB( false, $offset, $up, __METHOD__ );
+			$row = $this->selectRandomPageFromDB( false, $offset, $up );
 		}
 
 		// Maybe the category is really small and offset too high
 		if ( !$row ) {
-			$row = $this->selectRandomPageFromDB( $rand, 0, $up, __METHOD__ );
+			$row = $this->selectRandomPageFromDB( $rand, 0, $up );
 		}
 
 		// Just get the first entry.
 		if ( !$row ) {
-			$row = $this->selectRandomPageFromDB( false, 0, true, __METHOD__ );
+			$row = $this->selectRandomPageFromDB( false, 0, true );
 		}
 
 		if ( $row ) {
@@ -221,7 +219,7 @@ class SpecialRandomInCategory extends FormSpecialPage {
 				'OFFSET' => $offset
 			],
 			'join_conds' => [
-				'page' => [ 'JOIN', 'cl_from = page_id' ]
+				'page' => [ 'INNER JOIN', 'cl_from = page_id' ]
 			]
 		];
 
@@ -293,7 +291,7 @@ class SpecialRandomInCategory extends FormSpecialPage {
 	 * @param int $offset A small offset to make the result seem more "random"
 	 * @param bool $up Get the result above the random value
 	 * @param string $fname The name of the calling method
-	 * @return stdClass|false Info for the title selected.
+	 * @return array Info for the title selected.
 	 */
 	private function selectRandomPageFromDB( $rand, $offset, $up, $fname = __METHOD__ ) {
 		$dbr = wfGetDB( DB_REPLICA );

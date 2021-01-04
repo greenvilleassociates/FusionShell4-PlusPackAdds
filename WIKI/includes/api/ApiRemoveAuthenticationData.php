@@ -20,9 +20,7 @@
  * @file
  */
 
-use MediaWiki\Auth\AuthenticationRequest;
 use MediaWiki\Auth\AuthManager;
-use MediaWiki\MediaWikiServices;
 
 /**
  * Remove authentication data from AuthManager
@@ -51,11 +49,10 @@ class ApiRemoveAuthenticationData extends ApiBase {
 		}
 
 		$params = $this->extractRequestParams();
-		$manager = MediaWikiServices::getInstance()->getAuthManager();
+		$manager = AuthManager::singleton();
 
 		// Check security-sensitive operation status
-		ApiAuthManagerHelper::newForModule( $this, $manager )
-			->securitySensitiveOperation( $this->operation );
+		ApiAuthManagerHelper::newForModule( $this )->securitySensitiveOperation( $this->operation );
 
 		// Fetch the request. No need to load from the request, so don't use
 		// ApiAuthManagerHelper's method.
@@ -64,7 +61,7 @@ class ApiRemoveAuthenticationData extends ApiBase {
 			: [];
 		$reqs = array_filter(
 			$manager->getAuthenticationRequests( $this->authAction, $this->getUser() ),
-			function ( AuthenticationRequest $req ) use ( $params, $blacklist ) {
+			function ( $req ) use ( $params, $blacklist ) {
 				return $req->getUniqueId() === $params['request'] &&
 					!isset( $blacklist[get_class( $req )] );
 			}
@@ -76,7 +73,7 @@ class ApiRemoveAuthenticationData extends ApiBase {
 
 		// Perform the removal
 		$status = $manager->allowsAuthenticationDataChange( $req, true );
-		$this->getHookRunner()->onChangeAuthenticationDataAudit( $req, $status );
+		Hooks::run( 'ChangeAuthenticationDataAudit', [ $req, $status ] );
 		if ( !$status->isGood() ) {
 			$this->dieStatus( $status );
 		}

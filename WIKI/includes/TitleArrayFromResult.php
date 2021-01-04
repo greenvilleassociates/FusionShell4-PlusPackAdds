@@ -24,34 +24,24 @@
  * @file
  */
 
-use Wikimedia\Rdbms\IResultWrapper;
+use Wikimedia\Rdbms\ResultWrapper;
 
-/**
- * @newable
- * @note marked as newable in 1.35 for lack of a better alternative,
- *       but should probably become part of the TitleFactory service.
- */
 class TitleArrayFromResult extends TitleArray implements Countable {
-	/** @var IResultWrapper */
+	/** @var ResultWrapper */
 	public $res;
 
 	public $key;
 
 	public $current;
 
-	/**
-	 * @stable to call
-	 *
-	 * @param IResultWrapper $res
-	 */
-	public function __construct( $res ) {
+	function __construct( $res ) {
 		$this->res = $res;
 		$this->key = 0;
 		$this->setCurrent( $this->res->current() );
 	}
 
 	/**
-	 * @param bool|stdClass $row
+	 * @param bool|ResultWrapper $row
 	 * @return void
 	 */
 	protected function setCurrent( $row ) {
@@ -69,21 +59,21 @@ class TitleArrayFromResult extends TitleArray implements Countable {
 		return $this->res->numRows();
 	}
 
-	public function current() {
+	function current() {
 		return $this->current;
 	}
 
-	public function key() {
+	function key() {
 		return $this->key;
 	}
 
-	public function next() {
+	function next() {
 		$row = $this->res->next();
 		$this->setCurrent( $row );
 		$this->key++;
 	}
 
-	public function rewind() {
+	function rewind() {
 		$this->res->rewind();
 		$this->key = 0;
 		$this->setCurrent( $this->res->current() );
@@ -92,7 +82,7 @@ class TitleArrayFromResult extends TitleArray implements Countable {
 	/**
 	 * @return bool
 	 */
-	public function valid() {
+	function valid() {
 		return $this->current !== false;
 	}
 }

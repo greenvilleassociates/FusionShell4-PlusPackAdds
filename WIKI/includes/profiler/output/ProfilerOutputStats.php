@@ -1,5 +1,8 @@
 <?php
 /**
+ * ProfilerOutput class that flushes profiling data to the profiling
+ * context's stats buffer.
+ *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
  * the Free Software Foundation; either version 2 of the License, or
@@ -16,11 +19,13 @@
  * http://www.gnu.org/copyleft/gpl.html
  *
  * @file
+ * @ingroup Profiler
  */
 use MediaWiki\MediaWikiServices;
 
 /**
- * Flush profiling data to StatsD.
+ * ProfilerOutput class that flushes profiling data to the profiling
+ * context's stats buffer.
  *
  * @ingroup Profiler
  * @since 1.25
@@ -30,10 +35,10 @@ class ProfilerOutputStats extends ProfilerOutput {
 	/**
 	 * Flush profiling data to the current profiling context's stats buffer.
 	 *
-	 * @param array[] $stats
+	 * @param array $stats
 	 */
 	public function log( array $stats ) {
-		$prefix = $this->params['prefix'] ?? '';
+		$prefix = isset( $this->params['prefix'] ) ? $this->params['prefix'] : '';
 		$contextStats = MediaWikiServices::getInstance()->getStatsdDataFactory();
 
 		foreach ( $stats as $stat ) {

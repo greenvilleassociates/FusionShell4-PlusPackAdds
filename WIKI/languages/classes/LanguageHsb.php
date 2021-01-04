@@ -35,7 +35,7 @@ class LanguageHsb extends Language {
 	 * @param string $case
 	 * @return string
 	 */
-	public function convertGrammar( $word, $case ) {
+	function convertGrammar( $word, $case ) {
 		global $wgGrammarForms;
 		if ( isset( $wgGrammarForms['hsb'][$case][$word] ) ) {
 			return $wgGrammarForms['hsb'][$case][$word];

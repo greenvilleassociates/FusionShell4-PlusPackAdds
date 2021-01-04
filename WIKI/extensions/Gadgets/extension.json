@@ -6,9 +6,9 @@
 	],
 	"url": "https://www.mediawiki.org/wiki/Extension:Gadgets",
 	"descriptionmsg": "gadgets-desc",
-	"license-name": "GPL-2.0-or-later",
+	"license-name": "GPL-2.0+",
 	"requires": {
-		"MediaWiki": ">= 1.32.0"
+		"MediaWiki": ">= 1.28.0"
 	},
 	"type": "other",
 	"namespaces": [
@@ -54,25 +54,21 @@
 	},
 	"MessagesDirs": {
 		"Gadgets": [
-			"i18n",
-			"i18n/api"
+			"i18n"
 		]
 	},
 	"ExtensionMessagesFiles": {
 		"GadgetsAlias": "Gadgets.alias.php",
 		"GadgetsNamespaces": "Gadgets.namespaces.php"
 	},
-	"RawHtmlMessages": [
-		"gadgets-definition"
-	],
 	"AutoloadClasses": {
-		"ApiQueryGadgetCategories": "includes/api/ApiQueryGadgetCategories.php",
-		"ApiQueryGadgets": "includes/api/ApiQueryGadgets.php",
-		"Gadget": "includes/Gadget.php",
-		"GadgetHooks": "includes/GadgetHooks.php",
+		"ApiQueryGadgetCategories": "api/ApiQueryGadgetCategories.php",
+		"ApiQueryGadgets": "api/ApiQueryGadgets.php",
+		"Gadget": "Gadgets_body.php",
+		"GadgetHooks": "GadgetHooks.php",
 		"GadgetResourceLoaderModule": "includes/GadgetResourceLoaderModule.php",
-		"SpecialGadgets": "includes/SpecialGadgets.php",
-		"SpecialGadgetUsage": "includes/SpecialGadgetUsage.php",
+		"SpecialGadgets": "SpecialGadgets.php",
+		"SpecialGadgetUsage": "SpecialGadgetUsage.php",
 		"GadgetRepo": "includes/GadgetRepo.php",
 		"GadgetDefinitionNamespaceRepo": "includes/GadgetDefinitionNamespaceRepo.php",
 		"MediaWikiGadgetsDefinitionRepo": "includes/MediaWikiGadgetsDefinitionRepo.php",
@@ -83,24 +79,40 @@
 		"GadgetDefinitionDeletionUpdate": "includes/content/GadgetDefinitionDeletionUpdate.php"
 	},
 	"Hooks": {
-		"BeforePageDisplay": "GadgetHooks::beforePageDisplay",
-		"CodeEditorGetPageLanguage": "GadgetHooks::onCodeEditorGetPageLanguage",
-		"ContentHandlerDefaultModelFor": "GadgetHooks::onContentHandlerDefaultModelFor",
-		"EditFilterMergedContent": "GadgetHooks::onEditFilterMergedContent",
-		"UserGetDefaultOptions": "GadgetHooks::userGetDefaultOptions",
-		"GetPreferences": "GadgetHooks::getPreferences",
-		"ResourceLoaderRegisterModules": "GadgetHooks::registerModules",
-		"wgQueryPages": "GadgetHooks::onwgQueryPages",
-		"DeleteUnknownPreferences": "GadgetHooks::onDeleteUnknownPreferences"
+		"PageContentSaveComplete": [
+			"GadgetHooks::onPageContentSaveComplete"
+		],
+		"BeforePageDisplay": [
+			"GadgetHooks::beforePageDisplay"
+		],
+		"CodeEditorGetPageLanguage": [
+			"GadgetHooks::onCodeEditorGetPageLanguage"
+		],
+		"ContentHandlerDefaultModelFor": [
+			"GadgetHooks::onContentHandlerDefaultModelFor"
+		],
+		"EditFilterMergedContent": [
+			"GadgetHooks::onEditFilterMergedContent"
+		],
+		"PageContentInsertComplete": [
+			"GadgetHooks::onPageContentInsertComplete"
+		],
+		"UserGetDefaultOptions": [
+			"GadgetHooks::userGetDefaultOptions"
+		],
+		"GetPreferences": [
+			"GadgetHooks::getPreferences"
+		],
+		"ResourceLoaderRegisterModules": [
+			"GadgetHooks::registerModules"
+		],
+		"wgQueryPages": [
+			"GadgetHooks::onwgQueryPages"
+		]
 	},
-	"callback": "GadgetHooks::onRegistration",
 	"config": {
-		"GadgetsRepoClass": {
-			"value": "MediaWikiGadgetsDefinitionRepo"
-		},
-		"SpecialGadgetUsageActiveUsers": {
-			"value": true
-		}
+		"GadgetsRepoClass": "MediaWikiGadgetsDefinitionRepo",
+		"SpecialGadgetUsageActiveUsers": true
 	},
-	"manifest_version": 2
+	"manifest_version": 1
 }

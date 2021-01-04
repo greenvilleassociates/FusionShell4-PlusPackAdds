@@ -1,7 +1,4 @@
 <?php
-
-use MediaWiki\MediaWikiServices;
-
 /**
  * Test class for ImageListPagerTest class.
  *
@@ -11,15 +8,15 @@ use MediaWiki\MediaWikiServices;
  *
  * @group Database
  */
-class ImageListPagerTest extends MediaWikiIntegrationTestCase {
+
+class ImageListPagerTest extends MediaWikiTestCase {
 	/**
+	 * @expectedException MWException
+	 * @expectedExceptionMessage invalid_field
 	 * @covers ImageListPager::formatValue
 	 */
 	public function testFormatValuesThrowException() {
-		$page = new ImageListPager( RequestContext::getMain(), null, '', false, false,
-			MediaWikiServices::getInstance()->getLinkRenderer() );
-		$this->expectException( MWException::class );
-		$this->expectExceptionMessage( "invalid_field" );
+		$page = new ImageListPager( RequestContext::getMain() );
 		$page->formatValue( 'invalid_field', 'invalid_value' );
 	}
 }

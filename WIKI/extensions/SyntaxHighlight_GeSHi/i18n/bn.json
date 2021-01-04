@@ -1,11 +1,10 @@
 {
 	"@metadata": {
 		"authors": [
+			"Zaheen",
 			"Aftabuzzaman",
 			"Jim Carter",
-			"Sayma Jahan",
-			"Zaheen",
-			"আফতাবুজ্জামান"
+			"Sayma Jahan"
 		]
 	},
 	"syntaxhighlight-desc": "[http://pygments.org/ Pygments - পাইথন সিনট্যাক্স হাইলাইটার] ব্যবহার করে <code>&lt;syntaxhighlight&gt;</code> সিনট্যাক্স আলোকপাতের ক্ষমতা দেয়",

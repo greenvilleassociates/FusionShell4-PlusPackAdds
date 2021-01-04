@@ -8,22 +8,22 @@ namespace OOUI;
  */
 class DropdownInputWidget extends InputWidget {
 	/**
-	 * HTML `<option>` tags for this widget.
-	 * @var Tag[]
+	 * HTML `<option>` tags for this widget, as Tags.
+	 * @var array
 	 */
 	protected $options = [];
 
 	/**
 	 * @param array $config Configuration options
-	 *      - array[] $config['options'] Array of menu options in the format
-	 * described in DropdownInputWidget::setOptions().
+	 * @param array[] $config['options'] Array of menu options in the format
+	 *   `[ 'data' => …, 'label' => … ]`
 	 */
 	public function __construct( array $config = [] ) {
 		// Parent constructor
 		parent::__construct( $config );
 
 		// Initialization
-		$this->setOptions( $config['options'] ?? [] );
+		$this->setOptions( isset( $config['options'] ) ? $config['options'] : [] );
 		$this->addClasses( [ 'oo-ui-dropdownInputWidget', 'oo-ui-dropdownInputWidget-php' ] );
 		$this->input->addClasses( [ 'oo-ui-indicator-down' ] );
 	}
@@ -47,23 +47,8 @@ class DropdownInputWidget extends InputWidget {
 	/**
 	 * Set the options available for this input.
 	 *
-	 * Each element of the `$options` array should be an array with one of the
-	 * following structures:
-	 *
-	 *   -# For normal menu items (`label` and `disabled` are optional; if no
-	 *      label is provided, the 'data' value will be also used as the label):
-	 * ~~~~~
-	 * [ 'data' => 'optionvalue', 'label' => 'Option Label', 'disabled' => true ]
-	 * ~~~~~
-	 *   -# For option groups ('disabled' is optional):
-	 * ~~~~~
-	 * [ 'optgroup' => 'Group Label', 'disabled' => true ]
-	 * ~~~~~
-	 *
-	 * An `optgroup` will contain all subsequent options up until the next
-	 * `optgroup` or the end of the array.
-	 *
-	 * @param array[] $options Array of options in format described above.
+	 * @param array[] $options Array of menu options in the format
+	 *   `[ 'data' => …, 'label' => … ]`
 	 * @return $this
 	 */
 	public function setOptions( $options ) {
@@ -79,7 +64,7 @@ class DropdownInputWidget extends InputWidget {
 				$optValue = $this->cleanUpValue( $opt['data'] );
 				$option = ( new Tag( 'option' ) )
 					->setAttributes( [ 'value' => $optValue ] )
-					->appendContent( $opt['label'] ?? $optValue );
+					->appendContent( isset( $opt['label'] ) ? $opt['label'] : $optValue );
 
 				if ( $value === $optValue ) {
 					$isValueAvailable = true;
@@ -90,11 +75,6 @@ class DropdownInputWidget extends InputWidget {
 					->setAttributes( [ 'label' => $opt['optgroup'] ] );
 				$this->input->appendContent( $option );
 				$container = $option;
-			}
-			// Add disabled attribute if required (both the <option> and
-			// <optgroup> elements can be disabled).
-			if ( isset( $opt[ 'disabled' ] ) && $opt[ 'disabled' ] ) {
-				$option->setAttributes( [ 'disabled' => 'disabled' ] );
 			}
 
 			$this->options[] = $option;
@@ -115,23 +95,18 @@ class DropdownInputWidget extends InputWidget {
 	}
 
 	public function getConfig( &$config ) {
-		$optionsConfig = [];
+		$o = [];
 		foreach ( $this->options as $option ) {
 			if ( $option->getTag() !== 'optgroup' ) {
 				$label = $option->content[0];
 				$data = $option->getAttribute( 'value' );
-				$optionConfig = [ 'data' => $data, 'label' => $label ];
+				$o[] = [ 'data' => $data, 'label' => $label ];
 			} else {
 				$optgroup = $option->getAttribute( 'label' );
-				$optionConfig = [ 'optgroup' => $optgroup ];
+				$o[] = [ 'optgroup' => $optgroup ];
 			}
-			if ( $option->getAttribute( 'disabled' ) ) {
-				$optionConfig[ 'disabled' ] = true;
-			}
-			$optionsConfig[] = $optionConfig;
 		}
-		$config['options'] = $optionsConfig;
-		$config['$overlay'] = true;
+		$config['options'] = $o;
 		return parent::getConfig( $config );
 	}
 }

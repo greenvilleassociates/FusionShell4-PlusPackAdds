@@ -23,7 +23,6 @@
 /**
  * Exceptions for skin-related failures
  *
- * @newable
  * @since 1.24
  */
 class SkinException extends MWException {

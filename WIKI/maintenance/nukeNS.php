@@ -57,7 +57,9 @@ class NukeNS extends Maintenance {
 		$dbw = $this->getDB( DB_MASTER );
 		$this->beginTransaction( $dbw, __METHOD__ );
 
-		$res = $dbw->select( 'page', 'page_title', [ 'page_namespace' => $ns ], __METHOD__ );
+		$tbl_pag = $dbw->tableName( 'page' );
+		$tbl_rev = $dbw->tableName( 'revision' );
+		$res = $dbw->query( "SELECT page_title FROM $tbl_pag WHERE page_namespace = $ns" );
 
 		$n_deleted = 0;
 
@@ -67,12 +69,12 @@ class NukeNS extends Maintenance {
 			$id = $title->getArticleID();
 
 			// Get corresponding revisions
-			$revs = $dbw->selectFieldValues(
-				'revision',
-				'rev_id',
-				[ 'rev_page' => $id ],
-				__METHOD__
-			);
+			$res2 = $dbw->query( "SELECT rev_id FROM $tbl_rev WHERE rev_page = $id" );
+			$revs = [];
+
+			foreach ( $res2 as $row2 ) {
+				$revs[] = $row2->rev_id;
+			}
 			$count = count( $revs );
 
 			// skip anything that looks modified (i.e. multiple revs)
@@ -83,12 +85,10 @@ class NukeNS extends Maintenance {
 				// as much as I hate to cut & paste this, it's a little different, and
 				// I already have the id & revs
 				if ( $delete ) {
-					$dbw->delete( 'page', [ 'page_id' => $id ], __METHOD__ );
+					$dbw->query( "DELETE FROM $tbl_pag WHERE page_id = $id" );
 					$this->commitTransaction( $dbw, __METHOD__ );
 					// Delete revisions as appropriate
-					/** @var NukePage $child */
-					$child = $this->runChild( NukePage::class, 'nukePage.php' );
-					'@phan-var NukePage $child';
+					$child = $this->runChild( 'NukePage', 'nukePage.php' );
 					$child->deleteRevisions( $revs );
 					$this->purgeRedundantText( true );
 					$n_deleted++;
@@ -102,7 +102,7 @@ class NukeNS extends Maintenance {
 		if ( $n_deleted > 0 ) {
 			# update statistics - better to decrement existing count, or just count
 			# the page table?
-			$pages = $dbw->selectField( 'site_stats', 'ss_total_pages', [], __METHOD__ );
+			$pages = $dbw->selectField( 'site_stats', 'ss_total_pages' );
 			$pages -= $n_deleted;
 			$dbw->update(
 				'site_stats',
@@ -118,5 +118,5 @@ class NukeNS extends Maintenance {
 	}
 }
 
-$maintClass = NukeNS::class;
+$maintClass = "NukeNS";
 require_once RUN_MAINTENANCE_IF_MAIN;

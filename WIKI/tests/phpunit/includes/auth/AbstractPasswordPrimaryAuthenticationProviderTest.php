@@ -7,9 +7,9 @@ use Wikimedia\TestingAccessWrapper;
 
 /**
  * @group AuthManager
- * @covers \MediaWiki\Auth\AbstractPasswordPrimaryAuthenticationProvider
+ * @covers MediaWiki\Auth\AbstractPasswordPrimaryAuthenticationProvider
  */
-class AbstractPasswordPrimaryAuthenticationProviderTest extends \MediaWikiIntegrationTestCase {
+class AbstractPasswordPrimaryAuthenticationProviderTest extends \MediaWikiTestCase {
 	public function testConstructor() {
 		$provider = $this->getMockForAbstractClass(
 			AbstractPasswordPrimaryAuthenticationProvider::class
@@ -33,7 +33,7 @@ class AbstractPasswordPrimaryAuthenticationProviderTest extends \MediaWikiIntegr
 		$providerPriv = TestingAccessWrapper::newFromObject( $provider );
 
 		$obj = $providerPriv->getPasswordFactory();
-		$this->assertInstanceOf( \PasswordFactory::class, $obj );
+		$this->assertInstanceOf( 'PasswordFactory', $obj );
 		$this->assertSame( $obj, $providerPriv->getPasswordFactory() );
 	}
 
@@ -46,10 +46,10 @@ class AbstractPasswordPrimaryAuthenticationProviderTest extends \MediaWikiIntegr
 		$providerPriv = TestingAccessWrapper::newFromObject( $provider );
 
 		$obj = $providerPriv->getPassword( null );
-		$this->assertInstanceOf( \Password::class, $obj );
+		$this->assertInstanceOf( 'Password', $obj );
 
 		$obj = $providerPriv->getPassword( 'invalid' );
-		$this->assertInstanceOf( \Password::class, $obj );
+		$this->assertInstanceOf( 'Password', $obj );
 	}
 
 	public function testGetNewPasswordExpiry() {
@@ -62,7 +62,6 @@ class AbstractPasswordPrimaryAuthenticationProviderTest extends \MediaWikiIntegr
 			MediaWikiServices::getInstance()->getMainConfig()
 		] ) );
 		$provider->setLogger( new \Psr\Log\NullLogger() );
-		$provider->setHookContainer( MediaWikiServices::getInstance()->getHookContainer() );
 		$providerPriv = TestingAccessWrapper::newFromObject( $provider );
 
 		$this->mergeMwGlobalArrayValue( 'wgHooks', [ 'ResetPasswordExpiration' => [] ] );
@@ -71,9 +70,10 @@ class AbstractPasswordPrimaryAuthenticationProviderTest extends \MediaWikiIntegr
 		$this->assertNull( $providerPriv->getNewPasswordExpiry( 'UTSysop' ) );
 
 		$config->set( 'PasswordExpirationDays', 5 );
-		$this->assertEqualsWithDelta(
+		$this->assertEquals(
 			time() + 5 * 86400,
 			wfTimestamp( TS_UNIX, $providerPriv->getNewPasswordExpiry( 'UTSysop' ) ),
+			'',
 			2 /* Fuzz */
 		);
 
@@ -83,12 +83,12 @@ class AbstractPasswordPrimaryAuthenticationProviderTest extends \MediaWikiIntegr
 				$expires = '30001231235959';
 			} ]
 		] );
-		$this->assertSame( '30001231235959', $providerPriv->getNewPasswordExpiry( 'UTSysop' ) );
+		$this->assertEquals( '30001231235959', $providerPriv->getNewPasswordExpiry( 'UTSysop' ) );
 	}
 
 	public function testCheckPasswordValidity() {
 		$uppCalled = 0;
-		$uppStatus = \Status::newGood( [] );
+		$uppStatus = \Status::newGood();
 		$this->setMwGlobals( [
 			'wgPasswordPolicy' => [
 				'policies' => [
@@ -123,13 +123,9 @@ class AbstractPasswordPrimaryAuthenticationProviderTest extends \MediaWikiIntegr
 			'InvalidPasswordReset' => true,
 		] );
 
-		$services = MediaWikiServices::getInstance();
 		$manager = new AuthManager(
 			new \FauxRequest(),
-			$services->getMainConfig(),
-			$services->getObjectFactory(),
-			$services->getPermissionManager(),
-			$services->getHookContainer()
+			MediaWikiServices::getInstance()->getMainConfig()
 		);
 
 		$provider = $this->getMockForAbstractClass(
@@ -138,7 +134,6 @@ class AbstractPasswordPrimaryAuthenticationProviderTest extends \MediaWikiIntegr
 		$provider->setConfig( $config );
 		$provider->setLogger( new \Psr\Log\NullLogger() );
 		$provider->setManager( $manager );
-		$provider->setHookContainer( $services->getHookContainer() );
 		$providerPriv = TestingAccessWrapper::newFromObject( $provider );
 
 		$manager->removeAuthenticationSessionData( null );
@@ -147,7 +142,7 @@ class AbstractPasswordPrimaryAuthenticationProviderTest extends \MediaWikiIntegr
 		$this->assertNull( $manager->getAuthenticationSessionData( 'reset-pass' ) );
 
 		$manager->removeAuthenticationSessionData( null );
-		$status = \Status::newGood( [ 'suggestChangeOnLogin' => true ] );
+		$status = \Status::newGood();
 		$status->error( 'testing' );
 		$providerPriv->setPasswordResetFlag( 'Foo', $status );
 		$ret = $manager->getAuthenticationSessionData( 'reset-pass' );

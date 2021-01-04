@@ -263,16 +263,6 @@ $specialPageAliases['sk'] = [
 	'Nuke' => [ 'Zničenie' ],
 ];
 
-/** Serbian (Cyrillic script) (српски (ћирилица)‎) */
-$specialPageAliases['sr-ec'] = [
-	'Nuke' => [ 'МасовноБрисање', 'Масовно_брисање' ],
-];
-
-/** Serbian (Latin script) (srpski (latinica)‎) */
-$specialPageAliases['sr-el'] = [
-	'Nuke' => [ 'MasovnoBrisanje', 'Masovno_brisanje' ],
-];
-
 /** Swedish (svenska) */
 $specialPageAliases['sv'] = [
 	'Nuke' => [ 'Massradering' ],
@@ -291,11 +281,6 @@ $specialPageAliases['tr'] = [
 /** Ukrainian (українська) */
 $specialPageAliases['uk'] = [
 	'Nuke' => [ 'Масове_вилучення', 'Множественное_удаление' ],
-];
-
-/** Urdu (اردو) */
-$specialPageAliases['ur'] = [
-	'Nuke' => [ 'اجتماعی_حذف_شدگی' ],
 ];
 
 /** Vietnamese (Tiếng Việt) */

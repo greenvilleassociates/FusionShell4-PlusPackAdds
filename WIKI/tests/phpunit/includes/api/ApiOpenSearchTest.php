@@ -1,9 +1,6 @@
 <?php
 
-/**
- * @covers ApiOpenSearch
- */
-class ApiOpenSearchTest extends MediaWikiIntegrationTestCase {
+class ApiOpenSearchTest extends MediaWikiTestCase {
 	public function testGetAllowedParams() {
 		$config = $this->replaceSearchEngineConfig();
 		$config->expects( $this->any() )
@@ -36,7 +33,7 @@ class ApiOpenSearchTest extends MediaWikiIntegrationTestCase {
 	}
 
 	private function replaceSearchEngineConfig() {
-		$config = $this->getMockBuilder( SearchEngineConfig::class )
+		$config = $this->getMockBuilder( 'SearchEngineConfig' )
 			->disableOriginalConstructor()
 			->getMock();
 		$this->setService( 'SearchEngineConfig', $config );
@@ -45,10 +42,10 @@ class ApiOpenSearchTest extends MediaWikiIntegrationTestCase {
 	}
 
 	private function replaceSearchEngine() {
-		$engine = $this->getMockBuilder( SearchEngine::class )
+		$engine = $this->getMockBuilder( 'SearchEngine' )
 			->disableOriginalConstructor()
 			->getMock();
-		$engineFactory = $this->getMockBuilder( SearchEngineFactory::class )
+		$engineFactory = $this->getMockBuilder( 'SearchEngineFactory' )
 			->disableOriginalConstructor()
 			->getMock();
 		$engineFactory->expects( $this->any() )

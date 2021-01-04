@@ -10,11 +10,11 @@
  *
  * @author Jeroen De Dauw < jeroendedauw@gmail.com >
  */
-class MediaWikiVersionFetcherTest extends \MediaWikiIntegrationTestCase {
+class MediaWikiVersionFetcherTest extends PHPUnit_Framework_TestCase {
 
 	public function testReturnsResult() {
 		$versionFetcher = new MediaWikiVersionFetcher();
-		$this->assertSame( MW_VERSION, $versionFetcher->fetchVersion() );
+		$this->assertInternalType( 'string', $versionFetcher->fetchVersion() );
 	}
 
 }

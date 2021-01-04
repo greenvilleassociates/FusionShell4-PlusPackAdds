@@ -1,11 +1,8 @@
 <?php
 
-use MediaWiki\HookContainer\HookContainer;
 use MediaWiki\Linker\LinkRenderer;
 use MediaWiki\Linker\LinkRendererFactory;
 use MediaWiki\MediaWikiServices;
-use MediaWiki\SpecialPage\SpecialPageFactory;
-use PHPUnit\Framework\MockObject\MockObject;
 
 /**
  * @covers MediaWiki\Linker\LinkRendererFactory
@@ -22,30 +19,10 @@ class LinkRendererFactoryTest extends MediaWikiLangTestCase {
 	 */
 	private $linkCache;
 
-	/**
-	 * @var NamespaceInfo
-	 */
-	private $nsInfo;
-
-	/**
-	 * @var SpecialPageFactory
-	 */
-	private $specialPageFactory;
-
-	/**
-	 * @var HookContainer
-	 */
-	private $hookContainer;
-
-	protected function setUp() : void {
+	public function setUp() {
 		parent::setUp();
-
-		$services = MediaWikiServices::getInstance();
-		$this->titleFormatter = $services->getTitleFormatter();
-		$this->linkCache = $services->getLinkCache();
-		$this->nsInfo = $services->getNamespaceInfo();
-		$this->specialPageFactory = $services->getSpecialPageFactory();
-		$this->hookContainer = $services->getHookContainer();
+		$this->titleFormatter = MediaWikiServices::getInstance()->getTitleFormatter();
+		$this->linkCache = MediaWikiServices::getInstance()->getLinkCache();
 	}
 
 	public static function provideCreateFromLegacyOptions() {
@@ -77,10 +54,7 @@ class LinkRendererFactoryTest extends MediaWikiLangTestCase {
 	 * @dataProvider provideCreateFromLegacyOptions
 	 */
 	public function testCreateFromLegacyOptions( $options, $func, $val ) {
-		$factory = new LinkRendererFactory(
-				$this->titleFormatter, $this->linkCache, $this->nsInfo,
-				$this->specialPageFactory, $this->hookContainer
-			);
+		$factory = new LinkRendererFactory( $this->titleFormatter, $this->linkCache );
 		$linkRenderer = $factory->createFromLegacyOptions(
 			$options
 		);
@@ -89,24 +63,18 @@ class LinkRendererFactoryTest extends MediaWikiLangTestCase {
 	}
 
 	public function testCreate() {
-		$factory = new LinkRendererFactory(
-			$this->titleFormatter, $this->linkCache, $this->nsInfo,
-			$this->specialPageFactory, $this->hookContainer
-		);
+		$factory = new LinkRendererFactory( $this->titleFormatter, $this->linkCache );
 		$this->assertInstanceOf( LinkRenderer::class, $factory->create() );
 	}
 
 	public function testCreateForUser() {
-		/** @var MockObject|User $user */
+		/** @var PHPUnit_Framework_MockObject_MockObject|User $user */
 		$user = $this->getMockBuilder( User::class )
-			->onlyMethods( [ 'getStubThreshold' ] )->getMock();
+			->setMethods( [ 'getStubThreshold' ] )->getMock();
 		$user->expects( $this->once() )
 			->method( 'getStubThreshold' )
 			->willReturn( 15 );
-		$factory = new LinkRendererFactory(
-			$this->titleFormatter, $this->linkCache, $this->nsInfo,
-			$this->specialPageFactory, $this->hookContainer
-		);
+		$factory = new LinkRendererFactory( $this->titleFormatter, $this->linkCache );
 		$linkRenderer = $factory->createForUser( $user );
 		$this->assertInstanceOf( LinkRenderer::class, $linkRenderer );
 		$this->assertEquals( 15, $linkRenderer->getStubThreshold() );

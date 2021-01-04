@@ -1,74 +1,56 @@
-@import 'mediawiki.mixins.less';
-@import 'mediawiki.ui/variables.less';
-@import 'mw.rcfilters.variables.less';
+@import 'mediawiki.mixins';
 
 .mw-rcfilters-ui-itemMenuOptionWidget {
+	min-height: 3.5em;
 	padding: 0 0.5em;
 	.box-sizing( border-box );
 
-	&:not( :last-child ):not( .mw-rcfilters-ui-itemMenuOptionWidget-identifier-talk ) {
-		border-bottom: 1px solid @colorGray14;
+	&:not( :last-child ) {
+		border-bottom: 1px solid #eaecf0; // Base80 AAA
 	}
 
 	&-view-namespaces {
-		border-top: 4px solid @colorGray12;
-	}
+		border-top: 5px solid #c8ccd1;
 
-	// Don't show border for first namespace & hide for every 'talk' option in second selector
-	&-view-default + &-view-namespaces,
-	&-view-namespaces&.mw-rcfilters-ui-itemMenuOptionWidget-identifier-subject + &-view-namespaces.mw-rcfilters-ui-itemMenuOptionWidget-identifier-talk {
-		border-top: 0;
+		&:first-child,
+		&.mw-rcfilters-ui-itemMenuOptionWidget-identifier-subject + &.mw-rcfilters-ui-itemMenuOptionWidget-identifier-talk {
+			border-top: 0;
+		}
 	}
 
 	&:hover {
-		background-color: @colorGray15;
+		background-color: #f8f9fa;
 	}
 
 	.mw-rcfilters-ui-table {
-		padding-top: 6 / @font-size-system-ui / @font-size-vector;
-		padding-bottom: 6 / @font-size-system-ui / @font-size-vector;
+		padding-top: 0.5em;
 	}
 
 	&.oo-ui-optionWidget-selected {
-		background-color: @background-color-primary;
+		background-color: #eaf3ff; // Accent90 AAA
 	}
 
 	&-label {
 		&-title {
 			font-weight: bold;
 			font-size: 1.15em;
-			color: @colorGray2;
+			color: #222;
 		}
-
 		&-desc {
-			color: @colorGray5;
+			color: #54595d;
 			white-space: normal;
 		}
 	}
 
 	&-itemCheckbox {
-		.oo-ui-fieldLayout-body > .oo-ui-fieldLayout-header {
-			padding-left: 12 / @font-size-system-ui / @font-size-vector;
-		}
-
 		.oo-ui-fieldLayout.oo-ui-fieldLayout-align-inline {
 			// Override margin-top and -bottom rules from FieldLayout
 			margin: 0 !important; /* stylelint-disable-line declaration-no-important */
-
-			.oo-ui-fieldLayout-body > .oo-ui-fieldLayout-field {
-				vertical-align: middle;
-			}
 		}
 
 		.oo-ui-checkboxInputWidget {
 			// Workaround for IE11 rendering issues. T162098
 			display: block;
-		}
-
-		label {
-			// Workaround for Chrome browser bug (T199932)
-			// Override padding rule from FieldLayout
-			padding-left: 0 !important; /* stylelint-disable-line declaration-no-important */
 		}
 	}
 
@@ -79,7 +61,7 @@
 	&-excludeLabel {
 		width: 5em;
 		padding-left: 1em;
-		color: @colorGray5;
+		color: #54595d; // Base20 AAA
 	}
 
 	&-highlightButton {

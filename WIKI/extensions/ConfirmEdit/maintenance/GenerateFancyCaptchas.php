@@ -44,18 +44,15 @@ class GenerateFancyCaptchas extends Maintenance {
 		$this->addOption( "font-size", "The font size ", false, true );
 		$this->addOption( "blacklist", "A blacklist of words that should not be used", false, true );
 		$this->addOption( "fill", "Fill the captcha container to N files", true, true );
-		$this->addOption(
-			"verbose",
-			"Show debugging information when running the captcha python script"
-		);
+		$this->addOption( "verbose", "Show debugging information" );
 		$this->addOption(
 			"oldcaptcha",
 			"Whether to use captcha-old.py which doesn't have OCR fighting improvements"
 		);
-		$this->addOption( "delete", "Deletes all the old captchas" );
+		$this->addOption( "delete", "Delete the old captches" );
 		$this->addOption( "threads", "The number of threads to use to generate the images",
 			false, true );
-		$this->addDescription( "Generate new fancy captchas and move them into storage" );
+		$this->mDescription = "Generate new fancy captchas and move them into storage";
 
 		$this->requireExtension( "FancyCaptcha" );
 	}
@@ -67,7 +64,7 @@ class GenerateFancyCaptchas extends Maintenance {
 
 		$instance = ConfirmEditHooks::getInstance();
 		if ( !( $instance instanceof FancyCaptcha ) ) {
-			$this->fatalError( "\$wgCaptchaClass is not FancyCaptcha.\n", 1 );
+			$this->error( "\$wgCaptchaClass is not FancyCaptcha.\n", 1 );
 		}
 		$backend = $instance->getBackend();
 
@@ -87,7 +84,7 @@ class GenerateFancyCaptchas extends Maintenance {
 
 		$tmpDir = wfTempDir() . '/mw-fancycaptcha-' . time() . '-' . wfRandomString( 6 );
 		if ( !wfMkdirParents( $tmpDir ) ) {
-			$this->fatalError( "Could not create temp directory.\n", 1 );
+			$this->error( "Could not create temp directory.\n", 1 );
 		}
 
 		$captchaScript = 'captcha.py';
@@ -100,7 +97,7 @@ class GenerateFancyCaptchas extends Maintenance {
 			wfEscapeShellArg( dirname( __DIR__ ) . '/' . $captchaScript ),
 			wfEscapeShellArg( $wgCaptchaSecret ),
 			wfEscapeShellArg( $tmpDir ),
-			wfEscapeShellArg( (string)$countGen ),
+			wfEscapeShellArg( $countGen ),
 			wfEscapeShellArg( $wgCaptchaDirectoryLevels )
 		);
 		foreach (
@@ -116,9 +113,8 @@ class GenerateFancyCaptchas extends Maintenance {
 		$captchaTime = -microtime( true );
 		wfShellExec( $cmd, $retVal, [], [ 'time' => 0 ] );
 		if ( $retVal != 0 ) {
-			$this->output( " Failed.\n" );
 			wfRecursiveRemoveDir( $tmpDir );
-			$this->fatalError( "An error occured when running $captchaScript.\n", 1 );
+			$this->error( "Could not run generation script.\n", 1 );
 		}
 
 		$captchaTime += microtime( true );
@@ -179,7 +175,7 @@ class GenerateFancyCaptchas extends Maintenance {
 
 		$storeTime += microtime( true );
 
-		$storeSucceeded = true;
+		$storeSuceeded = true;
 		if ( $ret->isOK() ) {
 			$this->output( " Done.\n" );
 			$this->output(
@@ -192,16 +188,16 @@ class GenerateFancyCaptchas extends Maintenance {
 			if ( !$ret->isGood() ) {
 				$this->output(
 					"Non fatal errors:\n" .
-					Status::wrap( $ret )->getWikiText( false, false, 'en' ) .
+					Status::wrap( $ret )->getWikiText( null, null, 'en' ) .
 					"\n"
 				);
 			}
 			if ( $ret->failCount ) {
-				$storeSucceeded = false;
+				$storeSuceeded = false;
 				$this->error( sprintf( "\nFailed to copy %d captchas\n", $ret->failCount ) );
 			}
 			if ( $ret->successCount + $ret->failCount !== $captchasGenerated ) {
-				$storeSucceeded = false;
+				$storeSuceeded = false;
 				$this->error(
 					sprintf( "Internal error: captchasGenerated: %d, successCount: %d, failCount: %d\n",
 						$captchasGenerated, $ret->successCount, $ret->failCount
@@ -209,15 +205,15 @@ class GenerateFancyCaptchas extends Maintenance {
 				);
 			}
 		} else {
-			$storeSucceeded = false;
+			$storeSuceeded = false;
 			$this->output( "Errored.\n" );
 			$this->error(
-				Status::wrap( $ret )->getWikiText( false, false, 'en' ) .
+				Status::wrap( $ret )->getWikiText( null, null, 'en' ) .
 				"\n"
 			);
 		}
 
-		if ( $storeSucceeded && $deleteOldCaptchas ) {
+		if ( $storeSuceeded && $deleteOldCaptchas ) {
 			$numOriginalFiles = count( $filesToDelete );
 			$this->output( "Deleting {$numOriginalFiles} old captchas...\n" );
 			$deleteTime = -microtime( true );
@@ -236,14 +232,14 @@ class GenerateFancyCaptchas extends Maintenance {
 				if ( !$ret->isGood() ) {
 					$this->output(
 						"Non fatal errors:\n" .
-						Status::wrap( $ret )->getWikiText( false, false, 'en' ) .
+						Status::wrap( $ret )->getWikiText( null, null, 'en' ) .
 						"\n"
 					);
 				}
 			} else {
 				$this->output( "Errored.\n" );
 				$this->error(
-					Status::wrap( $ret )->getWikiText( false, false, 'en' ) .
+					Status::wrap( $ret )->getWikiText( null, null, 'en' ) .
 					"\n"
 				);
 			}
@@ -263,5 +259,5 @@ class GenerateFancyCaptchas extends Maintenance {
 	}
 }
 
-$maintClass = GenerateFancyCaptchas::class;
+$maintClass = "GenerateFancyCaptchas";
 require_once RUN_MAINTENANCE_IF_MAIN;

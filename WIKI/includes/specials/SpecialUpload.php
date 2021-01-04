@@ -33,7 +33,7 @@ use MediaWiki\MediaWikiServices;
 class SpecialUpload extends SpecialPage {
 	/**
 	 * Get data POSTed through the form and assign them to the object
-	 * @param WebRequest|null $request Data posted.
+	 * @param WebRequest $request Data posted.
 	 */
 	public function __construct( $request = null ) {
 		parent::__construct( 'Upload', 'upload' );
@@ -43,7 +43,7 @@ class SpecialUpload extends SpecialPage {
 		return true;
 	}
 
-	/** Misc variables */
+	/** Misc variables **/
 
 	/** @var WebRequest|FauxRequest The request this form is supposed to handle */
 	public $mRequest;
@@ -56,21 +56,21 @@ class SpecialUpload extends SpecialPage {
 	public $mLocalFile;
 	public $mUploadClicked;
 
-	/** User input variables from the "description" section */
+	/** User input variables from the "description" section **/
 
 	/** @var string The requested target file name */
 	public $mDesiredDestName;
 	public $mComment;
 	public $mLicense;
 
-	/** User input variables from the root section */
+	/** User input variables from the root section **/
 
 	public $mIgnoreWarning;
 	public $mWatchthis;
 	public $mCopyrightStatus;
 	public $mCopyrightSource;
 
-	/** Hidden variables */
+	/** Hidden variables **/
 
 	public $mDestWarningAck;
 
@@ -84,7 +84,7 @@ class SpecialUpload extends SpecialPage {
 	/** @var bool Subclasses can use this to determine whether a file was uploaded */
 	public $mUploadSuccessful = false;
 
-	/** Text injection points for hooks not using HTMLForm */
+	/** Text injection points for hooks not using HTMLForm **/
 	public $uploadFormTextTop;
 	public $uploadFormTextAfterSummary;
 
@@ -116,7 +116,7 @@ class SpecialUpload extends SpecialPage {
 		$this->mForReUpload = $request->getBool( 'wpForReUpload' ); // updating a file
 
 		$commentDefault = '';
-		$commentMsg = $this->msg( 'upload-default-description' )->inContentLanguage();
+		$commentMsg = wfMessage( 'upload-default-description' )->inContentLanguage();
 		if ( !$this->mForReUpload && !$commentMsg->isDisabled() ) {
 			$commentDefault = $commentMsg->plain();
 		}
@@ -146,7 +146,8 @@ class SpecialUpload extends SpecialPage {
 	}
 
 	/**
-	 * @param string|null $par
+	 * Special page entry point
+	 * @param string $par
 	 * @throws ErrorPageError
 	 * @throws Exception
 	 * @throws FatalError
@@ -176,23 +177,13 @@ class SpecialUpload extends SpecialPage {
 		}
 
 		# Check blocks
-		if ( $user->isBlockedFromUpload() ) {
-			throw new UserBlockedError(
-				$user->getBlock(),
-				$user,
-				$this->getLanguage(),
-				$this->getRequest()->getIP()
-			);
+		if ( $user->isBlocked() ) {
+			throw new UserBlockedError( $user->getBlock() );
 		}
 
 		// Global blocks
 		if ( $user->isBlockedGlobally() ) {
-			throw new UserBlockedError(
-				$user->getGlobalBlock(),
-				$user,
-				$this->getLanguage(),
-				$this->getRequest()->getIP()
-			);
+			throw new UserBlockedError( $user->getGlobalBlock() );
 		}
 
 		# Check whether we actually want to allow changing stuff
@@ -201,9 +192,11 @@ class SpecialUpload extends SpecialPage {
 		$this->loadRequest();
 
 		# Unsave the temporary file in case this was a cancelled upload
-		if ( $this->mCancelUpload && !$this->unsaveUploadedFile() ) {
-			# Something went wrong, so unsaveUploadedFile showed a warning
-			return;
+		if ( $this->mCancelUpload ) {
+			if ( !$this->unsaveUploadedFile() ) {
+				# Something went wrong, so unsaveUploadedFile showed a warning
+				return;
+			}
 		}
 
 		# Process upload or show a form
@@ -214,8 +207,10 @@ class SpecialUpload extends SpecialPage {
 			$this->processUpload();
 		} else {
 			# Backwards compatibility hook
-			if ( !$this->getHookRunner()->onUploadForm_initial( $this ) ) {
-				wfDebug( "Hook 'UploadForm:initial' broke output of the upload form" );
+			// Avoid PHP 7.1 warning of passing $this by reference
+			$upload = $this;
+			if ( !Hooks::run( 'UploadForm:initial', [ &$upload ] ) ) {
+				wfDebug( "Hook 'UploadForm:initial' broke output of the upload form\n" );
 
 				return;
 			}
@@ -319,25 +314,17 @@ class SpecialUpload extends SpecialPage {
 	protected function showViewDeletedLinks() {
 		$title = Title::makeTitleSafe( NS_FILE, $this->mDesiredDestName );
 		$user = $this->getUser();
-		$permissionManager = MediaWikiServices::getInstance()->getPermissionManager();
 		// Show a subtitle link to deleted revisions (to sysops et al only)
 		if ( $title instanceof Title ) {
 			$count = $title->isDeleted();
-			if ( $count > 0 && $permissionManager->userHasRight( $user, 'deletedhistory' ) ) {
+			if ( $count > 0 && $user->isAllowed( 'deletedhistory' ) ) {
 				$restorelink = $this->getLinkRenderer()->makeKnownLink(
 					SpecialPage::getTitleFor( 'Undelete', $title->getPrefixedText() ),
 					$this->msg( 'restorelink' )->numParams( $count )->text()
 				);
-				$link = $this->msg(
-					$permissionManager->userHasRight( $user, 'delete' ) ? 'thisisdeleted' : 'viewdeleted'
-				)->rawParams( $restorelink )->parseAsBlock();
-				$this->getOutput()->addHTML(
-					Html::rawElement(
-						'div',
-						[ 'id' => 'contentSub2' ],
-						$link
-					)
-				);
+				$link = $this->msg( $user->isAllowed( 'delete' ) ? 'thisisdeleted' : 'viewdeleted' )
+					->rawParams( $restorelink )->parseAsBlock();
+				$this->getOutput()->addHTML( "<div id=\"contentSub2\">{$link}</div>" );
 			}
 		}
 	}
@@ -400,7 +387,7 @@ class SpecialUpload extends SpecialPage {
 		}
 
 		// Add styles for the warning, reused from the live preview
-		$this->getOutput()->addModuleStyles( 'mediawiki.special' );
+		$this->getOutput()->addModuleStyles( 'mediawiki.special.upload.styles' );
 
 		$linkRenderer = $this->getLinkRenderer();
 		$warningHtml = '<h2>' . $this->msg( 'uploadwarning' )->escaped() . "</h2>\n"
@@ -414,12 +401,12 @@ class SpecialUpload extends SpecialPage {
 			} elseif ( $warning == 'no-change' ) {
 				$file = $args;
 				$filename = $file->getTitle()->getPrefixedText();
-				$msg = "\t<li>" . $this->msg( 'fileexists-no-change', $filename )->parse() . "</li>\n";
+				$msg = "\t<li>" . wfMessage( 'fileexists-no-change', $filename )->parse() . "</li>\n";
 			} elseif ( $warning == 'duplicate-version' ) {
 				$file = $args[0];
 				$count = count( $args );
 				$filename = $file->getTitle()->getPrefixedText();
-				$message = $this->msg( 'fileexists-duplicate-version' )
+				$message = wfMessage( 'fileexists-duplicate-version' )
 					->params( $filename )
 					->numParams( $count );
 				$msg = "\t<li>" . $message->parse() . "</li>\n";
@@ -428,14 +415,14 @@ class SpecialUpload extends SpecialPage {
 				$ltitle = SpecialPage::getTitleFor( 'Log' );
 				$llink = $linkRenderer->makeKnownLink(
 					$ltitle,
-					$this->msg( 'deletionlog' )->text(),
+					wfMessage( 'deletionlog' )->text(),
 					[],
 					[
 						'type' => 'delete',
 						'page' => Title::makeTitle( NS_FILE, $args )->getPrefixedText(),
 					]
 				);
-				$msg = "\t<li>" . $this->msg( 'filewasdeleted' )->rawParams( $llink )->parse() . "</li>\n";
+				$msg = "\t<li>" . wfMessage( 'filewasdeleted' )->rawParams( $llink )->parse() . "</li>\n";
 			} elseif ( $warning == 'duplicate' ) {
 				$msg = $this->getDupeWarning( $args );
 			} elseif ( $warning == 'duplicate-archive' ) {
@@ -496,14 +483,14 @@ class SpecialUpload extends SpecialPage {
 		// Fetch the file if required
 		$status = $this->mUpload->fetchFile();
 		if ( !$status->isOK() ) {
-			$this->showUploadError( $this->getOutput()->parseAsInterface(
-				$status->getWikiText( false, false, $this->getLanguage() )
-			) );
+			$this->showUploadError( $this->getOutput()->parse( $status->getWikiText() ) );
 
 			return;
 		}
-		if ( !$this->getHookRunner()->onUploadForm_BeforeProcessing( $this ) ) {
-			wfDebug( "Hook 'UploadForm:BeforeProcessing' broke processing the file." );
+		// Avoid PHP 7.1 warning of passing $this by reference
+		$upload = $this;
+		if ( !Hooks::run( 'UploadForm:BeforeProcessing', [ &$upload ] ) ) {
+			wfDebug( "Hook 'UploadForm:BeforeProcessing' broke processing the file.\n" );
 			// This code path is deprecated. If you want to break upload processing
 			// do so by hooking into the appropriate hooks in UploadBase::verifyUpload
 			// and UploadBase::verifyFile.
@@ -521,8 +508,7 @@ class SpecialUpload extends SpecialPage {
 		}
 
 		// Verify permissions for this title
-		$user = $this->getUser();
-		$permErrors = $this->mUpload->verifyTitlePermissions( $user );
+		$permErrors = $this->mUpload->verifyTitlePermissions( $this->getUser() );
 		if ( $permErrors !== true ) {
 			$code = array_shift( $permErrors[0] );
 			$this->showRecoverableUploadError( $this->msg( $code, $permErrors[0] )->parse() );
@@ -534,14 +520,14 @@ class SpecialUpload extends SpecialPage {
 
 		// Check warnings if necessary
 		if ( !$this->mIgnoreWarning ) {
-			$warnings = $this->mUpload->checkWarnings( $user );
+			$warnings = $this->mUpload->checkWarnings();
 			if ( $this->showUploadWarning( $warnings ) ) {
 				return;
 			}
 		}
 
 		// This is as late as we can throttle, after expected issues have been handled
-		if ( UploadBase::isThrottled( $user ) ) {
+		if ( UploadBase::isThrottled( $this->getUser() ) ) {
 			$this->showRecoverableUploadError(
 				$this->msg( 'actionthrottledtext' )->escaped()
 			);
@@ -557,7 +543,7 @@ class SpecialUpload extends SpecialPage {
 		}
 
 		$changeTags = $this->getRequest()->getVal( 'wpChangeTags' );
-		if ( $changeTags === null || $changeTags === '' ) {
+		if ( is_null( $changeTags ) || $changeTags === '' ) {
 			$changeTags = [];
 		} else {
 			$changeTags = array_filter( array_map( 'trim', explode( ',', $changeTags ) ) );
@@ -565,11 +551,9 @@ class SpecialUpload extends SpecialPage {
 
 		if ( $changeTags ) {
 			$changeTagsStatus = ChangeTags::canAddTagsAccompanyingChange(
-				$changeTags, $user );
+				$changeTags, $this->getUser() );
 			if ( !$changeTagsStatus->isOK() ) {
-				$this->showUploadError( $this->getOutput()->parseAsInterface(
-					$changeTagsStatus->getWikiText( false, false, $this->getLanguage() )
-				) );
+				$this->showUploadError( $this->getOutput()->parse( $changeTagsStatus->getWikiText() ) );
 
 				return;
 			}
@@ -579,23 +563,21 @@ class SpecialUpload extends SpecialPage {
 			$this->mComment,
 			$pageText,
 			$this->mWatchthis,
-			$user,
+			$this->getUser(),
 			$changeTags
 		);
 
 		if ( !$status->isGood() ) {
-			$this->showRecoverableUploadError(
-				$this->getOutput()->parseAsInterface(
-					$status->getWikiText( false, false, $this->getLanguage() )
-				)
-			);
+			$this->showRecoverableUploadError( $this->getOutput()->parse( $status->getWikiText() ) );
 
 			return;
 		}
 
 		// Success, redirect to description page
 		$this->mUploadSuccessful = true;
-		$this->getHookRunner()->onSpecialUploadComplete( $this );
+		// Avoid PHP 7.1 warning of passing $this by reference
+		$upload = $this;
+		Hooks::run( 'SpecialUploadComplete', [ &$upload ] );
 		$this->getOutput()->redirect( $this->mLocalFile->getTitle()->getFullURL() );
 	}
 
@@ -605,7 +587,7 @@ class SpecialUpload extends SpecialPage {
 	 * @param string $license
 	 * @param string $copyStatus
 	 * @param string $source
-	 * @param Config|null $config Configuration object to load data from
+	 * @param Config $config Configuration object to load data from
 	 * @return string
 	 */
 	public static function getInitialPageText( $comment = '', $license = '',
@@ -630,28 +612,24 @@ class SpecialUpload extends SpecialPage {
 			}
 		}
 
-		$licenseText = '';
-		if ( $license !== '' ) {
-			$licenseText = '== ' . $msg['license-header'] . " ==\n{{" . $license . "}}\n";
-		}
-
-		$pageText = $comment . "\n";
-		$headerText = '== ' . $msg['filedesc'] . ' ==';
-		if ( $comment !== '' && strpos( $comment, $headerText ) === false ) {
-			// prepend header to page text unless it's already there (or there is no content)
-			$pageText = $headerText . "\n" . $pageText;
-		}
-
 		if ( $config->get( 'UseCopyrightUpload' ) ) {
-			$pageText .= '== ' . $msg['filestatus'] . " ==\n" . $copyStatus . "\n";
-			$pageText .= $licenseText;
-			$pageText .= '== ' . $msg['filesource'] . " ==\n" . $source;
+			$licensetxt = '';
+			if ( $license != '' ) {
+				$licensetxt = '== ' . $msg['license-header'] . " ==\n" . '{{' . $license . '}}' . "\n";
+			}
+			$pageText = '== ' . $msg['filedesc'] . " ==\n" . $comment . "\n" .
+				'== ' . $msg['filestatus'] . " ==\n" . $copyStatus . "\n" .
+				"$licensetxt" .
+				'== ' . $msg['filesource'] . " ==\n" . $source;
 		} else {
-			$pageText .= $licenseText;
+			if ( $license != '' ) {
+				$filedesc = $comment == '' ? '' : '== ' . $msg['filedesc'] . " ==\n" . $comment . "\n";
+					$pageText = $filedesc .
+					'== ' . $msg['license-header'] . " ==\n" . '{{' . $license . '}}' . "\n";
+			} else {
+				$pageText = $comment;
+			}
 		}
-
-		// allow extensions to modify the content
-		Hooks::runner()->onUploadForm_getInitialPageText( $pageText, $msg, $config );
 
 		return $pageText;
 	}
@@ -680,8 +658,7 @@ class SpecialUpload extends SpecialPage {
 			return true;
 		}
 
-		$local = MediaWikiServices::getInstance()->getRepoGroup()->getLocalRepo()
-			->newFile( $this->mDesiredDestName );
+		$local = wfLocalFile( $this->mDesiredDestName );
 		if ( $local && $local->exists() ) {
 			// We're uploading a new version of an existing file.
 			// No creation, so don't watch it if we're not already.
@@ -701,7 +678,7 @@ class SpecialUpload extends SpecialPage {
 	 */
 	protected function processVerificationError( $details ) {
 		switch ( $details['status'] ) {
-			/** Statuses that only require name changing */
+			/** Statuses that only require name changing **/
 			case UploadBase::MIN_LENGTH_PARTNAME:
 				$this->showRecoverableUploadError( $this->msg( 'minlength1' )->escaped() );
 				break;
@@ -719,7 +696,7 @@ class SpecialUpload extends SpecialPage {
 				$this->showRecoverableUploadError( $this->msg( 'windows-nonascii-filename' )->parse() );
 				break;
 
-			/** Statuses that require reuploading */
+			/** Statuses that require reuploading **/
 			case UploadBase::EMPTY_FILE:
 				$this->showUploadError( $this->msg( 'emptyfile' )->escaped() );
 				break;
@@ -780,11 +757,7 @@ class SpecialUpload extends SpecialPage {
 		}
 		$success = $this->mUpload->unsaveUploadedFile();
 		if ( !$success ) {
-			$this->getOutput()->showFatalError(
-				$this->msg( 'filedeleteerror' )
-					->params( $this->mUpload->getTempPath() )
-					->escaped()
-			);
+			$this->getOutput()->showFileDeleteError( $this->mUpload->getTempPath() );
 
 			return false;
 		} else {
@@ -792,7 +765,7 @@ class SpecialUpload extends SpecialPage {
 		}
 	}
 
-	/** Functions for formatting warnings */
+	/*** Functions for formatting warnings ***/
 
 	/**
 	 * Formats a result of UploadBase::getExistsWarning as HTML

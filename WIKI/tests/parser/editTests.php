@@ -1,6 +1,6 @@
 <?php
 
-require __DIR__ . '/../../maintenance/Maintenance.php';
+require __DIR__.'/../../maintenance/Maintenance.php';
 
 define( 'MW_PARSER_TEST', true );
 
@@ -17,7 +17,7 @@ class ParserEditTests extends Maintenance {
 	private $numSkipped;
 	private $numFailed;
 
-	public function __construct() {
+	function __construct() {
 		parent::__construct();
 		$this->addOption( 'session-data', 'internal option, do not use', false, true );
 		$this->addOption( 'use-tidy-config',
@@ -62,9 +62,10 @@ class ParserEditTests extends Maintenance {
 	}
 
 	protected function setupFileData() {
+		global $wgParserTestFiles;
 		$this->testFiles = [];
 		$this->testCount = 0;
-		foreach ( ParserTestRunner::getParserTestFiles() as $file ) {
+		foreach ( $wgParserTestFiles as $file ) {
 			$fileInfo = TestFileReader::read( $file );
 			$this->testFiles[$file] = $fileInfo;
 			$this->testCount += count( $fileInfo['tests'] );
@@ -418,7 +419,8 @@ class ParserEditTests extends Maintenance {
 			print "Wrote updated file\n";
 		} else {
 			print "Cannot write updated file, here is a patch you can paste:\n\n";
-			print "--- {$fileName}\n" .
+			print
+				"--- {$fileName}\n" .
 				"+++ {$fileName}~\n" .
 				$this->unifiedDiff( $text, $result ) .
 				"\n";
@@ -484,5 +486,5 @@ class ParserEditTests extends Maintenance {
 	}
 }
 
-$maintClass = ParserEditTests::class;
+$maintClass = 'ParserEditTests';
 require RUN_MAINTENANCE_IF_MAIN;

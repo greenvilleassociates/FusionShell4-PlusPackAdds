@@ -1,8 +1,5 @@
 <?php
 
-use MediaWiki\MediaWikiServices;
-use PHPUnit\Framework\Error\Notice;
-
 /**
  * @covers SpecialPage
  *
@@ -10,14 +7,14 @@ use PHPUnit\Framework\Error\Notice;
  *
  * @author Katie Filbert < aude.wiki@gmail.com >
  */
-class SpecialPageTest extends MediaWikiIntegrationTestCase {
+class SpecialPageTest extends MediaWikiTestCase {
 
-	protected function setUp() : void {
+	protected function setUp() {
 		parent::setUp();
 
-		$this->setContentLang( 'en' );
 		$this->setMwGlobals( [
 			'wgScript' => '/index.php',
+			'wgContLang' => Language::factory( 'en' )
 		] );
 	}
 
@@ -36,18 +33,20 @@ class SpecialPageTest extends MediaWikiIntegrationTestCase {
 		];
 	}
 
+	/**
+	 * @expectedException PHPUnit_Framework_Error_Notice
+	 */
 	public function testInvalidGetTitleFor() {
-		$this->expectException( Notice::class );
 		$title = SpecialPage::getTitleFor( 'cat' );
 		$expected = Title::makeTitle( NS_SPECIAL, 'Cat' );
 		$this->assertEquals( $expected, $title );
 	}
 
 	/**
+	 * @expectedException PHPUnit_Framework_Error_Notice
 	 * @dataProvider getTitleForWithWarningProvider
 	 */
 	public function testGetTitleForWithWarning( $expected, $name ) {
-		$this->expectException( Notice::class );
 		$title = SpecialPage::getTitleFor( $name );
 		$this->assertEquals( $expected, $title );
 	}
@@ -66,14 +65,15 @@ class SpecialPageTest extends MediaWikiIntegrationTestCase {
 
 		$user = User::newFromId( 0 );
 		$specialPage->getContext()->setUser( $user );
-		$specialPage->getContext()->setLanguage(
-			MediaWikiServices::getInstance()->getLanguageFactory()->getLanguage( 'en' ) );
+		$specialPage->getContext()->setLanguage( Language::factory( 'en' ) );
 
-		$this->expectException( UserNotLoggedIn::class );
-		$this->expectExceptionMessage( $expected );
+		$this->setExpectedException( 'UserNotLoggedIn', $expected );
 
 		// $specialPage->requireLogin( [ $reason [, $title ] ] )
-		$specialPage->requireLogin( ...array_filter( [ $reason, $title ] ) );
+		call_user_func_array(
+			[ $specialPage, 'requireLogin' ],
+			array_filter( [ $reason, $title ] )
+		);
 	}
 
 	public function requireLoginAnonProvider() {
@@ -100,4 +100,5 @@ class SpecialPageTest extends MediaWikiIntegrationTestCase {
 		// no exception thrown, logged in use can access special page
 		$this->assertTrue( true );
 	}
+
 }

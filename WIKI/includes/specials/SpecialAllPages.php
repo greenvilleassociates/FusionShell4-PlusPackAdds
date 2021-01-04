@@ -32,21 +32,21 @@ class SpecialAllPages extends IncludableSpecialPage {
 	/**
 	 * Maximum number of pages to show on single subpage.
 	 *
-	 * @var int
+	 * @var int $maxPerPage
 	 */
 	protected $maxPerPage = 345;
 
 	/**
 	 * Determines, which message describes the input field 'nsfrom'.
 	 *
-	 * @var string
+	 * @var string $nsfromMsg
 	 */
 	protected $nsfromMsg = 'allpagesfrom';
 
 	/**
 	 * @param string $name Name of the special page, as seen in links and URLs (default: 'Allpages')
 	 */
-	public function __construct( $name = 'Allpages' ) {
+	function __construct( $name = 'Allpages' ) {
 		parent::__construct( $name );
 	}
 
@@ -55,7 +55,7 @@ class SpecialAllPages extends IncludableSpecialPage {
 	 *
 	 * @param string $par Becomes "FOO" when called like Special:Allpages/FOO (default null)
 	 */
-	public function execute( $par ) {
+	function execute( $par ) {
 		$request = $this->getRequest();
 		$out = $this->getOutput();
 
@@ -97,13 +97,13 @@ class SpecialAllPages extends IncludableSpecialPage {
 	 * @param int $namespace A namespace constant (default NS_MAIN).
 	 * @param string $from DbKey we are starting listing at.
 	 * @param string $to DbKey we are ending listing at.
-	 * @param bool $hideRedirects Don't show redirects  (default false)
+	 * @param bool $hideRedirects Dont show redirects  (default false)
 	 */
 	protected function outputHTMLForm( $namespace = NS_MAIN,
 		$from = '', $to = '', $hideRedirects = false
 	) {
 		$miserMode = (bool)$this->getConfig()->get( 'MiserMode' );
-		$formDescriptor = [
+		$fields = [
 			'from' => [
 				'type' => 'text',
 				'name' => 'from',
@@ -126,7 +126,7 @@ class SpecialAllPages extends IncludableSpecialPage {
 				'id' => 'namespace',
 				'label-message' => 'namespace',
 				'all' => null,
-				'default' => $namespace,
+				'value' => $namespace,
 			],
 			'hideredirects' => [
 				'type' => 'check',
@@ -138,14 +138,11 @@ class SpecialAllPages extends IncludableSpecialPage {
 		];
 
 		if ( $miserMode ) {
-			unset( $formDescriptor['hideredirects'] );
+			unset( $fields['hideredirects'] );
 		}
 
-		$context = new DerivativeContext( $this->getContext() );
-		$context->setTitle( $this->getPageTitle() ); // Remove subpage
-		$htmlForm = HTMLForm::factory( 'ooui', $formDescriptor, $context );
-		$htmlForm
-			->setMethod( 'get' )
+		$form = HTMLForm::factory( 'table', $fields, $this->getContext() );
+		$form->setMethod( 'get' )
 			->setWrapperLegendMsg( 'allpages' )
 			->setSubmitTextMsg( 'allpagessubmit' )
 			->prepareForm()
@@ -156,11 +153,9 @@ class SpecialAllPages extends IncludableSpecialPage {
 	 * @param int $namespace (default NS_MAIN)
 	 * @param string $from List all pages from this name
 	 * @param string $to List all pages to this name
-	 * @param bool $hideredirects Don't show redirects (default false)
+	 * @param bool $hideredirects Dont show redirects (default false)
 	 */
-	private function showToplevel(
-		$namespace = NS_MAIN, $from = '', $to = '', $hideredirects = false
-	) {
+	function showToplevel( $namespace = NS_MAIN, $from = '', $to = '', $hideredirects = false ) {
 		$from = Title::makeTitleSafe( $namespace, $from );
 		$to = Title::makeTitleSafe( $namespace, $to );
 		$from = ( $from && $from->isLocal() ) ? $from->getDBkey() : null;
@@ -171,13 +166,11 @@ class SpecialAllPages extends IncludableSpecialPage {
 
 	/**
 	 * @param int $namespace Namespace (Default NS_MAIN)
-	 * @param string|false $from List all pages from this name (default false)
-	 * @param string|false $to List all pages to this name (default false)
-	 * @param bool $hideredirects Don't show redirects (default false)
+	 * @param string $from List all pages from this name (default false)
+	 * @param string $to List all pages to this name (default false)
+	 * @param bool $hideredirects Dont show redirects (default false)
 	 */
-	private function showChunk(
-		$namespace = NS_MAIN, $from = false, $to = false, $hideredirects = false
-	) {
+	function showChunk( $namespace = NS_MAIN, $from = false, $to = false, $hideredirects = false ) {
 		$output = $this->getOutput();
 
 		$fromList = $this->getNamespaceKeyAndText( $namespace, $from );

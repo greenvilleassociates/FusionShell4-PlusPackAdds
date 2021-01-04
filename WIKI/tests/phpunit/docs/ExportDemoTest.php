@@ -6,7 +6,6 @@
  *
  * @group Dump
  * @group large
- * @coversNothing
  */
 class ExportDemoTest extends DumpTestCase {
 

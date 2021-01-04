@@ -5,10 +5,10 @@ use Wikimedia\TestingAccessWrapper;
 /**
  * @covers ChangesListFilter
  */
-class ChangesListFilterTest extends MediaWikiIntegrationTestCase {
+class ChangesListFilterTest extends MediaWikiTestCase {
 	protected $group;
 
-	protected function setUp() : void {
+	public function setUp() {
 		$this->group = $this->getGroup( [ 'name' => 'group' ] );
 
 		parent::setUp();
@@ -25,11 +25,13 @@ class ChangesListFilterTest extends MediaWikiIntegrationTestCase {
 		);
 	}
 
+	// @codingStandardsIgnoreStart
+	/**
+	 * @expectedException MWException
+	 * @expectedExceptionMessage Filter names may not contain '_'.  Use the naming convention: 'lowercase'
+	 */
+	// @codingStandardsIgnoreEnd
 	public function testReservedCharacter() {
-		$this->expectException( MWException::class );
-		$this->expectExceptionMessage(
-			"Filter names may not contain '_'.  Use the naming convention: 'lowercase'"
-		);
 		$filter = new MockChangesListFilter(
 			[
 				'group' => $this->group,
@@ -39,6 +41,12 @@ class ChangesListFilterTest extends MediaWikiIntegrationTestCase {
 		);
 	}
 
+	// @codingStandardsIgnoreStart
+	/**
+	 * @expectedException MWException
+	 * @expectedExceptionMessage Two filters in a group cannot have the same name: 'somename'
+	 */
+	// @codingStandardsIgnoreEnd
 	public function testDuplicateName() {
 		new MockChangesListFilter(
 			[
@@ -48,8 +56,6 @@ class ChangesListFilterTest extends MediaWikiIntegrationTestCase {
 			]
 		);
 
-		$this->expectException( MWException::class );
-		$this->expectExceptionMessage( "Two filters in a group cannot have the same name: 'somename'" );
 		new MockChangesListFilter(
 			[
 				'group' => $this->group,
@@ -59,6 +65,10 @@ class ChangesListFilterTest extends MediaWikiIntegrationTestCase {
 		);
 	}
 
+	/**
+	 * @expectedException MWException
+	 * @expectedExceptionMessage Supersets can only be defined for filters in the same group
+	 */
 	public function testSetAsSupersetOf() {
 		$groupA = $this->getGroup(
 			[
@@ -103,8 +113,6 @@ class ChangesListFilterTest extends MediaWikiIntegrationTestCase {
 			/** named= */ true
 		);
 
-		$this->expectException( MWException::class );
-		$this->expectExceptionMessage( "Supersets can only be defined for filters in the same group" );
 		$foo->setAsSupersetOf( $baz );
 	}
 }

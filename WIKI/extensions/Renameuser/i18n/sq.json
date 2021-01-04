@@ -1,17 +1,16 @@
 {
 	"@metadata": {
 		"authors": [
-			"Ammartivari",
-			"Bjakupi",
 			"Dori",
 			"FatosMorina",
 			"Mikullovci11",
-			"Olsi"
+			"Olsi",
+			"Ammartivari"
 		]
 	},
 	"renameuser": "Riemëroje përdoruesin",
-	"renameuser-linkoncontribs": "riemëro {{GENDER:$1|perdorues}}",
-	"renameuser-linkoncontribs-text": "Riemëro këtë {{GENDER:$1|përdorues}}",
+	"renameuser-linkoncontribs": "Riemëroje përdoruesin",
+	"renameuser-linkoncontribs-text": "Riemëroje këtë përdoruesin",
 	"renameuser-desc": "Shton një [[Special:RenameUser|faqe speciale]] për të riemëruar një përdorues (duhet e drejta ''renameuser'')",
 	"renameuserold": "Emri i tanishëm",
 	"renameusernew": "Emri i ri",

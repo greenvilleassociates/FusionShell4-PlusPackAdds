@@ -23,6 +23,8 @@
 
 require_once __DIR__ . '/Maintenance.php';
 
+use Wikimedia\Rdbms\IDatabase;
+
 /**
  * Usage:
  *  populatePPSortKey.php
@@ -39,8 +41,6 @@ class PopulatePPSortKey extends LoggedUpdateMaintenance {
 
 		$lastProp = null;
 		$lastPageValue = 0;
-
-		$lastRowCount = 0;
 		$editedRowCount = 0;
 
 		$this->output( "Populating page_props.pp_sortkey...\n" );
@@ -58,8 +58,8 @@ class PopulatePPSortKey extends LoggedUpdateMaintenance {
 				$conditions,
 				__METHOD__,
 				[
-					'ORDER BY' => [ 'pp_page', 'pp_propname' ],
-					'LIMIT' => $this->getBatchSize()
+					'ORDER BY' => 'pp_page, pp_propname',
+					'LIMIT' => $this->mBatchSize
 				]
 			);
 
@@ -85,11 +85,7 @@ class PopulatePPSortKey extends LoggedUpdateMaintenance {
 				$editedRowCount++;
 			}
 
-			if ( $editedRowCount !== $lastRowCount ) {
-				$this->output( "Updated " . $editedRowCount . " rows\n" );
-				$lastRowCount = $editedRowCount;
-			}
-
+			$this->output( "Updated " . $editedRowCount . " rows\n" );
 			$this->commitTransaction( $dbw, __METHOD__ );
 
 			// We need to get the last element's page ID
@@ -99,8 +95,6 @@ class PopulatePPSortKey extends LoggedUpdateMaintenance {
 		}
 
 		$this->output( "Populating page_props.pp_sortkey complete.\n" );
-		$this->output( "Updated a total of $editedRowCount rows\n" );
-		return true;
 	}
 
 	protected function getUpdateKey() {
@@ -108,5 +102,5 @@ class PopulatePPSortKey extends LoggedUpdateMaintenance {
 	}
 }
 
-$maintClass = PopulatePPSortKey::class;
+$maintClass = 'PopulatePPSortKey';
 require_once RUN_MAINTENANCE_IF_MAIN;

@@ -5,7 +5,7 @@
  *
  * @covers HttpError
  */
-class HttpErrorTest extends MediaWikiIntegrationTestCase {
+class HttpErrorTest extends MediaWikiTestCase {
 
 	public function testIsLoggable() {
 		$httpError = new HttpError( 500, 'server error!' );
@@ -25,7 +25,7 @@ class HttpErrorTest extends MediaWikiIntegrationTestCase {
 		$errorHtml = $httpError->getHTML();
 
 		foreach ( $expected as $key => $html ) {
-			$this->assertStringContainsString( $html, $errorHtml, $key );
+			$this->assertContains( $html, $errorHtml, $key );
 		}
 	}
 

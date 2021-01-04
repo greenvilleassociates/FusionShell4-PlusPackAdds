@@ -29,11 +29,9 @@ class WikiTextStructure {
 	private $excludedElementSelectors = [
 		// "it looks like you don't have javascript enabled..." – do not need to index
 		'audio', 'video',
-		// CSS stylesheets aren't content
-		'style',
-		// The [1] for references from Cite
+		// The [1] for references
 		'sup.reference',
-		// The ↑ next to references in the references section from Cite
+		// The ↑ next to references in the references section
 		'.mw-cite-backlink',
 		// Headings are already indexed in their own field.
 		'h1', 'h2', 'h3', 'h4', 'h5', 'h6',
@@ -41,9 +39,7 @@ class WikiTextStructure {
 		'.autocollapse',
 		// Content explicitly decided to be not searchable by editors such
 		// as custom navigation templates.
-		'.navigation-not-searchable',
-		// User-facing interface code prompting the user to act from WikibaseMediaInfo
-		'.wbmi-entityview-emptyCaption',
+		'.navigation-not-searchable'
 	];
 
 	/**
@@ -147,14 +143,13 @@ class WikiTextStructure {
 	 * Extract parts of the text - opening, main and auxiliary.
 	 */
 	private function extractWikitextParts() {
-		if ( $this->allText !== null ) {
+		if ( !is_null( $this->allText ) ) {
 			return;
 		}
-		$text = $this->parserOutput->getText( [
-			'enableSectionEditTokens' => false,
-			'allowTOC' => false,
-		] );
-		if ( $text === '' ) {
+		$this->parserOutput->setEditSectionTokens( false );
+		$this->parserOutput->setTOCEnabled( false );
+		$text = $this->parserOutput->getText();
+		if ( strlen( $text ) == 0 ) {
 			$this->allText = "";
 			// empty text - nothing to seek here
 			return;
@@ -162,6 +157,10 @@ class WikiTextStructure {
 		$opening = null;
 
 		$this->openingText = $this->extractHeadingBeforeFirstHeading( $text );
+
+		// Add extra spacing around break tags so text crammed together like<br>this
+		// doesn't make one word.
+		$text = str_replace( '<br', "\n<br", $text );
 
 		$formatter = new HtmlFormatter( $text );
 

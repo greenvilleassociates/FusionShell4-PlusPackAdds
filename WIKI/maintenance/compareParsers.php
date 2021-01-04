@@ -39,18 +39,6 @@ require_once __DIR__ . '/dumpIterator.php';
 class CompareParsers extends DumpIterator {
 
 	private $count = 0;
-	/** @var bool */
-	private $saveFailed;
-	/** @var bool */
-	private $stripParametersEnabled;
-	/** @var bool */
-	private $showParsedOutput;
-	/** @var bool */
-	private $showDiff;
-	/** @var ParserOptions */
-	private $options;
-	/** @var int */
-	private $failed;
 
 	public function __construct() {
 		parent::__construct();
@@ -58,6 +46,7 @@ class CompareParsers extends DumpIterator {
 		$this->addDescription( 'Run a file or dump with several parsers' );
 		$this->addOption( 'parser1', 'The first parser to compare.', true, true );
 		$this->addOption( 'parser2', 'The second parser to compare.', true, true );
+		$this->addOption( 'tidy', 'Run tidy on the articles.', false, false );
 		$this->addOption(
 			'save-failed',
 			'Folder in which articles which differ will be stored.',
@@ -105,6 +94,14 @@ class CompareParsers extends DumpIterator {
 		$user = new User();
 		$this->options = ParserOptions::newFromUser( $user );
 
+		if ( $this->hasOption( 'tidy' ) ) {
+			global $wgUseTidy;
+			if ( !$wgUseTidy ) {
+				$this->error( 'Tidy was requested but $wgUseTidy is not set in LocalSettings.php', true );
+			}
+			$this->options->setTidy( true );
+		}
+
 		$this->failed = 0;
 	}
 
@@ -115,7 +112,7 @@ class CompareParsers extends DumpIterator {
 		}
 	}
 
-	private function stripParameters( $text ) {
+	function stripParameters( $text ) {
 		if ( !$this->stripParametersEnabled ) {
 			return $text;
 		}
@@ -125,9 +122,9 @@ class CompareParsers extends DumpIterator {
 
 	/**
 	 * Callback function for each revision, parse with both parsers and compare
-	 * @param WikiRevision $rev
+	 * @param Revision $rev
 	 */
-	public function processRevision( WikiRevision $rev ) {
+	public function processRevision( $rev ) {
 		$title = $rev->getTitle();
 
 		$parser1Name = $this->getOption( 'parser1' );
@@ -148,9 +145,7 @@ class CompareParsers extends DumpIterator {
 			return;
 		}
 
-		/** @var WikitextContent $content */
-		'@phan-var WikitextContent $content';
-		$text = strval( $content->getText() );
+		$text = strval( $content->getNativeData() );
 
 		$output1 = $parser1->parse( $text, $title, $this->options );
 		$output2 = $parser2->parse( $text, $title, $this->options );
@@ -190,5 +185,5 @@ class CompareParsers extends DumpIterator {
 	}
 }
 
-$maintClass = CompareParsers::class;
+$maintClass = "CompareParsers";
 require_once RUN_MAINTENANCE_IF_MAIN;

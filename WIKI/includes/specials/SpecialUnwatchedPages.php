@@ -24,17 +24,17 @@
  * @author Ævar Arnfjörð Bjarmason <avarab@gmail.com>
  */
 
+use Wikimedia\Rdbms\ResultWrapper;
 use Wikimedia\Rdbms\IDatabase;
-use Wikimedia\Rdbms\IResultWrapper;
 
 /**
  * A special page that displays a list of pages that are not on anyones watchlist.
  *
  * @ingroup SpecialPage
  */
-class SpecialUnwatchedPages extends QueryPage {
+class UnwatchedpagesPage extends QueryPage {
 
-	public function __construct( $name = 'Unwatchedpages' ) {
+	function __construct( $name = 'Unwatchedpages' ) {
 		parent::__construct( $name, 'unwatchedpages' );
 	}
 
@@ -42,7 +42,7 @@ class SpecialUnwatchedPages extends QueryPage {
 		return true;
 	}
 
-	public function isSyndicated() {
+	function isSyndicated() {
 		return false;
 	}
 
@@ -50,7 +50,7 @@ class SpecialUnwatchedPages extends QueryPage {
 	 * Pre-cache page existence to speed up link generation
 	 *
 	 * @param IDatabase $db
-	 * @param IResultWrapper $res
+	 * @param ResultWrapper $res
 	 */
 	public function preprocessResults( $db, $res ) {
 		if ( !$res->numRows() ) {
@@ -86,11 +86,11 @@ class SpecialUnwatchedPages extends QueryPage {
 		];
 	}
 
-	protected function sortDescending() {
+	function sortDescending() {
 		return false;
 	}
 
-	protected function getOrderFields() {
+	function getOrderFields() {
 		return [ 'page_namespace', 'page_title' ];
 	}
 
@@ -101,7 +101,6 @@ class SpecialUnwatchedPages extends QueryPage {
 	public function execute( $par ) {
 		parent::execute( $par );
 		$this->getOutput()->addModules( 'mediawiki.special.unwatchedPages' );
-		$this->addHelpLink( 'Help:Watchlist' );
 	}
 
 	/**
@@ -109,18 +108,20 @@ class SpecialUnwatchedPages extends QueryPage {
 	 * @param object $result Result row
 	 * @return string
 	 */
-	public function formatResult( $skin, $result ) {
+	function formatResult( $skin, $result ) {
+		global $wgContLang;
+
 		$nt = Title::makeTitleSafe( $result->namespace, $result->title );
 		if ( !$nt ) {
 			return Html::element( 'span', [ 'class' => 'mw-invalidtitle' ],
 				Linker::getInvalidTitleDescription( $this->getContext(), $result->namespace, $result->title ) );
 		}
 
-		$text = $this->getLanguageConverter()->convertHtml( $nt->getPrefixedText() );
+		$text = $wgContLang->convert( $nt->getPrefixedText() );
 
 		$linkRenderer = $this->getLinkRenderer();
 
-		$plink = $linkRenderer->makeKnownLink( $nt, new HtmlArmor( $text ) );
+		$plink = $linkRenderer->makeKnownLink( $nt, $text );
 		$wlink = $linkRenderer->makeKnownLink(
 			$nt,
 			$this->msg( 'watch' )->text(),

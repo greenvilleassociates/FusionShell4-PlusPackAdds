@@ -21,9 +21,8 @@
  * @ingroup SpecialPage
  */
 
-use MediaWiki\MediaWikiServices;
+use Wikimedia\Rdbms\ResultWrapper;
 use Wikimedia\Rdbms\IDatabase;
-use Wikimedia\Rdbms\IResultWrapper;
 
 /**
  * A special page listing redirects to non existent page. Those should be
@@ -31,8 +30,8 @@ use Wikimedia\Rdbms\IResultWrapper;
  *
  * @ingroup SpecialPage
  */
-class SpecialBrokenRedirects extends QueryPage {
-	public function __construct( $name = 'BrokenRedirects' ) {
+class BrokenRedirectsPage extends QueryPage {
+	function __construct( $name = 'BrokenRedirects' ) {
 		parent::__construct( $name );
 	}
 
@@ -40,15 +39,15 @@ class SpecialBrokenRedirects extends QueryPage {
 		return true;
 	}
 
-	public function isSyndicated() {
+	function isSyndicated() {
 		return false;
 	}
 
-	protected function sortDescending() {
+	function sortDescending() {
 		return false;
 	}
 
-	protected function getPageHeader() {
+	function getPageHeader() {
 		return $this->msg( 'brokenredirectstext' )->parseAsBlock();
 	}
 
@@ -64,6 +63,7 @@ class SpecialBrokenRedirects extends QueryPage {
 			'fields' => [
 				'namespace' => 'p1.page_namespace',
 				'title' => 'p1.page_title',
+				'value' => 'p1.page_title',
 				'rd_namespace',
 				'rd_title',
 				'rd_fragment',
@@ -91,7 +91,7 @@ class SpecialBrokenRedirects extends QueryPage {
 	/**
 	 * @return array
 	 */
-	protected function getOrderFields() {
+	function getOrderFields() {
 		return [ 'rd_namespace', 'rd_title', 'rd_from' ];
 	}
 
@@ -100,7 +100,7 @@ class SpecialBrokenRedirects extends QueryPage {
 	 * @param object $result Result row
 	 * @return string
 	 */
-	public function formatResult( $skin, $result ) {
+	function formatResult( $skin, $result ) {
 		$fromObj = Title::makeTitle( $result->namespace, $result->title );
 		if ( isset( $result->rd_title ) ) {
 			$toObj = Title::makeTitle( $result->rd_namespace, $result->rd_title, $result->rd_fragment );
@@ -114,8 +114,6 @@ class SpecialBrokenRedirects extends QueryPage {
 		}
 
 		$linkRenderer = $this->getLinkRenderer();
-		$permissionManager = MediaWikiServices::getInstance()->getPermissionManager();
-
 		// $toObj may very easily be false if the $result list is cached
 		if ( !is_object( $toObj ) ) {
 			return '<del>' . $linkRenderer->makeLink( $fromObj ) . '</del>';
@@ -131,12 +129,9 @@ class SpecialBrokenRedirects extends QueryPage {
 		// if the page is editable, add an edit link
 		if (
 			// check user permissions
-			$permissionManager->userHasRight( $this->getUser(), 'edit' ) &&
+			$this->getUser()->isAllowed( 'edit' ) &&
 			// check, if the content model is editable through action=edit
-			MediaWikiServices::getInstance()
-				->getContentHandlerFactory()
-				->getContentHandler( $fromObj->getContentModel() )
-				->supportsDirectEditing()
+			ContentHandler::getForTitle( $fromObj )->supportsDirectEditing()
 		) {
 			$links[] = $linkRenderer->makeKnownLink(
 				$fromObj,
@@ -150,17 +145,12 @@ class SpecialBrokenRedirects extends QueryPage {
 
 		$out = $from . $this->msg( 'word-separator' )->escaped();
 
-		if ( $permissionManager->userHasRight( $this->getUser(), 'delete' ) ) {
+		if ( $this->getUser()->isAllowed( 'delete' ) ) {
 			$links[] = $linkRenderer->makeKnownLink(
 				$fromObj,
 				$this->msg( 'brokenredirects-delete' )->text(),
 				[],
-				[
-					'action' => 'delete',
-					'wpReason' => $this->msg( 'brokenredirects-delete-reason' )
-						->inContentLanguage()
-						->text()
-				]
+				[ 'action' => 'delete' ]
 			);
 		}
 
@@ -173,18 +163,13 @@ class SpecialBrokenRedirects extends QueryPage {
 		return $out;
 	}
 
-	public function execute( $par ) {
-		$this->addHelpLink( 'Help:Redirects' );
-		parent::execute( $par );
-	}
-
 	/**
 	 * Cache page content model for performance
 	 *
 	 * @param IDatabase $db
-	 * @param IResultWrapper $res
+	 * @param ResultWrapper $res
 	 */
-	public function preprocessResults( $db, $res ) {
+	function preprocessResults( $db, $res ) {
 		$this->executeLBFromResultWrapper( $res );
 	}
 

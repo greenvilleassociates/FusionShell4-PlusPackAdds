@@ -1,8 +1,8 @@
-( function () {
+( function ( $ ) {
 	QUnit.module( 'ext.wikiEditor.toolbar', QUnit.newMwEnvironment( {
 		setup: function () {
 			var $fixture = $( '#qunit-fixture' ),
-				$target = $( '<textarea>' ).attr( 'id', 'wpTextBox1' );
+				$target = $( '<textarea id="wpTextBox1">' );
 			this.$target = $target;
 			$fixture.append( $target );
 			$target.wikiEditor( 'addModule', 'toolbar' );
@@ -10,7 +10,7 @@
 		}
 	} ) );
 
-	QUnit.test( 'Toolbars', function ( assert ) {
+	QUnit.test( 'Toolbars', 16, function ( assert ) {
 		// Add toolbar section
 		var data = {
 			sections: {
@@ -20,9 +20,9 @@
 				}
 			}
 		};
-		assert.strictEqual( this.$ui.find( '*[rel="emoticons"].section' ).length, 0, 'Before adding toolbar section' );
+		assert.equal( this.$ui.find( '*[rel="emoticons"].section' ).length, 0, 'Before adding toolbar section' );
 		this.$target.wikiEditor( 'addToToolbar', data );
-		assert.strictEqual( this.$ui.find( '*[rel="emoticons"].section' ).length, 1, 'After adding toolbar section' );
+		assert.equal( this.$ui.find( '*[rel="emoticons"].section' ).length, 1, 'After adding toolbar section' );
 
 		// Add toolbar group
 		data = {
@@ -33,9 +33,9 @@
 				}
 			}
 		};
-		assert.strictEqual( this.$ui.find( '*[rel="emoticons"].section *[rel="faces"].group' ).length, 0, 'Before adding toolbar group' );
+		assert.equal( this.$ui.find( '*[rel="emoticons"].section *[rel="faces"].group' ).length, 0, 'Before adding toolbar group' );
 		this.$target.wikiEditor( 'addToToolbar', data );
-		assert.strictEqual( this.$ui.find( '*[rel="emoticons"].section *[rel="faces"].group' ).length, 1, 'After adding toolbar group' );
+		assert.equal( this.$ui.find( '*[rel="emoticons"].section *[rel="faces"].group' ).length, 1, 'After adding toolbar group' );
 
 		// Add button tool
 		data = {
@@ -55,9 +55,9 @@
 				}
 			}
 		};
-		assert.strictEqual( this.$ui.find( '*[rel="emoticons"].section *[rel="faces"].group *[rel="smile"].tool' ).length, 0, 'Before adding button' );
+		assert.equal( this.$ui.find( '*[rel="emoticons"].section *[rel="faces"].group *[rel="smile"].tool' ).length, 0, 'Before adding button' );
 		this.$target.wikiEditor( 'addToToolbar', data );
-		assert.strictEqual( this.$ui.find( '*[rel="emoticons"].section *[rel="faces"].group *[rel="smile"].tool' ).length, 1, 'After adding button' );
+		assert.equal( this.$ui.find( '*[rel="emoticons"].section *[rel="faces"].group *[rel="smile"].tool' ).length, 1, 'After adding button' );
 
 		// Remove button tool
 		data = {
@@ -65,9 +65,9 @@
 			group: 'faces',
 			tool: 'smile'
 		};
-		assert.strictEqual( this.$ui.find( '*[rel="emoticons"].section *[rel="faces"].group *[rel="smile"].tool' ).length, 1, 'Before removing button' );
+		assert.equal( this.$ui.find( '*[rel="emoticons"].section *[rel="faces"].group *[rel="smile"].tool' ).length, 1, 'Before removing button' );
 		this.$target.wikiEditor( 'removeFromToolbar', data );
-		assert.strictEqual( this.$ui.find( '*[rel="emoticons"].section *[rel="faces"].group *[rel="smile"].tool' ).length, 0, 'After removing button' );
+		assert.equal( this.$ui.find( '*[rel="emoticons"].section *[rel="faces"].group *[rel="smile"].tool' ).length, 0, 'After removing button' );
 
 		// Add select tool
 		data = {
@@ -109,9 +109,9 @@
 				}
 			}
 		};
-		assert.strictEqual( this.$ui.find( '*[rel="emoticons"].section *[rel="faces"].group *[rel="icons"].tool' ).length, 0, 'Before adding select' );
+		assert.equal( this.$ui.find( '*[rel="emoticons"].section *[rel="faces"].group *[rel="icons"].tool' ).length, 0, 'Before adding select' );
 		this.$target.wikiEditor( 'addToToolbar', data );
-		assert.strictEqual( this.$ui.find( '*[rel="emoticons"].section *[rel="faces"].group *[rel="icons"].tool' ).length, 1, 'After adding select' );
+		assert.equal( this.$ui.find( '*[rel="emoticons"].section *[rel="faces"].group *[rel="icons"].tool' ).length, 1, 'After adding select' );
 
 		// Remove select tool
 		data = {
@@ -119,29 +119,29 @@
 			group: 'faces',
 			tool: 'icons'
 		};
-		assert.strictEqual( this.$ui.find( '*[rel="emoticons"].section *[rel="faces"].group *[rel="icons"].tool' ).length, 1, 'Before removing select' );
+		assert.equal( this.$ui.find( '*[rel="emoticons"].section *[rel="faces"].group *[rel="icons"].tool' ).length, 1, 'Before removing select' );
 		this.$target.wikiEditor( 'removeFromToolbar', data );
-		assert.strictEqual( this.$ui.find( '*[rel="emoticons"].section *[rel="faces"].group *[rel="icons"].tool' ).length, 0, 'After removing select' );
+		assert.equal( this.$ui.find( '*[rel="emoticons"].section *[rel="faces"].group *[rel="icons"].tool' ).length, 0, 'After removing select' );
 
 		// Remove toolbar group
 		data = {
 			section: 'emoticons',
 			group: 'faces'
 		};
-		assert.strictEqual( this.$ui.find( '*[rel="emoticons"].section *[rel="faces"].group' ).length, 1, 'Before removing toolbar group' );
+		assert.equal( this.$ui.find( '*[rel="emoticons"].section *[rel="faces"].group' ).length, 1, 'Before removing toolbar group' );
 		this.$target.wikiEditor( 'removeFromToolbar', data );
-		assert.strictEqual( this.$ui.find( '*[rel="emoticons"].section *[rel="faces"].group' ).length, 0, 'After removing toolbar group' );
+		assert.equal( this.$ui.find( '*[rel="emoticons"].section *[rel="faces"].group' ).length, 0, 'After removing toolbar group' );
 
 		// Remove toolbar section
 		data = {
 			section: 'emoticons'
 		};
-		assert.strictEqual( this.$ui.find( '*[rel="emoticons"].section' ).length, 1, 'Before removing toolbar section' );
+		assert.equal( this.$ui.find( '*[rel="emoticons"].section' ).length, 1, 'Before removing toolbar section' );
 		this.$target.wikiEditor( 'removeFromToolbar', data );
-		assert.strictEqual( this.$ui.find( '*[rel="emoticons"].section' ).length, 0, 'After removing toolbar section' );
+		assert.equal( this.$ui.find( '*[rel="emoticons"].section' ).length, 0, 'After removing toolbar section' );
 	} );
 
-	QUnit.test( 'Booklets', function ( assert ) {
+	QUnit.test( 'Booklets', 20, function ( assert ) {
 		// Add booklet section
 		var data = {
 			sections: {
@@ -151,9 +151,9 @@
 				}
 			}
 		};
-		assert.strictEqual( this.$ui.find( '*[rel="info"].section' ).length, 0, 'Before adding booklet section' );
+		assert.equal( this.$ui.find( '*[rel="info"].section' ).length, 0, 'Before adding booklet section' );
 		this.$target.wikiEditor( 'addToToolbar', data );
-		assert.strictEqual( this.$ui.find( '*[rel="info"].section' ).length, 1, 'After adding booklet section' );
+		assert.equal( this.$ui.find( '*[rel="info"].section' ).length, 1, 'After adding booklet section' );
 
 		// Add table page
 		data = {
@@ -170,9 +170,9 @@
 				}
 			}
 		};
-		assert.strictEqual( this.$ui.find( '*[rel="info"].section *[rel="colors"].page' ).length, 0, 'Before adding table page' );
+		assert.equal( this.$ui.find( '*[rel="info"].section *[rel="colors"].page' ).length, 0, 'Before adding table page' );
 		this.$target.wikiEditor( 'addToToolbar', data );
-		assert.strictEqual( this.$ui.find( '*[rel="info"].section *[rel="colors"].page' ).length, 1, 'After adding table page' );
+		assert.equal( this.$ui.find( '*[rel="info"].section *[rel="colors"].page' ).length, 1, 'After adding table page' );
 
 		// Add table rows
 		data = {
@@ -196,9 +196,9 @@
 				}
 			]
 		};
-		assert.strictEqual( this.$ui.find( '*[rel="info"].section *[rel="colors"].page tr td' ).length, 0, 'Before adding table rows' );
+		assert.equal( this.$ui.find( '*[rel="info"].section *[rel="colors"].page tr td' ).length, 0, 'Before adding table rows' );
 		this.$target.wikiEditor( 'addToToolbar', data );
-		assert.strictEqual( this.$ui.find( '*[rel="info"].section *[rel="colors"].page tr td' ).length, 9, 'After adding table rows' );
+		assert.equal( this.$ui.find( '*[rel="info"].section *[rel="colors"].page tr td' ).length, 9, 'After adding table rows' );
 
 		// Remove table row
 		data = {
@@ -206,18 +206,18 @@
 			page: 'colors',
 			row: 0
 		};
-		assert.strictEqual( this.$ui.find( '*[rel="info"].section *[rel="colors"].page tr td' ).length, 9, 'Before removing table row' );
+		assert.equal( this.$ui.find( '*[rel="info"].section *[rel="colors"].page tr td' ).length, 9, 'Before removing table row' );
 		this.$target.wikiEditor( 'removeFromToolbar', data );
-		assert.strictEqual( this.$ui.find( '*[rel="info"].section *[rel="colors"].page tr td' ).length, 6, 'After removing table row' );
+		assert.equal( this.$ui.find( '*[rel="info"].section *[rel="colors"].page tr td' ).length, 6, 'After removing table row' );
 
 		// Remove table page
 		data = {
 			section: 'info',
 			page: 'colors'
 		};
-		assert.strictEqual( this.$ui.find( '*[rel="info"].section *[rel="colors"].page' ).length, 1, 'Before removing table page' );
+		assert.equal( this.$ui.find( '*[rel="info"].section *[rel="colors"].page' ).length, 1, 'Before removing table page' );
 		this.$target.wikiEditor( 'removeFromToolbar', data );
-		assert.strictEqual( this.$ui.find( '*[rel="info"].section *[rel="colors"].page' ).length, 0, 'After removing table page' );
+		assert.equal( this.$ui.find( '*[rel="info"].section *[rel="colors"].page' ).length, 0, 'After removing table page' );
 
 		// Add character page
 		data = {
@@ -229,9 +229,9 @@
 				}
 			}
 		};
-		assert.strictEqual( this.$ui.find( '*[rel="info"].section *[rel="emoticons"].page' ).length, 0, 'Before adding character page' );
+		assert.equal( this.$ui.find( '*[rel="info"].section *[rel="emoticons"].page' ).length, 0, 'Before adding character page' );
 		this.$target.wikiEditor( 'addToToolbar', data );
-		assert.strictEqual( this.$ui.find( '*[rel="info"].section *[rel="emoticons"].page' ).length, 1, 'After adding character page' );
+		assert.equal( this.$ui.find( '*[rel="info"].section *[rel="emoticons"].page' ).length, 1, 'After adding character page' );
 
 		// Add characters
 		data = {
@@ -239,9 +239,9 @@
 			page: 'emoticons',
 			characters: [ ':)', ':))', ':(', '<3', ';)' ]
 		};
-		assert.strictEqual( this.$ui.find( '*[rel="info"].section *[rel="emoticons"].page *[rel=":))"]' ).length, 0, 'Before adding characters' );
+		assert.equal( this.$ui.find( '*[rel="info"].section *[rel="emoticons"].page *[rel=":))"]' ).length, 0, 'Before adding characters' );
 		this.$target.wikiEditor( 'addToToolbar', data );
-		assert.strictEqual( this.$ui.find( '*[rel="info"].section *[rel="emoticons"].page *[rel=":))"]' ).length, 1, 'After adding characters' );
+		assert.equal( this.$ui.find( '*[rel="info"].section *[rel="emoticons"].page *[rel=":))"]' ).length, 1, 'After adding characters' );
 
 		// Remove character
 		data = {
@@ -249,26 +249,26 @@
 			page: 'emoticons',
 			character: ':))'
 		};
-		assert.strictEqual( this.$ui.find( '*[rel="info"].section *[rel="emoticons"].page *[rel=":))"]' ).length, 1, 'Before removing character' );
+		assert.equal( this.$ui.find( '*[rel="info"].section *[rel="emoticons"].page *[rel=":))"]' ).length, 1, 'Before removing character' );
 		this.$target.wikiEditor( 'removeFromToolbar', data );
-		assert.strictEqual( this.$ui.find( '*[rel="info"].section *[rel="emoticons"].page *[rel=":))"]' ).length, 0, 'After removing character' );
+		assert.equal( this.$ui.find( '*[rel="info"].section *[rel="emoticons"].page *[rel=":))"]' ).length, 0, 'After removing character' );
 
 		// Remove character page
 		data = {
 			section: 'info',
 			page: 'emoticons'
 		};
-		assert.strictEqual( this.$ui.find( '*[rel="info"].section *[rel="emoticons"].page' ).length, 1, 'Before removing character page' );
+		assert.equal( this.$ui.find( '*[rel="info"].section *[rel="emoticons"].page' ).length, 1, 'Before removing character page' );
 		this.$target.wikiEditor( 'removeFromToolbar', data );
-		assert.strictEqual( this.$ui.find( '*[rel="info"].section *[rel="emoticons"].page' ).length, 0, 'After removing character page' );
+		assert.equal( this.$ui.find( '*[rel="info"].section *[rel="emoticons"].page' ).length, 0, 'After removing character page' );
 
 		// Remove booklet section
 		data = {
 			section: 'info'
 		};
-		assert.strictEqual( this.$ui.find( '*[rel="info"].section' ).length, 1, 'Before removing booklet section' );
+		assert.equal( this.$ui.find( '*[rel="info"].section' ).length, 1, 'Before removing booklet section' );
 		this.$target.wikiEditor( 'removeFromToolbar', data );
-		assert.strictEqual( this.$ui.find( '*[rel="info"].section' ).length, 0, 'After removing booklet section' );
+		assert.equal( this.$ui.find( '*[rel="info"].section' ).length, 0, 'After removing booklet section' );
 	} );
 
-}() );
+}( jQuery ) );

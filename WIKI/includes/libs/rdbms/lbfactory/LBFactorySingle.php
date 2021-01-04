@@ -23,8 +23,8 @@
 
 namespace Wikimedia\Rdbms;
 
-use BadMethodCallException;
 use InvalidArgumentException;
+use BadMethodCallException;
 
 /**
  * An LBFactory class that always returns a single database object.
@@ -44,12 +44,8 @@ class LBFactorySingle extends LBFactory {
 			throw new InvalidArgumentException( "Missing 'connection' argument." );
 		}
 
-		$lb = new LoadBalancerSingle( array_merge(
-			$this->baseLoadBalancerParams( $this->getOwnershipId() ),
-			$conf
-		) );
+		$lb = new LoadBalancerSingle( array_merge( $this->baseLoadBalancerParams(), $conf ) );
 		$this->initLoadBalancer( $lb );
-
 		$this->lb = $lb;
 	}
 
@@ -60,22 +56,26 @@ class LBFactorySingle extends LBFactory {
 	 * @since 1.28
 	 */
 	public static function newFromConnection( IDatabase $db, array $params = [] ) {
-		return new static( array_merge(
-			[ 'localDomain' => $db->getDomainID() ],
-			$params,
-			[ 'connection' => $db ]
-		) );
+		return new static( [ 'connection' => $db ] + $params );
 	}
 
-	public function newMainLB( $domain = false, $owner = null ) {
-		throw new BadMethodCallException( "Method is not supported." );
+	/**
+	 * @param bool|string $domain (unused)
+	 * @return LoadBalancerSingle
+	 */
+	public function newMainLB( $domain = false ) {
+		return $this->lb;
 	}
 
+	/**
+	 * @param bool|string $domain (unused)
+	 * @return LoadBalancerSingle
+	 */
 	public function getMainLB( $domain = false ) {
 		return $this->lb;
 	}
 
-	public function newExternalLB( $cluster, $owner = null ) {
+	public function newExternalLB( $cluster ) {
 		throw new BadMethodCallException( "Method is not supported." );
 	}
 
@@ -83,17 +83,25 @@ class LBFactorySingle extends LBFactory {
 		throw new BadMethodCallException( "Method is not supported." );
 	}
 
+	/**
+	 * @return LoadBalancerSingle[] Map of (cluster name => LoadBalancer)
+	 */
 	public function getAllMainLBs() {
 		return [ 'DEFAULT' => $this->lb ];
 	}
 
+	/**
+	 * @return LoadBalancerSingle[] Map of (cluster name => LoadBalancer)
+	 */
 	public function getAllExternalLBs() {
 		return [];
 	}
 
+	/**
+	 * @param string|callable $callback
+	 * @param array $params
+	 */
 	public function forEachLB( $callback, array $params = [] ) {
-		if ( isset( $this->lb ) ) { // may not be set during _destruct()
-			$callback( $this->lb, ...$params );
-		}
+		call_user_func_array( $callback, array_merge( [ $this->lb ], $params ) );
 	}
 }

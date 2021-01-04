@@ -1,11 +1,10 @@
 {
 	"@metadata": {
 		"authors": [
-			"Banjo",
-			"Elisardojm",
-			"Iváns",
 			"Toliño",
-			"Xosé"
+			"Xosé",
+			"Elisardojm",
+			"Banjo"
 		]
 	},
 	"syntaxhighlight-desc": "Proporciona unha sintaxe resaltada <code>&lt;syntaxhighlight&gt;</code> usando [http://pygments.org/ Pygments - Resaltador de sintaxe en Python]",
@@ -14,7 +13,7 @@
 	"syntaxhighlight-visualeditor-mwsyntaxhighlightinspector-code": "Código",
 	"syntaxhighlight-visualeditor-mwsyntaxhighlightinspector-language": "Lingua",
 	"syntaxhighlight-visualeditor-mwsyntaxhighlightinspector-none": "(ningún)",
-	"syntaxhighlight-visualeditor-mwsyntaxhighlightinspector-showlines": "Amosar números de liña",
+	"syntaxhighlight-visualeditor-mwsyntaxhighlightinspector-showlines": "Mostrar números de liña",
 	"syntaxhighlight-visualeditor-mwsyntaxhighlightinspector-startingline": "Número de liña de comezo",
 	"syntaxhighlight-visualeditor-mwsyntaxhighlightinspector-title": "Segmento de código",
 	"syntaxhighlight-error-pygments-invocation-failure": "Erro ó invocar Pygments",

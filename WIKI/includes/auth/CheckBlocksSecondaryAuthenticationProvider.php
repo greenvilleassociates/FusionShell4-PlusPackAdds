@@ -22,7 +22,6 @@
 namespace MediaWiki\Auth;
 
 use Config;
-use MediaWiki\MediaWikiServices;
 use StatusValue;
 
 /**
@@ -60,11 +59,9 @@ class CheckBlocksSecondaryAuthenticationProvider extends AbstractSecondaryAuthen
 	}
 
 	public function beginSecondaryAuthentication( $user, array $reqs ) {
-		// @TODO Partial blocks should not prevent the user from logging in.
-		//       see: https://phabricator.wikimedia.org/T208895
 		if ( !$this->blockDisablesLogin ) {
 			return AuthenticationResponse::newAbstain();
-		} elseif ( $user->getBlock() ) {
+		} elseif ( $user->isBlocked() ) {
 			return AuthenticationResponse::newFail(
 				new \Message( 'login-userblocked', [ $user->getName() ] )
 			);
@@ -80,16 +77,21 @@ class CheckBlocksSecondaryAuthenticationProvider extends AbstractSecondaryAuthen
 	public function testUserForCreation( $user, $autocreate, array $options = [] ) {
 		$block = $user->isBlockedFromCreateAccount();
 		if ( $block ) {
-			$formatter = MediaWikiServices::getInstance()->getBlockErrorFormatter();
+			$errorParams = [
+				$block->getTarget(),
+				$block->mReason ?: \Message::newFromKey( 'blockednoreason' )->text(),
+				$block->getByName()
+			];
 
-			$language = \RequestContext::getMain()->getUser()->isSafeToLoad() ?
-				\RequestContext::getMain()->getLanguage() :
-				MediaWikiServices::getInstance()->getContentLanguage();
-
-			$ip = $this->manager->getRequest()->getIP();
+			if ( $block->getType() === \Block::TYPE_RANGE ) {
+				$errorMessage = 'cantcreateaccount-range-text';
+				$errorParams[] = $this->manager->getRequest()->getIP();
+			} else {
+				$errorMessage = 'cantcreateaccount-text';
+			}
 
 			return StatusValue::newFatal(
-				$formatter->getMessage( $block, $user, $language, $ip )
+				new \Message( $errorMessage, $errorParams )
 			);
 		} else {
 			return StatusValue::newGood();

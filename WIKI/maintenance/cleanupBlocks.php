@@ -23,8 +23,6 @@
 
 require_once __DIR__ . '/Maintenance.php';
 
-use MediaWiki\Block\DatabaseBlock;
-
 /**
  * Maintenance script to clean up user blocks with user names not matching the
  * 'user' table.
@@ -41,14 +39,12 @@ class CleanupBlocks extends Maintenance {
 
 	public function execute() {
 		$db = $this->getDB( DB_MASTER );
-		$blockQuery = DatabaseBlock::getQueryInfo();
 
-		$max = $db->selectField( 'ipblocks', 'MAX(ipb_user)', [], __METHOD__ );
+		$max = $db->selectField( 'ipblocks', 'MAX(ipb_user)' );
 
 		// Step 1: Clean up any duplicate user blocks
-		$batchSize = $this->getBatchSize();
-		for ( $from = 1; $from <= $max; $from += $batchSize ) {
-			$to = min( $max, $from + $batchSize - 1 );
+		for ( $from = 1; $from <= $max; $from += $this->mBatchSize ) {
+			$to = min( $max, $from + $this->mBatchSize - 1 );
 			$this->output( "Cleaning up duplicate ipb_user ($from-$to of $max)\n" );
 
 			$delete = [];
@@ -57,8 +53,8 @@ class CleanupBlocks extends Maintenance {
 				'ipblocks',
 				[ 'ipb_user' ],
 				[
-					"ipb_user >= " . $from,
-					"ipb_user <= " . (int)$to,
+					"ipb_user >= $from",
+					"ipb_user <= $to",
 				],
 				__METHOD__,
 				[
@@ -69,24 +65,21 @@ class CleanupBlocks extends Maintenance {
 			foreach ( $res as $row ) {
 				$bestBlock = null;
 				$res2 = $db->select(
-					$blockQuery['tables'],
-					$blockQuery['fields'],
+					'ipblocks',
+					'*',
 					[
 						'ipb_user' => $row->ipb_user,
-					],
-					__METHOD__,
-					[],
-					$blockQuery['joins']
+					]
 				);
 				foreach ( $res2 as $row2 ) {
-					$block = DatabaseBlock::newFromRow( $row2 );
+					$block = Block::newFromRow( $row2 );
 					if ( !$bestBlock ) {
 						$bestBlock = $block;
 						continue;
 					}
 
 					// Find the most-restrictive block. Can't use
-					// DatabaseBlock::chooseBlock because that's for IP blocks, not
+					// Block::chooseBlock because that's for IP blocks, not
 					// user blocks.
 					$keep = null;
 					if ( $keep === null && $block->getExpiry() !== $bestBlock->getExpiry() ) {
@@ -94,12 +87,11 @@ class CleanupBlocks extends Maintenance {
 						$keep = $block->getExpiry() > $bestBlock->getExpiry();
 					}
 					if ( $keep === null ) {
-						if ( $block->isCreateAccountBlocked() xor $bestBlock->isCreateAccountBlocked() ) {
-							$keep = $block->isCreateAccountBlocked();
-						} elseif ( $block->isEmailBlocked() xor $bestBlock->isEmailBlocked() ) {
-							$keep = $block->isEmailBlocked();
-						} elseif ( $block->isUsertalkEditAllowed() xor $bestBlock->isUsertalkEditAllowed() ) {
-							$keep = $block->isUsertalkEditAllowed();
+						foreach ( [ 'createaccount', 'sendemail', 'editownusertalk' ] as $action ) {
+							if ( $block->prevents( $action ) xor $bestBlock->prevents( $action ) ) {
+								$keep = $block->prevents( $action );
+								break;
+							}
 						}
 					}
 
@@ -122,8 +114,8 @@ class CleanupBlocks extends Maintenance {
 		}
 
 		// Step 2: Update the user name in any blocks where it doesn't match
-		for ( $from = 1; $from <= $max; $from += $batchSize ) {
-			$to = min( $max, $from + $batchSize - 1 );
+		for ( $from = 1; $from <= $max; $from += $this->mBatchSize ) {
+			$to = min( $max, $from + $this->mBatchSize - 1 );
 			$this->output( "Cleaning up mismatched user name ($from-$to of $max)\n" );
 
 			$res = $db->select(
@@ -131,8 +123,8 @@ class CleanupBlocks extends Maintenance {
 				[ 'ipb_id', 'user_name' ],
 				[
 					'ipb_user = user_id',
-					"ipb_user >= " . $from,
-					"ipb_user <= " . (int)$to,
+					"ipb_user >= $from",
+					"ipb_user <= $to",
 					'ipb_address != user_name',
 				],
 				__METHOD__
@@ -151,5 +143,5 @@ class CleanupBlocks extends Maintenance {
 	}
 }
 
-$maintClass = CleanupBlocks::class;
+$maintClass = "CleanupBlocks";
 require_once RUN_MAINTENANCE_IF_MAIN;

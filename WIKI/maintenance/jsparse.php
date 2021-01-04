@@ -38,20 +38,18 @@ class JSParseHelper extends Maintenance {
 	}
 
 	public function execute() {
-		if ( $this->hasArg( 0 ) ) {
+		if ( $this->hasArg() ) {
 			$files = $this->mArgs;
 		} else {
-			// @todo fixme this is a lame API :)
-			$this->maybeHelp( true );
-			// it should exit from the above first...
-			exit( 1 );
+			$this->maybeHelp( true ); // @todo fixme this is a lame API :)
+			exit( 1 ); // it should exit from the above first...
 		}
 
 		$parser = new JSParser();
 		foreach ( $files as $filename ) {
-			Wikimedia\suppressWarnings();
+			MediaWiki\suppressWarnings();
 			$js = file_get_contents( $filename );
-			Wikimedia\restoreWarnings();
+			MediaWiki\restoreWarnings();
 			if ( $js === false ) {
 				$this->output( "$filename ERROR: could not read file\n" );
 				$this->errs++;
@@ -75,5 +73,5 @@ class JSParseHelper extends Maintenance {
 	}
 }
 
-$maintClass = JSParseHelper::class;
+$maintClass = "JSParseHelper";
 require_once RUN_MAINTENANCE_IF_MAIN;

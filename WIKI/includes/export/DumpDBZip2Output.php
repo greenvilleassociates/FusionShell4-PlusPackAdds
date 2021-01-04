@@ -30,7 +30,7 @@ class DumpDBZip2Output extends DumpPipeOutput {
 	/**
 	 * @param string $file
 	 */
-	public function __construct( $file ) {
+	function __construct( $file ) {
 		parent::__construct( "dbzip2", $file );
 	}
 }

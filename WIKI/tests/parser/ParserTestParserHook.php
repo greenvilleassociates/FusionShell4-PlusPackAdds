@@ -27,21 +27,21 @@
 
 class ParserTestParserHook {
 
-	public static function setup( Parser $parser ) {
+	static function setup( &$parser ) {
 		$parser->setHook( 'tag', [ __CLASS__, 'dumpHook' ] );
 		$parser->setHook( 'tåg', [ __CLASS__, 'dumpHook' ] );
 		$parser->setHook( 'statictag', [ __CLASS__, 'staticTagHook' ] );
 		return true;
 	}
 
-	public static function dumpHook( $in, $argv ) {
+	static function dumpHook( $in, $argv ) {
 		return "<pre>\n" .
 			var_export( $in, true ) . "\n" .
 			var_export( $argv, true ) . "\n" .
 			"</pre>";
 	}
 
-	public static function staticTagHook( $in, $argv, $parser ) {
+	static function staticTagHook( $in, $argv, $parser ) {
 		if ( !count( $argv ) ) {
 			$parser->static_tag_buf = $in;
 			return '';
@@ -49,11 +49,16 @@ class ParserTestParserHook {
 			&& $argv['action'] === 'flush' && $in === null
 		) {
 			// Clear the buffer, we probably don't need to
-			$tmp = $parser->static_tag_buf ?? '';
+			if ( isset( $parser->static_tag_buf ) ) {
+				$tmp = $parser->static_tag_buf;
+			} else {
+				$tmp = '';
+			}
 			$parser->static_tag_buf = null;
 			return $tmp;
 		} else { // wtf?
-			return "\nCall this extension as <statictag>string</statictag> or as" .
+			return
+				"\nCall this extension as <statictag>string</statictag> or as" .
 				" <statictag action=flush/>, not in any other way.\n" .
 				"text: " . var_export( $in, true ) . "\n" .
 				"argv: " . var_export( $argv, true ) . "\n";

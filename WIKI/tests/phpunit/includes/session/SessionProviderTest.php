@@ -2,8 +2,7 @@
 
 namespace MediaWiki\Session;
 
-use MediaWiki\MediaWikiServices;
-use MediaWikiIntegrationTestCase;
+use MediaWikiTestCase;
 use Wikimedia\TestingAccessWrapper;
 
 /**
@@ -11,13 +10,12 @@ use Wikimedia\TestingAccessWrapper;
  * @group Database
  * @covers MediaWiki\Session\SessionProvider
  */
-class SessionProviderTest extends MediaWikiIntegrationTestCase {
+class SessionProviderTest extends MediaWikiTestCase {
 
 	public function testBasics() {
 		$manager = new SessionManager();
 		$logger = new \TestLogger();
 		$config = new \HashConfig();
-		$hookContainer = $this->createHookContainer();
 
 		$provider = $this->getMockForAbstractClass( SessionProvider::class );
 		$priv = TestingAccessWrapper::newFromObject( $provider );
@@ -29,8 +27,6 @@ class SessionProviderTest extends MediaWikiIntegrationTestCase {
 		$provider->setManager( $manager );
 		$this->assertSame( $manager, $priv->manager );
 		$this->assertSame( $manager, $provider->getManager() );
-		$provider->setHookContainer( $hookContainer );
-		$this->assertSame( $hookContainer, $priv->getHookContainer() );
 
 		$provider->invalidateSessionsForUser( new \User );
 
@@ -43,7 +39,6 @@ class SessionProviderTest extends MediaWikiIntegrationTestCase {
 		$this->assertNull( $provider->getRememberUserDuration() );
 
 		$this->assertNull( $provider->whyNoSession() );
-		$this->assertFalse( $provider->safeAgainstCsrf() );
 
 		$info = new SessionInfo( SessionInfo::MIN_PRIORITY, [
 			'id' => 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
@@ -139,7 +134,7 @@ class SessionProviderTest extends MediaWikiIntegrationTestCase {
 			$this->fail( 'Expected exception not thrown' );
 		} catch ( \BadMethodCallException $ex ) {
 			$this->assertSame(
-				'MediaWiki\\Session\\SessionProvider::preventSessionsForUser must be implemented ' .
+				'MediaWiki\\Session\\SessionProvider::preventSessionsForUser must be implmented ' .
 					'when canChangeUser() is false',
 				$ex->getMessage()
 			);
@@ -186,8 +181,7 @@ class SessionProviderTest extends MediaWikiIntegrationTestCase {
 
 		$this->assertSame(
 			'MockSessionProvider sessions',
-			$provider->describe(
-				MediaWikiServices::getInstance()->getLanguageFactory()->getLanguage( 'en' ) )
+			$provider->describe( \Language::factory( 'en' ) )
 		);
 	}
 

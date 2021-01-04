@@ -1,25 +1,22 @@
 <?php
-
-class SpecialCaptcha extends UnlistedSpecialPage {
+class CaptchaSpecialPage extends UnlistedSpecialPage {
 	public function __construct() {
 		parent::__construct( 'Captcha' );
 	}
 
-	/**
-	 * @inheritDoc
-	 */
-	public function execute( $par ) {
+	function execute( $par ) {
 		$this->setHeaders();
 
 		$instance = ConfirmEditHooks::getInstance();
 
-		if ( $par === 'image' && method_exists( $instance, 'showImage' ) ) {
-			// @todo: Do this in a more OOP way
-			/** @phan-suppress-next-line PhanUndeclaredMethod */
-			$instance->showImage();
-			return;
+		switch ( $par ) {
+			case "image":
+				if ( method_exists( $instance, 'showImage' ) ) {
+					return $instance->showImage();
+				}
+			case "help":
+			default:
+				return $instance->showHelp();
 		}
-
-		$instance->showHelp();
 	}
 }

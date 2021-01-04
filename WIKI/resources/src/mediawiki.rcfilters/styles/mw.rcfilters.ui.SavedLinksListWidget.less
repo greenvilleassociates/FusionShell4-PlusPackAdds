@@ -1,21 +1,18 @@
-@import 'mediawiki.ui/variables.less';
-
 .mw-rcfilters-ui-savedLinksListWidget {
+	&-menu {
+		width: 100%;
+	}
+
 	&-placeholder {
 		&-title {
 			font-weight: bold;
-			margin-bottom: 0.4375em; // 7px / 16
-			margin-top: 0.1875em; // 3px / 16
-		}
-
-		&-description {
-			line-height: 1.5em; // 24px / 16
+			margin-bottom: 1em;
 		}
 
 		// Extra specificity needed to override OOUI rule that sets white-space: nowrap;
 		// on labels inside options
 		&.oo-ui-optionWidget .oo-ui-labelElement-label {
-			color: @color-base--subtle;
+			color: #72777d;
 			white-space: normal;
 		}
 

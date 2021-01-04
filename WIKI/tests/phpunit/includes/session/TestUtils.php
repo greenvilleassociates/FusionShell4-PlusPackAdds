@@ -2,7 +2,6 @@
 
 namespace MediaWiki\Session;
 
-use PHPUnit\Framework\Assert;
 use Psr\Log\LoggerInterface;
 use Wikimedia\TestingAccessWrapper;
 
@@ -66,7 +65,7 @@ class TestUtils {
 	public static function getDummySessionBackend() {
 		$rc = new \ReflectionClass( SessionBackend::class );
 		if ( !method_exists( $rc, 'newInstanceWithoutConstructor' ) ) {
-			Assert::markTestSkipped(
+			\PHPUnit_Framework_Assert::markTestSkipped(
 				'ReflectionClass::newInstanceWithoutConstructor isn\'t available'
 			);
 		}
@@ -79,13 +78,18 @@ class TestUtils {
 	/**
 	 * If you need a Session for testing but don't want to create a backend to
 	 * construct one, use this.
-	 * @param object|null $backend Object to serve as the SessionBackend
-	 * @param int $index
-	 * @param LoggerInterface|null $logger
+	 * @param object $backend Object to serve as the SessionBackend
+	 * @param int $index Index
+	 * @param LoggerInterface $logger
 	 * @return Session
 	 */
 	public static function getDummySession( $backend = null, $index = -1, $logger = null ) {
 		$rc = new \ReflectionClass( Session::class );
+		if ( !method_exists( $rc, 'newInstanceWithoutConstructor' ) ) {
+			\PHPUnit_Framework_Assert::markTestSkipped(
+				'ReflectionClass::newInstanceWithoutConstructor isn\'t available'
+			);
+		}
 
 		if ( $backend === null ) {
 			$backend = new DummySessionBackend;

@@ -20,6 +20,7 @@
  * http://www.gnu.org/copyleft/gpl.html
  *
  * @file
+ * @ingroup Database
  */
 namespace Wikimedia\Rdbms;
 
@@ -62,14 +63,13 @@ interface IMaintainableDatabase extends IDatabase {
 	 * This is handy when you need to construct SQL for joins
 	 *
 	 * Example:
-	 * list( $user, $watchlist ) = $dbr->tableNames( 'user', 'watchlist' ) );
-	 * $sql = "SELECT wl_namespace, wl_title FROM $watchlist, $user
+	 * extract( $dbr->tableNames( 'user', 'watchlist' ) );
+	 * $sql = "SELECT wl_namespace,wl_title FROM $watchlist,$user
 	 *         WHERE wl_user=user_id AND wl_user=$nameWithQuotes";
 	 *
-	 * @param string ...$tables
 	 * @return array
 	 */
-	public function tableNames( ...$tables );
+	public function tableNames();
 
 	/**
 	 * Fetch a number of table names into an zero-indexed numerical array
@@ -80,10 +80,9 @@ interface IMaintainableDatabase extends IDatabase {
 	 * $sql = "SELECT wl_namespace,wl_title FROM $watchlist,$user
 	 *         WHERE wl_user=user_id AND wl_user=$nameWithQuotes";
 	 *
-	 * @param string ...$tables
 	 * @return array
 	 */
-	public function tableNamesN( ...$tables );
+	public function tableNamesN();
 
 	/**
 	 * Returns the size of a text field, or -1 for "unlimited"
@@ -150,23 +149,11 @@ interface IMaintainableDatabase extends IDatabase {
 
 	/**
 	 * Delete a table
-	 *
-	 * @param string $table
-	 * @param string $fname
-	 * @return bool Whether the table already existed
-	 * @throws DBError If an error occurs
+	 * @param string $tableName
+	 * @param string $fName
+	 * @return bool|ResultWrapper
 	 */
-	public function dropTable( $table, $fname = __METHOD__ );
-
-	/**
-	 * Delete all data in a table(s) and reset any sequences owned by that table(s)
-	 *
-	 * @param string|string[] $tables
-	 * @param string $fname
-	 * @throws DBError If an error occurs
-	 * @since 1.35
-	 */
-	public function truncate( $tables, $fname = __METHOD__ );
+	public function dropTable( $tableName, $fName = __METHOD__ );
 
 	/**
 	 * Perform a deadlock-prone transaction.
@@ -188,17 +175,16 @@ interface IMaintainableDatabase extends IDatabase {
 	 * iteration, or false on error, for example if the retry limit was
 	 * reached.
 	 *
-	 * @param mixed ...$args
 	 * @return mixed
 	 * @throws DBUnexpectedError
 	 * @throws Exception
 	 */
-	public function deadlockLoop( ...$args );
+	public function deadlockLoop();
 
 	/**
 	 * Lists all the VIEWs in the database
 	 *
-	 * @param string|null $prefix Only show VIEWs with this prefix, eg. unit_test_
+	 * @param string $prefix Only show VIEWs with this prefix, eg. unit_test_
 	 * @param string $fname Name of calling function
 	 * @throws RuntimeException
 	 * @return array
@@ -290,38 +276,6 @@ interface IMaintainableDatabase extends IDatabase {
 	 * @since 1.29
 	 */
 	public function unlockTables( $method );
-
-	/**
-	 * List all tables on the database
-	 *
-	 * @param string|null $prefix Only show tables with this prefix, e.g. mw_
-	 * @param string $fname Calling function name
-	 * @throws DBError
-	 * @return array
-	 */
-	public function listTables( $prefix = null, $fname = __METHOD__ );
-
-	/**
-	 * Determines if a given index is unique
-	 *
-	 * @param string $table
-	 * @param string $index
-	 * @param string $fname Calling function name
-	 *
-	 * @return bool
-	 */
-	public function indexUnique( $table, $index, $fname = __METHOD__ );
-
-	/**
-	 * mysql_fetch_field() wrapper
-	 * Returns false if the field doesn't exist
-	 *
-	 * @param string $table Table name
-	 * @param string $field Field name
-	 *
-	 * @return false|Field
-	 */
-	public function fieldInfo( $table, $field );
 }
 
 class_alias( IMaintainableDatabase::class, 'IMaintainableDatabase' );

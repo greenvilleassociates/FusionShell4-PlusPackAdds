@@ -1,15 +1,13 @@
 <?php
 
 use MediaWiki\Auth\AuthenticationRequestTestCase;
+use MediaWiki\Auth\AuthManager;
 
-/**
- * @covers CaptchaAuthenticationRequest
- */
 class CaptchaAuthenticationRequestTest extends AuthenticationRequestTestCase {
-	public function setUp() : void {
+	public function setUp() {
 		parent::setUp();
 		$this->setMwGlobals( [
-			'wgCaptchaClass' => SimpleCaptcha::class,
+			'wgCaptchaClass' => 'SimpleCaptcha',
 			'wgCaptchaStorageClass' => CaptchaHashStore::class,
 		] );
 		CaptchaStore::unsetInstanceForTests();

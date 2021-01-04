@@ -1,5 +1,9 @@
 <?php
 /**
+ *
+ *
+ * Created on Oct 16, 2006
+ *
  * Copyright © 2006 Yuri Astrakhan "<Firstname><Lastname>@gmail.com"
  *
  * This program is free software; you can redistribute it and/or modify
@@ -20,9 +24,6 @@
  * @file
  */
 
-use Wikimedia\ParamValidator\ParamValidator;
-use Wikimedia\ParamValidator\TypeDef\IntegerDef;
-
 /**
  * This is a three-in-one module to query:
  *   * backlinks  - links pointing to the given page,
@@ -38,14 +39,8 @@ class ApiQueryBacklinks extends ApiQueryGeneratorBase {
 	 */
 	private $rootTitle;
 
-	private $params;
-	/** @var array */
-	private $cont;
-	private $redirect;
+	private $params, $cont, $redirect;
 	private $bl_ns, $bl_from, $bl_from_ns, $bl_table, $bl_code, $bl_title, $bl_fields, $hasNS;
-
-	/** @var string */
-	private $helpUrl;
 
 	/**
 	 * Maps ns and title to pageid
@@ -122,13 +117,13 @@ class ApiQueryBacklinks extends ApiQueryGeneratorBase {
 	}
 
 	/**
-	 * @param ApiPageSet|null $resultPageSet
+	 * @param ApiPageSet $resultPageSet
 	 * @return void
 	 */
 	private function runFirstQuery( $resultPageSet = null ) {
 		$this->addTables( [ $this->bl_table, 'page' ] );
 		$this->addWhere( "{$this->bl_from}=page_id" );
-		if ( $resultPageSet === null ) {
+		if ( is_null( $resultPageSet ) ) {
 			$this->addFields( [ 'page_id', 'page_title', 'page_namespace' ] );
 		} else {
 			$this->addFields( $resultPageSet->getPageTableFields() );
@@ -143,7 +138,7 @@ class ApiQueryBacklinks extends ApiQueryGeneratorBase {
 
 		if ( count( $this->cont ) >= 2 ) {
 			$op = $this->params['dir'] == 'descending' ? '<' : '>';
-			if ( $this->params['namespace'] !== null && count( $this->params['namespace'] ) > 1 ) {
+			if ( count( $this->params['namespace'] ) > 1 ) {
 				$this->addWhere(
 					"{$this->bl_from_ns} $op {$this->cont[0]} OR " .
 					"({$this->bl_from_ns} = {$this->cont[0]} AND " .
@@ -165,7 +160,7 @@ class ApiQueryBacklinks extends ApiQueryGeneratorBase {
 		$this->addOption( 'LIMIT', $this->params['limit'] + 1 );
 		$sort = ( $this->params['dir'] == 'descending' ? ' DESC' : '' );
 		$orderBy = [];
-		if ( $this->params['namespace'] !== null && count( $this->params['namespace'] ) > 1 ) {
+		if ( count( $this->params['namespace'] ) > 1 ) {
 			$orderBy[] = $this->bl_from_ns . $sort;
 		}
 		$orderBy[] = $this->bl_from . $sort;
@@ -173,11 +168,6 @@ class ApiQueryBacklinks extends ApiQueryGeneratorBase {
 		$this->addOption( 'STRAIGHT_JOIN' );
 
 		$res = $this->select( __METHOD__ );
-
-		if ( $resultPageSet === null ) {
-			$this->executeGenderCacheFromResultWrapper( $res, __METHOD__ );
-		}
-
 		$count = 0;
 		foreach ( $res as $row ) {
 			if ( ++$count > $this->params['limit'] ) {
@@ -200,8 +190,8 @@ class ApiQueryBacklinks extends ApiQueryGeneratorBase {
 				$this->redirTitles[] = $t;
 			}
 
-			if ( $resultPageSet === null ) {
-				$a = [ 'pageid' => (int)$row->page_id ];
+			if ( is_null( $resultPageSet ) ) {
+				$a = [ 'pageid' => intval( $row->page_id ) ];
 				ApiQueryBase::addTitleInfo( $a, $t );
 				if ( $row->page_is_redirect ) {
 					$a['redirect'] = true;
@@ -215,7 +205,7 @@ class ApiQueryBacklinks extends ApiQueryGeneratorBase {
 	}
 
 	/**
-	 * @param ApiPageSet|null $resultPageSet
+	 * @param ApiPageSet $resultPageSet
 	 * @return void
 	 */
 	private function runSecondQuery( $resultPageSet = null ) {
@@ -223,7 +213,7 @@ class ApiQueryBacklinks extends ApiQueryGeneratorBase {
 		$this->addTables( [ 'page', $this->bl_table ] );
 		$this->addWhere( "{$this->bl_from}=page_id" );
 
-		if ( $resultPageSet === null ) {
+		if ( is_null( $resultPageSet ) ) {
 			$this->addFields( [ 'page_id', 'page_title', 'page_namespace', 'page_is_redirect' ] );
 		} else {
 			$this->addFields( $resultPageSet->getPageTableFields() );
@@ -256,7 +246,7 @@ class ApiQueryBacklinks extends ApiQueryGeneratorBase {
 			$where = "{$this->bl_from} $op= {$this->cont[5]}";
 			// Don't bother with namespace, title, or from_namespace if it's
 			// otherwise constant in the where clause.
-			if ( $this->params['namespace'] !== null && count( $this->params['namespace'] ) > 1 ) {
+			if ( count( $this->params['namespace'] ) > 1 ) {
 				$where = "{$this->bl_from_ns} $op {$this->cont[4]} OR " .
 					"({$this->bl_from_ns} = {$this->cont[4]} AND ($where))";
 			}
@@ -288,7 +278,7 @@ class ApiQueryBacklinks extends ApiQueryGeneratorBase {
 		if ( count( $allRedirDBkey ) > 1 ) {
 			$orderBy[] = $this->bl_title . $sort;
 		}
-		if ( $this->params['namespace'] !== null && count( $this->params['namespace'] ) > 1 ) {
+		if ( count( $this->params['namespace'] ) > 1 ) {
 			$orderBy[] = $this->bl_from_ns . $sort;
 		}
 		$orderBy[] = $this->bl_from . $sort;
@@ -296,11 +286,6 @@ class ApiQueryBacklinks extends ApiQueryGeneratorBase {
 		$this->addOption( 'USE INDEX', [ 'page' => 'PRIMARY' ] );
 
 		$res = $this->select( __METHOD__ );
-
-		if ( $resultPageSet === null ) {
-			$this->executeGenderCacheFromResultWrapper( $res, __METHOD__ );
-		}
-
 		$count = 0;
 		foreach ( $res as $row ) {
 			$ns = $this->hasNS ? $row->{$this->bl_ns} : NS_FILE;
@@ -324,8 +309,8 @@ class ApiQueryBacklinks extends ApiQueryGeneratorBase {
 				$this->cont[] = $row->page_id;
 			}
 
-			if ( $resultPageSet === null ) {
-				$a = [ 'pageid' => (int)$row->page_id ];
+			if ( is_null( $resultPageSet ) ) {
+				$a['pageid'] = intval( $row->page_id );
 				ApiQueryBase::addTitleInfo( $a, Title::makeTitle( $row->page_namespace, $row->page_title ) );
 				if ( $row->page_is_redirect ) {
 					$a['redirect'] = true;
@@ -340,7 +325,7 @@ class ApiQueryBacklinks extends ApiQueryGeneratorBase {
 	}
 
 	/**
-	 * @param ApiPageSet|null $resultPageSet
+	 * @param ApiPageSet $resultPageSet
 	 * @return void
 	 */
 	private function run( $resultPageSet = null ) {
@@ -355,15 +340,8 @@ class ApiQueryBacklinks extends ApiQueryGeneratorBase {
 			$this->params['limit'] = $this->getMain()->canApiHighLimits() ? $botMax : $userMax;
 			$result->addParsedLimit( $this->getModuleName(), $this->params['limit'] );
 		} else {
-			$this->params['limit'] = $this->getMain()->getParamValidator()->validateValue(
-				$this, 'limit', (int)$this->params['limit'], [
-					ParamValidator::PARAM_TYPE => 'limit',
-					IntegerDef::PARAM_MIN => 1,
-					IntegerDef::PARAM_MAX => $userMax,
-					IntegerDef::PARAM_MAX2 => $botMax,
-					IntegerDef::PARAM_IGNORE_RANGE => true,
-				]
-			);
+			$this->params['limit'] = intval( $this->params['limit'] );
+			$this->validateLimit( 'limit', $this->params['limit'], 1, $userMax, $botMax );
 		}
 
 		$this->rootTitle = $this->getTitleFromTitleOrPageId( $this->params );
@@ -426,7 +404,6 @@ class ApiQueryBacklinks extends ApiQueryGeneratorBase {
 					break;
 
 				default:
-					// @phan-suppress-next-line PhanImpossibleCondition
 					$this->dieContinueUsageIf( true );
 			}
 
@@ -442,10 +419,10 @@ class ApiQueryBacklinks extends ApiQueryGeneratorBase {
 		// Fill in any missing fields in case it's needed below
 		$this->cont += [ 0, 0, 0, '', 0, 0, 0 ];
 
-		if ( $resultPageSet === null ) {
+		if ( is_null( $resultPageSet ) ) {
 			// Try to add the result data in one go and pray that it fits
 			$code = $this->bl_code;
-			$data = array_map( function ( $arr ) use ( $code ) {
+			$data = array_map( function ( $arr ) use ( $result, $code ) {
 				if ( isset( $arr['redirlinks'] ) ) {
 					$arr['redirlinks'] = array_values( $arr['redirlinks'] );
 					ApiResult::setIndexedTagName( $arr['redirlinks'], $code );
@@ -457,7 +434,6 @@ class ApiQueryBacklinks extends ApiQueryGeneratorBase {
 				// It didn't fit. Add elements one by one until the
 				// result is full.
 				ksort( $this->resultArr );
-				// @phan-suppress-next-line PhanSuspiciousValueComparison
 				if ( count( $this->cont ) >= 7 ) {
 					$startAt = $this->cont[6];
 				} else {
@@ -483,7 +459,6 @@ class ApiQueryBacklinks extends ApiQueryGeneratorBase {
 					$hasRedirs = false;
 					$redirLinks = isset( $arr['redirlinks'] ) ? (array)$arr['redirlinks'] : [];
 					ksort( $redirLinks );
-					// @phan-suppress-next-line PhanSuspiciousValueComparisonInLoop
 					if ( count( $this->cont ) >= 8 && $pageID == $startAt ) {
 						$redirStartAt = $this->cont[7];
 					} else {
@@ -523,7 +498,7 @@ class ApiQueryBacklinks extends ApiQueryGeneratorBase {
 				$this->bl_code
 			);
 		}
-		if ( $this->continueStr !== null ) {
+		if ( !is_null( $this->continueStr ) ) {
 			$this->setContinueEnumParameter( 'continue', $this->continueStr );
 		}
 	}

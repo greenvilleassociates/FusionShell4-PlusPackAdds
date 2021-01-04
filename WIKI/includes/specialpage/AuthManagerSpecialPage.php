@@ -4,20 +4,16 @@ use MediaWiki\Auth\AuthenticationRequest;
 use MediaWiki\Auth\AuthenticationResponse;
 use MediaWiki\Auth\AuthManager;
 use MediaWiki\Logger\LoggerFactory;
-use MediaWiki\MediaWikiServices;
 use MediaWiki\Session\Token;
 
 /**
  * A special page subclass for authentication-related special pages. It generates a form from
  * a set of AuthenticationRequest objects, submits the result to AuthManager and
  * partially handles the response.
- *
- * @stable to extend
  */
 abstract class AuthManagerSpecialPage extends SpecialPage {
 	/** @var string[] The list of actions this special page deals with. Subclasses should override
-	 * this.
-	 */
+	 * this. */
 	protected static $allowedActions = [
 		AuthManager::ACTION_LOGIN, AuthManager::ACTION_LOGIN_CONTINUE,
 		AuthManager::ACTION_CREATE, AuthManager::ACTION_CREATE_CONTINUE,
@@ -46,8 +42,6 @@ abstract class AuthManagerSpecialPage extends SpecialPage {
 	/**
 	 * Change the form descriptor that determines how a field will look in the authentication form.
 	 * Called from fieldInfoToFormDescriptor().
-	 * @stable to override
-	 *
 	 * @param AuthenticationRequest[] $requests
 	 * @param array $fieldInfo Field information array (union of all
 	 *    AuthenticationRequest::getFieldInfo() responses).
@@ -62,10 +56,6 @@ abstract class AuthManagerSpecialPage extends SpecialPage {
 		return true;
 	}
 
-	/**
-	 * @stable to override
-	 * @return bool|string
-	 */
 	protected function getLoginSecurityLevel() {
 		return $this->getName();
 	}
@@ -79,10 +69,8 @@ abstract class AuthManagerSpecialPage extends SpecialPage {
 	 *
 	 * Used to preserve POST data over a HTTP redirect.
 	 *
-	 * @stable to override
-	 *
 	 * @param array $data
-	 * @param bool|null $wasPosted
+	 * @param bool $wasPosted
 	 */
 	protected function setRequest( array $data, $wasPosted = null ) {
 		$request = $this->getContext()->getRequest();
@@ -93,12 +81,6 @@ abstract class AuthManagerSpecialPage extends SpecialPage {
 			$wasPosted );
 	}
 
-	/**
-	 * @stable to override
-	 * @param string|null $subPage
-	 *
-	 * @return bool|void
-	 */
 	protected function beforeExecute( $subPage ) {
 		$this->getOutput()->disallowUserJs();
 
@@ -123,7 +105,7 @@ abstract class AuthManagerSpecialPage extends SpecialPage {
 	 * @return bool False if execution should be stopped.
 	 */
 	protected function handleReturnBeforeExecute( $subPage ) {
-		$authManager = MediaWikiServices::getInstance()->getAuthManager();
+		$authManager = AuthManager::singleton();
 		$key = 'AuthManagerSpecialPage:return:' . $this->getName();
 
 		if ( $subPage === 'return' ) {
@@ -161,20 +143,21 @@ abstract class AuthManagerSpecialPage extends SpecialPage {
 	 * @throws ErrorPageError When the user is not allowed to use this page.
 	 */
 	protected function handleReauthBeforeExecute( $subPage ) {
-		$authManager = MediaWikiServices::getInstance()->getAuthManager();
+		$authManager = AuthManager::singleton();
 		$request = $this->getRequest();
 		$key = 'AuthManagerSpecialPage:reauth:' . $this->getName();
 
 		$securityLevel = $this->getLoginSecurityLevel();
 		if ( $securityLevel ) {
-			$securityStatus = $authManager->securitySensitiveOperationStatus( $securityLevel );
+			$securityStatus = AuthManager::singleton()
+				->securitySensitiveOperationStatus( $securityLevel );
 			if ( $securityStatus === AuthManager::SEC_REAUTH ) {
 				$queryParams = array_diff_key( $request->getQueryValues(), [ 'title' => true ] );
 
 				if ( $request->wasPosted() ) {
 					// unique ID in case the same special page is open in multiple browser tabs
 					$uniqueId = MWCryptRand::generateHex( 6 );
-					$key .= ':' . $uniqueId;
+					$key = $key . ':' . $uniqueId;
 
 					$queryParams = [ 'authUniqueId' => $uniqueId ] + $queryParams;
 					$authData = array_diff_key( $request->getValues(),
@@ -198,7 +181,7 @@ abstract class AuthManagerSpecialPage extends SpecialPage {
 
 		$uniqueId = $request->getVal( 'authUniqueId' );
 		if ( $uniqueId ) {
-			$key .= ':' . $uniqueId;
+			$key = $key . ':' . $uniqueId;
 			$authData = $authManager->getAuthenticationSessionData( $key );
 			if ( $authData ) {
 				$authManager->removeAuthenticationSessionData( $key );
@@ -230,7 +213,6 @@ abstract class AuthManagerSpecialPage extends SpecialPage {
 
 	/**
 	 * Allows blacklisting certain request types.
-	 * @stable to override
 	 * @return array A list of AuthenticationRequest subclass names
 	 */
 	protected function getRequestBlacklist() {
@@ -240,9 +222,8 @@ abstract class AuthManagerSpecialPage extends SpecialPage {
 	/**
 	 * Load or initialize $authAction, $authRequests and $subPage.
 	 * Subclasses should call this from execute() or otherwise ensure the variables are initialized.
-	 * @stable to override
 	 * @param string $subPage Subpage of the special page.
-	 * @param string|null $authAction Override auth action specified in request (this is useful
+	 * @param string $authAction Override auth action specified in request (this is useful
 	 *    when the form needs to be changed from <action> to <action>_CONTINUE after a successful
 	 *    authentication step)
 	 * @param bool $reset Regenerate the requests even if a cached version is available
@@ -271,9 +252,9 @@ abstract class AuthManagerSpecialPage extends SpecialPage {
 			}
 		}
 
-		$allReqs = MediaWikiServices::getInstance()->getAuthManager()->getAuthenticationRequests(
+		$allReqs = AuthManager::singleton()->getAuthenticationRequests(
 			$this->authAction, $this->getUser() );
-		$this->authRequests = array_filter( $allReqs, function ( $req ) {
+		$this->authRequests = array_filter( $allReqs, function ( $req ) use ( $subPage ) {
 			return !in_array( get_class( $req ), $this->getRequestBlacklist(), true );
 		} );
 	}
@@ -319,7 +300,7 @@ abstract class AuthManagerSpecialPage extends SpecialPage {
 	 * @throws LogicException if $action is invalid
 	 */
 	protected function isActionAllowed( $action ) {
-		$authManager = MediaWikiServices::getInstance()->getAuthManager();
+		$authManager = AuthManager::singleton();
 		if ( !in_array( $action, static::$allowedActions, true ) ) {
 			throw new InvalidArgumentException( 'invalid action: ' . $action );
 		}
@@ -363,7 +344,7 @@ abstract class AuthManagerSpecialPage extends SpecialPage {
 			throw new InvalidArgumentException( 'invalid action: ' . $action );
 		}
 
-		$authManager = MediaWikiServices::getInstance()->getAuthManager();
+		$authManager = AuthManager::singleton();
 		$returnToUrl = $this->getPageTitle( 'return' )
 			->getFullURL( $this->getPreservedParams( true ), false, PROTO_HTTPS );
 
@@ -391,7 +372,7 @@ abstract class AuthManagerSpecialPage extends SpecialPage {
 				}
 				$req = reset( $requests );
 				$status = $authManager->allowsAuthenticationDataChange( $req );
-				$this->getHookRunner()->onChangeAuthenticationDataAudit( $req, $status );
+				Hooks::run( 'ChangeAuthenticationDataAudit', [ $req, $status ] );
 				if ( !$status->isGood() ) {
 					return AuthenticationResponse::newFail( $status->getMessage() );
 				}
@@ -448,16 +429,15 @@ abstract class AuthManagerSpecialPage extends SpecialPage {
 				// accidentally returning it so best check and fix
 				$status = Status::wrap( $status );
 			} elseif ( is_string( $status ) ) {
-				$status = Status::newFatal( new RawMessage( '$1', [ $status ] ) );
+				$status = Status::newFatal( new RawMessage( '$1', $status ) );
 			} elseif ( is_array( $status ) ) {
 				if ( is_string( reset( $status ) ) ) {
-					$status = Status::newFatal( ...$status );
+					$status = call_user_func_array( 'Status::newFatal', $status );
 				} elseif ( is_array( reset( $status ) ) ) {
-					$ret = Status::newGood();
+					$status = Status::newGood();
 					foreach ( $status as $message ) {
-						$ret->fatal( ...$message );
+						call_user_func_array( [ $status, 'fatal' ], $message );
 					}
-					$status = $ret;
 				} else {
 					throw new UnexpectedValueException( 'invalid HTMLForm::trySubmit() return value: '
 						. 'first element of array is ' . gettype( reset( $status ) ) );
@@ -476,7 +456,7 @@ abstract class AuthManagerSpecialPage extends SpecialPage {
 				// Let's just submit the data to AuthManager directly instead.
 				LoggerFactory::getInstance( 'authentication' )
 					->warning( 'Validation error on return', [ 'data' => $form->mFieldData,
-						'status' => $status->getWikiText( false, false, 'en' ) ] );
+						'status' => $status->getWikiText() ] );
 				$status = $this->handleFormSubmit( $form->mFieldData );
 			}
 		}
@@ -485,7 +465,7 @@ abstract class AuthManagerSpecialPage extends SpecialPage {
 			AuthManager::ACTION_CHANGE, AuthManager::ACTION_REMOVE, AuthManager::ACTION_UNLINK
 		];
 		if ( in_array( $this->authAction, $changeActions, true ) && $status && !$status->isOK() ) {
-			$this->getHookRunner()->onChangeAuthenticationDataAudit( reset( $this->authRequests ), $status );
+			Hooks::run( 'ChangeAuthenticationDataAudit', [ reset( $this->authRequests ), $status ] );
 		}
 
 		return $status;
@@ -493,7 +473,7 @@ abstract class AuthManagerSpecialPage extends SpecialPage {
 
 	/**
 	 * Submit handler callback for HTMLForm
-	 * @internal
+	 * @private
 	 * @param array $data Submitted data
 	 * @return Status
 	 */
@@ -509,7 +489,6 @@ abstract class AuthManagerSpecialPage extends SpecialPage {
 	 * Returns URL query parameters which can be used to reload the page (or leave and return) while
 	 * preserving all information that is necessary for authentication to continue. These parameters
 	 * will be preserved in the action URL of the form and in the return URL for redirect flow.
-	 * @stable to override
 	 * @param bool $withToken Include CSRF token
 	 * @return array
 	 */
@@ -526,10 +505,9 @@ abstract class AuthManagerSpecialPage extends SpecialPage {
 
 	/**
 	 * Generates a HTMLForm descriptor array from a set of authentication requests.
-	 * @stable to override
 	 * @param AuthenticationRequest[] $requests
 	 * @param string $action AuthManager action name (one of the AuthManager::ACTION_* constants)
-	 * @return array[]
+	 * @return array
 	 */
 	protected function getAuthFormDescriptor( $requests, $action ) {
 		$fieldInfo = AuthenticationRequest::mergeFieldInfo( $requests );
@@ -541,7 +519,6 @@ abstract class AuthManagerSpecialPage extends SpecialPage {
 	}
 
 	/**
-	 * @stable to override
 	 * @param AuthenticationRequest[] $requests
 	 * @param string $action AuthManager action name (one of the AuthManager::ACTION_* constants)
 	 * @return HTMLForm
@@ -580,7 +557,6 @@ abstract class AuthManagerSpecialPage extends SpecialPage {
 	 * Providers using redirect flow (e.g. Google login) need their own submit buttons; if using
 	 * one of those custom buttons is the only way to proceed, there is no point in displaying the
 	 * default button which won't do anything useful.
-	 * @stable to override
 	 *
 	 * @param AuthenticationRequest[] $requests An array of AuthenticationRequests from which the
 	 *  form will be built
@@ -622,7 +598,7 @@ abstract class AuthManagerSpecialPage extends SpecialPage {
 	/**
 	 * Adds a sequential tabindex starting from 1 to all form elements. This way the user can
 	 * use the tab key to traverse the form without having to step through all links and such.
-	 * @param array[] &$formDescriptor
+	 * @param array &$formDescriptor
 	 */
 	protected function addTabIndex( &$formDescriptor ) {
 		$i = 1;
@@ -633,7 +609,7 @@ abstract class AuthManagerSpecialPage extends SpecialPage {
 			} elseif ( array_key_exists( 'type', $definition ) ) {
 				$class = HTMLForm::$typeMappings[$definition['type']];
 			}
-			if ( $class !== HTMLInfoField::class ) {
+			if ( $class !== 'HTMLInfoField' ) {
 				$definition['tabindex'] = $i;
 				$i++;
 			}
@@ -642,7 +618,6 @@ abstract class AuthManagerSpecialPage extends SpecialPage {
 
 	/**
 	 * Returns the CSRF token.
-	 * @stable to override
 	 * @return Token
 	 */
 	protected function getToken() {
@@ -652,7 +627,6 @@ abstract class AuthManagerSpecialPage extends SpecialPage {
 
 	/**
 	 * Returns the name of the CSRF token (under which it should be found in the POST or GET data).
-	 * @stable to override
 	 * @return string
 	 */
 	protected function getTokenName() {
@@ -676,8 +650,7 @@ abstract class AuthManagerSpecialPage extends SpecialPage {
 
 		$requestSnapshot = serialize( $requests );
 		$this->onAuthChangeFormFields( $requests, $fieldInfo, $formDescriptor, $action );
-		$this->getHookRunner()->onAuthChangeFormFields( $requests, $fieldInfo,
-			$formDescriptor, $action );
+		\Hooks::run( 'AuthChangeFormFields', [ $requests, $fieldInfo, &$formDescriptor, $action ] );
 		if ( $requestSnapshot !== serialize( $requests ) ) {
 			LoggerFactory::getInstance( 'authentication' )->warning(
 				'AuthChangeFormFields hook changed auth requests' );
@@ -737,6 +710,7 @@ abstract class AuthManagerSpecialPage extends SpecialPage {
 	 * are shown closer to the bottom; weight defaults to 0. Negative weight is allowed.)
 	 * Keep order if weights are equal.
 	 * @param array &$formDescriptor
+	 * @return array
 	 */
 	protected static function sortFormDescriptorFields( array &$formDescriptor ) {
 		$i = 0;
@@ -744,8 +718,8 @@ abstract class AuthManagerSpecialPage extends SpecialPage {
 			$field['__index'] = $i++;
 		}
 		uasort( $formDescriptor, function ( $first, $second ) {
-			return self::getField( $first, 'weight', 0 ) <=> self::getField( $second, 'weight', 0 )
-				?: $first['__index'] <=> $second['__index'];
+			return self::getField( $first, 'weight', 0 ) - self::getField( $second, 'weight', 0 )
+				?: $first['__index'] - $second['__index'];
 		} );
 		foreach ( $formDescriptor as &$field ) {
 			unset( $field['__index'] );
@@ -756,7 +730,7 @@ abstract class AuthManagerSpecialPage extends SpecialPage {
 	 * Get an array value, or a default if it does not exist.
 	 * @param array $array
 	 * @param string $fieldName
-	 * @param mixed|null $default
+	 * @param mixed $default
 	 * @return mixed
 	 */
 	protected static function getField( array $array, $fieldName, $default = null ) {

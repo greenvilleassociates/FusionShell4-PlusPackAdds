@@ -21,8 +21,6 @@
  * @ingroup Maintenance
  */
 
-use MediaWiki\MediaWikiServices;
-
 require_once __DIR__ . '/Maintenance.php';
 
 /**
@@ -66,8 +64,7 @@ class ImportSiteScripts extends Maintenance {
 			$url = wfAppendQuery( $baseUrl, [
 				'action' => 'raw',
 				'title' => "MediaWiki:{$page}" ] );
-			$text = MediaWikiServices::getInstance()->getHttpRequestFactory()->
-				get( $url, [], __METHOD__ );
+			$text = Http::get( $url, [], __METHOD__ );
 
 			$wikiPage = WikiPage::factory( $title );
 			$content = ContentHandler::makeContent( $text, $wikiPage->getTitle() );
@@ -89,8 +86,7 @@ class ImportSiteScripts extends Maintenance {
 
 		while ( true ) {
 			$url = wfAppendQuery( $baseUrl, $data );
-			$strResult = MediaWikiServices::getInstance()->getHttpRequestFactory()->
-				get( $url, [], __METHOD__ );
+			$strResult = Http::get( $url, [], __METHOD__ );
 			$result = FormatJson::decode( $strResult, true );
 
 			$page = null;
@@ -118,5 +114,5 @@ class ImportSiteScripts extends Maintenance {
 	}
 }
 
-$maintClass = ImportSiteScripts::class;
+$maintClass = 'ImportSiteScripts';
 require_once RUN_MAINTENANCE_IF_MAIN;

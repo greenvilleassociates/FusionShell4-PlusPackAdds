@@ -1,5 +1,9 @@
 <?php
 /**
+ *
+ *
+ * Created on Oct 4, 2008
+ *
  * Copyright © 2008 Roan Kattouw "<Firstname>.<Lastname>@gmail.com"
  *
  * This program is free software; you can redistribute it and/or modify
@@ -21,7 +25,6 @@
  */
 
 use MediaWiki\MediaWikiServices;
-use MediaWiki\ParamValidator\TypeDef\UserDef;
 
 /**
  * This query action allows clients to retrieve a list of pages
@@ -44,7 +47,7 @@ class ApiQueryWatchlistRaw extends ApiQueryGeneratorBase {
 	}
 
 	/**
-	 * @param ApiPageSet|null $resultPageSet
+	 * @param ApiPageSet $resultPageSet
 	 * @return void
 	 */
 	private function run( $resultPageSet = null ) {
@@ -74,19 +77,20 @@ class ApiQueryWatchlistRaw extends ApiQueryGeneratorBase {
 		if ( isset( $params['continue'] ) ) {
 			$cont = explode( '|', $params['continue'] );
 			$this->dieContinueUsageIf( count( $cont ) != 2 );
-			$ns = (int)$cont[0];
+			$ns = intval( $cont[0] );
 			$this->dieContinueUsageIf( strval( $ns ) !== $cont[0] );
 			$title = $cont[1];
-			$options['startFrom'] = TitleValue::tryNew( $ns, $title );
-			$this->dieContinueUsageIf( !$options['startFrom'] );
+			$options['startFrom'] = new TitleValue( $ns, $title );
 		}
 
 		if ( isset( $params['fromtitle'] ) ) {
-			$options['from'] = $this->parsePrefixedTitlePart( $params['fromtitle'] );
+			list( $ns, $title ) = $this->prefixedTitlePartToKey( $params['fromtitle'] );
+			$options['from'] = new TitleValue( $ns, $title );
 		}
 
 		if ( isset( $params['totitle'] ) ) {
-			$options['until'] = $this->parsePrefixedTitlePart( $params['totitle'] );
+			list( $ns, $title ) = $this->prefixedTitlePartToKey( $params['totitle'] );
+			$options['until'] = new TitleValue( $ns, $title );
 		}
 
 		$options['sort'] = WatchedItemStore::SORT_ASC;
@@ -97,27 +101,8 @@ class ApiQueryWatchlistRaw extends ApiQueryGeneratorBase {
 
 		$titles = [];
 		$count = 0;
-		$services = MediaWikiServices::getInstance();
-		$items = $services->getWatchedItemQueryService()
+		$items = MediaWikiServices::getInstance()->getWatchedItemQueryService()
 			->getWatchedItemsForUser( $user, $options );
-
-		// Get gender information
-		if ( $items !== [] && $resultPageSet === null &&
-			$services->getContentLanguage()->needsGenderDistinction()
-		) {
-			$nsInfo = $services->getNamespaceInfo();
-			$usernames = [];
-			foreach ( $items as $item ) {
-				$linkTarget = $item->getLinkTarget();
-				if ( $nsInfo->hasGenderDistinction( $linkTarget->getNamespace() ) ) {
-					$usernames[] = $linkTarget->getText();
-				}
-			}
-			if ( $usernames !== [] ) {
-				$services->getGenderCache()->doQuery( $usernames, __METHOD__ );
-			}
-		}
-
 		foreach ( $items as $item ) {
 			$ns = $item->getLinkTarget()->getNamespace();
 			$dbKey = $item->getLinkTarget()->getDBkey();
@@ -129,10 +114,10 @@ class ApiQueryWatchlistRaw extends ApiQueryGeneratorBase {
 			}
 			$t = Title::makeTitle( $ns, $dbKey );
 
-			if ( $resultPageSet === null ) {
+			if ( is_null( $resultPageSet ) ) {
 				$vals = [];
 				ApiQueryBase::addTitleInfo( $vals, $t );
-				if ( isset( $prop['changed'] ) && $item->getNotificationTimestamp() !== null ) {
+				if ( isset( $prop['changed'] ) && !is_null( $item->getNotificationTimestamp() ) ) {
 					$vals['changed'] = wfTimestamp( TS_ISO_8601, $item->getNotificationTimestamp() );
 				}
 				$fit = $this->getResult()->addValue( $this->getModuleName(), null, $vals );
@@ -144,7 +129,7 @@ class ApiQueryWatchlistRaw extends ApiQueryGeneratorBase {
 				$titles[] = $t;
 			}
 		}
-		if ( $resultPageSet === null ) {
+		if ( is_null( $resultPageSet ) ) {
 			$this->getResult()->addIndexedTagName( $this->getModuleName(), 'wr' );
 		} else {
 			$resultPageSet->populateFromTitles( $titles );
@@ -182,8 +167,7 @@ class ApiQueryWatchlistRaw extends ApiQueryGeneratorBase {
 				]
 			],
 			'owner' => [
-				ApiBase::PARAM_TYPE => 'user',
-				UserDef::PARAM_ALLOWED_USER_TYPES => [ 'name' ],
+				ApiBase::PARAM_TYPE => 'user'
 			],
 			'token' => [
 				ApiBase::PARAM_TYPE => 'string',

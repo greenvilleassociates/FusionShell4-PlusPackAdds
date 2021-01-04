@@ -1,5 +1,4 @@
 <?php
-
 use MediaWiki\MediaWikiServices;
 
 /**
@@ -31,23 +30,23 @@ use MediaWiki\MediaWikiServices;
  *
  * @ingroup SpecialPage
  */
-class SpecialFileDuplicateSearch extends QueryPage {
+class FileDuplicateSearchPage extends QueryPage {
 	protected $hash = '', $filename = '';
 
 	/**
-	 * @var File selected reference file, if present
+	 * @var File $file selected reference file, if present
 	 */
 	protected $file = null;
 
-	public function __construct( $name = 'FileDuplicateSearch' ) {
+	function __construct( $name = 'FileDuplicateSearch' ) {
 		parent::__construct( $name );
 	}
 
-	public function isSyndicated() {
+	function isSyndicated() {
 		return false;
 	}
 
-	public function isCacheable() {
+	function isCacheable() {
 		return false;
 	}
 
@@ -55,7 +54,7 @@ class SpecialFileDuplicateSearch extends QueryPage {
 		return false;
 	}
 
-	protected function linkParameters() {
+	function linkParameters() {
 		return [ 'filename' => $this->filename ];
 	}
 
@@ -64,14 +63,15 @@ class SpecialFileDuplicateSearch extends QueryPage {
 	 *
 	 * @return array Array of File objects
 	 */
-	private function getDupes() {
-		return MediaWikiServices::getInstance()->getRepoGroup()->findBySha1( $this->hash );
+	function getDupes() {
+		return RepoGroup::singleton()->findBySha1( $this->hash );
 	}
 
 	/**
+	 *
 	 * @param array $dupes Array of File objects
 	 */
-	private function showList( $dupes ) {
+	function showList( $dupes ) {
 		$html = [];
 		$html[] = $this->openList( 0 );
 
@@ -85,17 +85,15 @@ class SpecialFileDuplicateSearch extends QueryPage {
 	}
 
 	public function getQueryInfo() {
-		$imgQuery = LocalFile::getQueryInfo();
 		return [
-			'tables' => $imgQuery['tables'],
+			'tables' => [ 'image' ],
 			'fields' => [
 				'title' => 'img_name',
 				'value' => 'img_sha1',
-				'img_user_text' => $imgQuery['fields']['img_user_text'],
+				'img_user_text',
 				'img_timestamp'
 			],
-			'conds' => [ 'img_sha1' => $this->hash ],
-			'join_conds' => $imgQuery['joins'],
+			'conds' => [ 'img_sha1' => $this->hash ]
 		];
 	}
 
@@ -103,12 +101,12 @@ class SpecialFileDuplicateSearch extends QueryPage {
 		$this->setHeaders();
 		$this->outputHeader();
 
-		$this->filename = $par ?? $this->getRequest()->getText( 'filename' );
+		$this->filename = $par !== null ? $par : $this->getRequest()->getText( 'filename' );
 		$this->file = null;
 		$this->hash = '';
 		$title = Title::newFromText( $this->filename, NS_FILE );
 		if ( $title && $title->getText() != '' ) {
-			$this->file = MediaWikiServices::getInstance()->getRepoGroup()->findFile( $title );
+			$this->file = wfFindFile( $title );
 		}
 
 		$out = $this->getOutput();
@@ -121,7 +119,7 @@ class SpecialFileDuplicateSearch extends QueryPage {
 				'label-message' => 'fileduplicatesearch-filename',
 				'id' => 'filename',
 				'size' => 50,
-				'default' => $this->filename,
+				'value' => $this->filename,
 			],
 		];
 		$hiddenFields = [
@@ -131,6 +129,7 @@ class SpecialFileDuplicateSearch extends QueryPage {
 		$htmlForm->addHiddenFields( $hiddenFields );
 		$htmlForm->setAction( wfScript() );
 		$htmlForm->setMethod( 'get' );
+		$htmlForm->setSubmitProgressive();
 		$htmlForm->setSubmitTextMsg( $this->msg( 'fileduplicatesearch-submit' ) );
 
 		// The form should be visible always, even if it was submitted (e.g. to perform another action).
@@ -185,7 +184,7 @@ class SpecialFileDuplicateSearch extends QueryPage {
 		}
 	}
 
-	private function doBatchLookups( $list ) {
+	function doBatchLookups( $list ) {
 		$batch = new LinkBatch();
 		/** @var File $file */
 		foreach ( $list as $file ) {
@@ -201,19 +200,20 @@ class SpecialFileDuplicateSearch extends QueryPage {
 	}
 
 	/**
+	 *
 	 * @param Skin $skin
 	 * @param File $result
 	 * @return string HTML
 	 */
-	public function formatResult( $skin, $result ) {
+	function formatResult( $skin, $result ) {
+		global $wgContLang;
+
 		$linkRenderer = $this->getLinkRenderer();
 		$nt = $result->getTitle();
-		$text = MediaWikiServices::getInstance()->getContentLanguage()->convert(
-			htmlspecialchars( $nt->getText() )
-		);
+		$text = $wgContLang->convert( $nt->getText() );
 		$plink = $linkRenderer->makeLink(
 			$nt,
-			new HtmlArmor( $text )
+			$text
 		);
 
 		$userText = $result->getUser( 'text' );

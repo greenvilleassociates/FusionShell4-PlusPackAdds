@@ -21,9 +21,9 @@
  * @ingroup MaintenanceLanguage
  */
 
-use MediaWiki\MediaWikiServices;
-
+/** This is a command line script */
 require_once __DIR__ . '/../Maintenance.php';
+require_once __DIR__ . '/languages.inc';
 
 /**
  * Maintenance script that tries to get the memory usage for each language file.
@@ -40,22 +40,16 @@ class LangMemUsage extends Maintenance {
 
 	public function execute() {
 		if ( !function_exists( 'memory_get_usage' ) ) {
-			$this->fatalError( "You must compile PHP with --enable-memory-limit" );
+			$this->error( "You must compile PHP with --enable-memory-limit", true );
 		}
 
+		$langtool = new Languages();
 		$memlast = $memstart = memory_get_usage();
 
 		$this->output( "Base memory usage: $memstart\n" );
 
-		$languages = array_keys(
-			MediaWikiServices::getInstance()
-				->getLanguageNameUtils()
-				->getLanguageNames( null, 'mwfile' )
-		);
-		sort( $languages );
-
-		foreach ( $languages as $langcode ) {
-			MediaWikiServices::getInstance()->getLanguageFactory()->getLanguage( $langcode );
+		foreach ( $langtool->getLanguages() as $langcode ) {
+			Language::factory( $langcode );
 			$memstep = memory_get_usage();
 			$this->output( sprintf( "%12s: %d\n", $langcode, ( $memstep - $memlast ) ) );
 			$memlast = $memstep;
@@ -67,5 +61,5 @@ class LangMemUsage extends Maintenance {
 	}
 }
 
-$maintClass = LangMemUsage::class;
+$maintClass = "LangMemUsage";
 require_once RUN_MAINTENANCE_IF_MAIN;

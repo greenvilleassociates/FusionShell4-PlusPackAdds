@@ -21,8 +21,6 @@
  * @ingroup Maintenance
  */
 
-use MediaWiki\MediaWikiServices;
-
 require_once __DIR__ . '/Maintenance.php';
 
 /**
@@ -79,7 +77,7 @@ class PurgeChangedFiles extends Maintenance {
 		global $wgHTCPRouting;
 
 		if ( $this->hasOption( 'htcp-dest' ) ) {
-			$parts = explode( ':', $this->getOption( 'htcp-dest' ), 2 );
+			$parts = explode( ':', $this->getOption( 'htcp-dest' ) );
 			if ( count( $parts ) < 2 ) {
 				// Add default htcp port
 				$parts[] = '4827';
@@ -138,7 +136,7 @@ class PurgeChangedFiles extends Maintenance {
 	 * @param string $type Type of change to find
 	 */
 	protected function purgeFromLogType( $type ) {
-		$repo = MediaWikiServices::getInstance()->getRepoGroup()->getLocalRepo();
+		$repo = RepoGroup::singleton()->getLocalRepo();
 		$dbr = $this->getDB( DB_REPLICA );
 
 		foreach ( self::$typeMappings[$type] as $logType => $logActions ) {
@@ -202,7 +200,7 @@ class PurgeChangedFiles extends Maintenance {
 
 				$this->verbose( "Purged file {$row->log_title}; {$type} @{$row->log_timestamp}.\n" );
 
-				if ( $this->hasOption( 'sleep-per-batch' ) && ++$bSize > $this->getBatchSize() ) {
+				if ( $this->hasOption( 'sleep-per-batch' ) && ++$bSize > $this->mBatchSize ) {
 					$bSize = 0;
 					// sleep-per-batch is milliseconds, usleep wants micro seconds.
 					usleep( 1000 * (int)$this->getOption( 'sleep-per-batch' ) );
@@ -260,5 +258,5 @@ class PurgeChangedFiles extends Maintenance {
 	}
 }
 
-$maintClass = PurgeChangedFiles::class;
+$maintClass = "PurgeChangedFiles";
 require_once RUN_MAINTENANCE_IF_MAIN;

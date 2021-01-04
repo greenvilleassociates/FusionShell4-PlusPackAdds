@@ -6,29 +6,25 @@
 	],
 	"url": "https://www.mediawiki.org/wiki/Extension:ConfirmEdit#FancyCaptcha",
 	"descriptionmsg": "fancycaptcha-desc",
-	"license-name": "GPL-2.0-or-later",
+	"license-name": "GPL-2.0+",
 	"type": "antispam",
 	"APIModules": {
 		"fancycaptchareload": "ApiFancyCaptchaReload"
 	},
 	"MessagesDirs": {
 		"FancyCaptcha": [
-			"i18n",
-			"i18n/api"
+			"i18n"
 		]
 	},
 	"AutoloadClasses": {
-		"FancyCaptcha": "includes/FancyCaptcha.php",
-		"HTMLFancyCaptchaField": "includes/HTMLFancyCaptchaField.php",
-		"ApiFancyCaptchaReload": "includes/ApiFancyCaptchaReload.php"
+		"FancyCaptcha": "FancyCaptcha.class.php",
+		"HTMLFancyCaptchaField": "HTMLFancyCaptchaField.php",
+		"ApiFancyCaptchaReload": "ApiFancyCaptchaReload.php"
 	},
 	"ResourceModules": {
 		"ext.confirmEdit.fancyCaptcha.styles": {
-			"styles": "ext.confirmEdit.fancyCaptcha.less",
-			"targets": [
-				"mobile",
-				"desktop"
-			]
+			"position": "top",
+			"styles": "ext.confirmEdit.fancyCaptcha.css"
 		},
 		"ext.confirmEdit.fancyCaptcha": {
 			"scripts": "ext.confirmEdit.fancyCaptcha.js",
@@ -53,24 +49,12 @@
 	},
 	"callback": "ConfirmEditHooks::onFancyCaptchaSetup",
 	"config": {
-		"CaptchaClass": {
-			"value": "FancyCaptcha"
-		},
-		"CaptchaFileBackend": {
-			"value": ""
-		},
-		"CaptchaDirectory": {
-			"value": false
-		},
-		"CaptchaDirectoryLevels": {
-			"value": 0
-		},
-		"CaptchaSecret": {
-			"value": "CHANGE_THIS_SECRET!"
-		},
-		"CaptchaDeleteOnSolve": {
-			"value": false
-		}
+		"CaptchaClass": "FancyCaptcha",
+		"CaptchaFileBackend": "",
+		"CaptchaDirectory": false,
+		"CaptchaDirectoryLevels": 0,
+		"CaptchaSecret": "CHANGE_THIS_SECRET!",
+		"CaptchaDeleteOnSolve": false
 	},
-	"manifest_version": 2
+	"manifest_version": 1
 }

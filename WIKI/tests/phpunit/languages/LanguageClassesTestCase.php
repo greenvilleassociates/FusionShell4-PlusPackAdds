@@ -1,7 +1,4 @@
 <?php
-
-use MediaWiki\MediaWikiServices;
-
 /**
  * Helping class to run tests using a clean language instance.
  *
@@ -21,7 +18,7 @@ use MediaWiki\MediaWikiServices;
  * }
  * @endcode
  */
-abstract class LanguageClassesTestCase extends MediaWikiIntegrationTestCase {
+abstract class LanguageClassesTestCase extends MediaWikiTestCase {
 	/**
 	 * Internal language object
 	 *
@@ -48,7 +45,7 @@ abstract class LanguageClassesTestCase extends MediaWikiIntegrationTestCase {
 	/**
 	 * Create a new language object before each test.
 	 */
-	protected function setUp() : void {
+	protected function setUp() {
 		parent::setUp();
 		$found = preg_match( '/Language(.+)Test/', static::class, $m );
 		if ( $found ) {
@@ -59,19 +56,18 @@ abstract class LanguageClassesTestCase extends MediaWikiIntegrationTestCase {
 			$m[1] = 'en';
 			wfDebug(
 				__METHOD__ . ' could not extract a language name '
-					. 'out of ' . static::class . " failling back to 'en'"
+					. 'out of ' . static::class . " failling back to 'en'\n"
 			);
 		}
 		// @todo validate $m[1] which should be a valid language code
-		$this->languageObject = MediaWikiServices::getInstance()->getLanguageFactory()
-			->getLanguage( $m[1] );
+		$this->languageObject = Language::factory( $m[1] );
 	}
 
 	/**
 	 * Delete the internal language object so each test start
 	 * out with a fresh language instance.
 	 */
-	protected function tearDown() : void {
+	protected function tearDown() {
 		unset( $this->languageObject );
 		parent::tearDown();
 	}

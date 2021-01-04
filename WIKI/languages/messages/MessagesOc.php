@@ -286,6 +286,6 @@ $dateFormats = [
 	'oc normal both' => 'j F "de" Y "a" H.i',
 ];
 
-$separatorTransformTable = [ ',' => "\u{00A0}", '.' => ',' ];
+$separatorTransformTable = [ ',' => "\xc2\xa0", '.' => ',' ];
 
 $linkTrail = "/^([a-zàâçéèêîôû]+)(.*)$/sDu";

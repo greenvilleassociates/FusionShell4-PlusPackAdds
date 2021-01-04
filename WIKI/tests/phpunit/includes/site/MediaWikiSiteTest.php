@@ -1,6 +1,8 @@
 <?php
 
 /**
+ * Tests for the MediaWikiSite class.
+ *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
  * the Free Software Foundation; either version 2 of the License, or
@@ -28,9 +30,6 @@
  */
 class MediaWikiSiteTest extends SiteTest {
 
-	/**
-	 * @covers MediaWikiSite::normalizePageName
-	 */
 	public function testNormalizePageTitle() {
 		$this->setMwGlobals( [
 			'wgCapitalLinks' => true,
@@ -103,7 +102,7 @@ class MediaWikiSiteTest extends SiteTest {
 		$site = new MediaWikiSite();
 		$site->setLinkPath( $path );
 
-		$this->assertStringContainsString( $path, $site->getPageUrl() );
-		$this->assertStringContainsString( $expected, $site->getPageUrl( $page ) );
+		$this->assertContains( $path, $site->getPageUrl() );
+		$this->assertContains( $expected, $site->getPageUrl( $page ) );
 	}
 }

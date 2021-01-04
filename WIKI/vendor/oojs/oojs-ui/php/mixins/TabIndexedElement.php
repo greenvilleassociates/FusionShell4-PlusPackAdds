@@ -11,7 +11,7 @@ trait TabIndexedElement {
 	/**
 	 * Tab index value.
 	 *
-	 * @var int|null
+	 * @var number|null
 	 */
 	protected $tabIndex = null;
 
@@ -22,16 +22,15 @@ trait TabIndexedElement {
 
 	/**
 	 * @param array $config Configuration options
-	 *      - string|int|null $config['tabIndex'] Tab index value. Use 0 to use default ordering,
-	 *          use -1 to prevent tab focusing, use null to suppress the `tabindex` attribute.
-	 *          (default: 0)
+	 * @param string|number|null $config['tabIndex'] Tab index value. Use 0 to use default ordering,
+	 *   use -1 to prevent tab focusing, use null to suppress the `tabindex` attribute. (default: 0)
 	 */
 	public function initializeTabIndexedElement( array $config = [] ) {
 		// Properties
-		$this->tabIndexed = $config['tabIndexed'] ?? $this;
+		$this->tabIndexed = isset( $config['tabIndexed'] ) ? $config['tabIndexed'] : $this;
 
 		// Initialization
-		$this->setTabIndex( $config['tabIndex'] ?? 0 );
+		$this->setTabIndex( isset( $config['tabIndex'] ) ? $config['tabIndex'] : 0 );
 
 		$this->registerConfigCallback( function ( &$config ) {
 			if ( $this->tabIndex !== 0 ) {
@@ -43,7 +42,7 @@ trait TabIndexedElement {
 	/**
 	 * Set tab index value.
 	 *
-	 * @param string|int|null $tabIndex Tab index value or null for no tab index
+	 * @param string|number|null $tabIndex Tab index value or null for no tab index
 	 * @return $this
 	 */
 	public function setTabIndex( $tabIndex ) {
@@ -81,7 +80,7 @@ trait TabIndexedElement {
 	/**
 	 * Get tab index value.
 	 *
-	 * @return int|null Tab index value
+	 * @return number|null Tab index value
 	 */
 	public function getTabIndex() {
 		return $this->tabIndex;
@@ -116,7 +115,7 @@ trait TabIndexedElement {
 	 * See: <https://html.spec.whatwg.org/multipage/forms.html#category-label>.
 	 *
 	 * @param Tag $tag
-	 * @return bool
+	 * @return boolean
 	 */
 	private function isLabelableNode( Tag $tag ) {
 		$labelableTags = [ 'button', 'meter', 'output', 'progress', 'select', 'textarea' ];

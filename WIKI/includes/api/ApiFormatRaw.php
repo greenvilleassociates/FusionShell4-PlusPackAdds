@@ -1,5 +1,9 @@
 <?php
 /**
+ *
+ *
+ * Created on Feb 2, 2009
+ *
  * Copyright © 2009 Roan Kattouw "<Firstname>.<Lastname>@gmail.com"
  *
  * This program is free software; you can redistribute it and/or modify
@@ -35,8 +39,11 @@ class ApiFormatRaw extends ApiFormatBase {
 	 */
 	public function __construct( ApiMain $main, ApiFormatBase $errorFallback = null ) {
 		parent::__construct( $main, 'raw' );
-		$this->errorFallback = $errorFallback ?:
-			$main->createPrinterByName( $main->getParameter( 'format' ) );
+		if ( $errorFallback === null ) {
+			$this->errorFallback = $main->createPrinterByName( $main->getParameter( 'format' ) );
+		} else {
+			$this->errorFallback = $errorFallback;
+		}
 	}
 
 	public function getMimeType() {

@@ -3,7 +3,7 @@
  *
  * Loading this module also ensures the availability of appropriate messages via mw.msg.
  */
-( function () {
+( function ( mw, $ ) {
 	var
 		monthMessages = [
 			'january', 'february', 'march', 'april',
@@ -21,10 +21,9 @@
 			'sep', 'oct', 'nov', 'dec'
 		];
 
-	// Function suitable for passing to Array.prototype.map
-	// Can't use mw.msg directly because Array.prototype.map passes element index as second argument
+	// Function suitable for passing to jQuery.map
+	// Can't use mw.msg directly because jQuery.map passes element index as second argument
 	function mwMsgMapper( key ) {
-		// eslint-disable-next-line mediawiki/msg-doc
 		return mw.msg( key );
 	}
 
@@ -40,7 +39,7 @@
 	 * - `keys`: object with three keys like the above, containing zero-indexed arrays of message keys
 	 *   for appropriate messages which can be passed to mw.msg.
 	 *
-	 * @property {Object}
+	 * @property
 	 * @member mw.language
 	 */
 	mw.language.months = {
@@ -49,9 +48,9 @@
 			genitive: monthGenMessages,
 			abbrev: monthAbbrevMessages
 		},
-		names: monthMessages.map( mwMsgMapper ),
-		genitive: monthGenMessages.map( mwMsgMapper ),
-		abbrev: monthAbbrevMessages.map( mwMsgMapper )
+		names: $.map( monthMessages, mwMsgMapper ),
+		genitive: $.map( monthGenMessages, mwMsgMapper ),
+		abbrev: $.map( monthAbbrevMessages, mwMsgMapper )
 	};
 
-}() );
+}( mediaWiki, jQuery ) );

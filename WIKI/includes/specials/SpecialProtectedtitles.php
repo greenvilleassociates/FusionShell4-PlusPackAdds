@@ -34,10 +34,9 @@ class SpecialProtectedtitles extends SpecialPage {
 		parent::__construct( 'Protectedtitles' );
 	}
 
-	public function execute( $par ) {
+	function execute( $par ) {
 		$this->setHeaders();
 		$this->outputHeader();
-		$this->addHelpLink( 'Help:Protected_pages' );
 
 		$request = $this->getRequest();
 		$type = $request->getVal( $this->IdType );
@@ -67,7 +66,7 @@ class SpecialProtectedtitles extends SpecialPage {
 	 * @param object $row Database row
 	 * @return string
 	 */
-	public function formatRow( $row ) {
+	function formatRow( $row ) {
 		$title = Title::makeTitleSafe( $row->pt_namespace, $row->pt_title );
 		if ( !$title ) {
 			return Html::rawElement(
@@ -86,8 +85,10 @@ class SpecialProtectedtitles extends SpecialPage {
 		}
 
 		$link = $this->getLinkRenderer()->makeLink( $title );
+		$description_items = [];
 		// Messages: restriction-level-sysop, restriction-level-autoconfirmed
-		$description = $this->msg( 'restriction-level-' . $row->pt_create_perm )->escaped();
+		$protType = $this->msg( 'restriction-level-' . $row->pt_create_perm )->escaped();
+		$description_items[] = $protType;
 		$lang = $this->getLanguage();
 		$expiry = strlen( $row->pt_expiry ) ?
 			$lang->formatExpiry( $row->pt_expiry, TS_MW ) :
@@ -95,7 +96,7 @@ class SpecialProtectedtitles extends SpecialPage {
 
 		if ( $expiry !== 'infinity' ) {
 			$user = $this->getUser();
-			$description .= $this->msg( 'comma-separator' )->escaped() . $this->msg(
+			$description_items[] = $this->msg(
 				'protect-expiring-local',
 				$lang->userTimeAndDate( $expiry, $user ),
 				$lang->userDate( $expiry, $user ),
@@ -103,7 +104,8 @@ class SpecialProtectedtitles extends SpecialPage {
 			)->escaped();
 		}
 
-		return '<li>' . $lang->specialList( $link, $description ) . "</li>\n";
+		// @todo i18n: This should use a comma separator instead of a hard coded comma, right?
+		return '<li>' . $lang->specialList( $link, implode( $description_items, ', ' ) ) . "</li>\n";
 	}
 
 	/**
@@ -111,36 +113,50 @@ class SpecialProtectedtitles extends SpecialPage {
 	 * @param string $type
 	 * @param string $level
 	 * @return string
-	 * @internal
+	 * @private
 	 */
-	private function showOptions( $namespace, $type, $level ) {
-		$formDescriptor = [
-			'namespace' => [
-				'class' => 'HTMLSelectNamespace',
-				'name' => 'namespace',
-				'id' => 'namespace',
-				'cssclass' => 'namespaceselector',
+	function showOptions( $namespace, $type = 'edit', $level ) {
+		$action = htmlspecialchars( wfScript() );
+		$title = $this->getPageTitle();
+		$special = htmlspecialchars( $title->getPrefixedDBkey() );
+
+		return "<form action=\"$action\" method=\"get\">\n" .
+			'<fieldset>' .
+			Xml::element( 'legend', [], $this->msg( 'protectedtitles' )->text() ) .
+			Html::hidden( 'title', $special ) . "&#160;\n" .
+			$this->getNamespaceMenu( $namespace ) . "&#160;\n" .
+			$this->getLevelMenu( $level ) . "&#160;\n" .
+			"&#160;" . Xml::submitButton( $this->msg( 'protectedtitles-submit' )->text() ) . "\n" .
+			"</fieldset></form>";
+	}
+
+	/**
+	 * Prepare the namespace filter drop-down; standard namespace
+	 * selector, sans the MediaWiki namespace
+	 *
+	 * @param string|null $namespace Pre-select namespace
+	 * @return string
+	 */
+	function getNamespaceMenu( $namespace = null ) {
+		return Html::namespaceSelector(
+			[
+				'selected' => $namespace,
 				'all' => '',
 				'label' => $this->msg( 'namespace' )->text()
-			],
-			'levelmenu' => $this->getLevelMenu( $level )
-		];
-
-		$htmlForm = HTMLForm::factory( 'ooui', $formDescriptor, $this->getContext() );
-		$htmlForm
-			->setMethod( 'get' )
-			->setWrapperLegendMsg( 'protectedtitles' )
-			->setSubmitText( $this->msg( 'protectedtitles-submit' )->text() );
-
-		return $htmlForm->prepareForm()->getHTML( false );
+			], [
+				'name' => 'namespace',
+				'id' => 'namespace',
+				'class' => 'namespaceselector',
+			]
+		);
 	}
 
 	/**
 	 * @param string $pr_level Determines which option is selected as default
-	 * @return string|array
-	 * @internal
+	 * @return string Formatted HTML
+	 * @private
 	 */
-	private function getLevelMenu( $pr_level ) {
+	function getLevelMenu( $pr_level ) {
 		// Temporary array
 		$m = [ $this->msg( 'restriction-level-all' )->text() => 0 ];
 		$options = [];
@@ -160,16 +176,14 @@ class SpecialProtectedtitles extends SpecialPage {
 		}
 		// Third pass generates sorted XHTML content
 		foreach ( $m as $text => $type ) {
-			$options[ $text ] = $type;
+			$selected = ( $type == $pr_level );
+			$options[] = Xml::option( $text, $type, $selected );
 		}
 
-		return [
-			'type' => 'select',
-			'options' => $options,
-			'label' => $this->msg( 'restriction-level' )->text(),
-			'name' => $this->IdLevel,
-			'id' => $this->IdLevel
-		];
+		return Xml::label( $this->msg( 'restriction-level' )->text(), $this->IdLevel ) . '&#160;' .
+			Xml::tags( 'select',
+				[ 'id' => $this->IdLevel, 'name' => $this->IdLevel ],
+				implode( "\n", $options ) );
 	}
 
 	protected function getGroupName() {

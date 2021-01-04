@@ -34,6 +34,7 @@ class TestFileEditor {
 					break;
 				case 'hooks':
 				case 'functionhooks':
+				case 'transparenthooks':
 					$this->parseHooks();
 					break;
 				default:
@@ -88,10 +89,14 @@ class TestFileEditor {
 
 				// Add trailing line breaks to the "end" section, to allow for neat deletions
 				$trail = '';
-				while ( $this->lines[$this->pos] === '' && $this->pos < $this->numLines - 1 ) {
-					$trail .= "\n";
-					$this->pos++;
+				for ( $i = 0; $i < $this->numLines - $this->pos - 1; $i++ ) {
+					if ( $this->lines[$this->pos + $i] === '' ) {
+						$trail .= "\n";
+					} else {
+						break;
+					}
 				}
+				$this->pos += strlen( $trail );
 
 				$test[] = [
 					'name' => 'end',
@@ -157,18 +162,18 @@ class TestFileEditor {
 				if ( isset( $changes[$sectionName] ) ) {
 					$change = $changes[$sectionName];
 					switch ( $change['op'] ) {
-						case 'rename':
-							$test[$i]['name'] = $change['value'];
-							$test[$i]['headingLine'] = "!! {$change['value']}";
-							break;
-						case 'update':
-							$test[$i]['contents'] = $change['value'];
-							break;
-						case 'delete':
-							$test[$i]['deleted'] = true;
-							break;
-						default:
-							throw new Exception( "Unknown op: ${change['op']}" );
+					case 'rename':
+						$test[$i]['name'] = $change['value'];
+						$test[$i]['headingLine'] = "!! {$change['value']}";
+						break;
+					case 'update':
+						$test[$i]['contents'] = $change['value'];
+						break;
+					case 'delete':
+						$test[$i]['deleted'] = true;
+						break;
+					default:
+						throw new Exception( "Unknown op: ${change['op']}" );
 					}
 					// Acknowledge
 					// Note that we use the old section name for the rename op

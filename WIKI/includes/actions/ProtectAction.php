@@ -1,5 +1,9 @@
 <?php
 /**
+ * action=protect handler
+ *
+ * Copyright © 2012 Timo Tijhof
+ *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
  * the Free Software Foundation; either version 2 of the License, or
@@ -16,10 +20,11 @@
  *
  * @file
  * @ingroup Actions
+ * @author Timo Tijhof
  */
 
 /**
- * Handle page protection (action=protect)
+ * Handle page protection
  *
  * This is a wrapper that will call Article::protect().
  *
@@ -44,7 +49,7 @@ class ProtectAction extends FormlessAction {
 			] );
 		}
 
-		$this->getArticle()->protect();
+		$this->page->protect();
 	}
 
 	public function doesWrites() {

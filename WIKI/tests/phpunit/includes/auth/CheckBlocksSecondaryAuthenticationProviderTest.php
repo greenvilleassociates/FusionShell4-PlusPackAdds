@@ -2,16 +2,14 @@
 
 namespace MediaWiki\Auth;
 
-use MediaWiki\Block\DatabaseBlock;
-use MediaWiki\MediaWikiServices;
 use Wikimedia\TestingAccessWrapper;
 
 /**
  * @group AuthManager
  * @group Database
- * @covers \MediaWiki\Auth\CheckBlocksSecondaryAuthenticationProvider
+ * @covers MediaWiki\Auth\CheckBlocksSecondaryAuthenticationProvider
  */
-class CheckBlocksSecondaryAuthenticationProviderTest extends \MediaWikiIntegrationTestCase {
+class CheckBlocksSecondaryAuthenticationProviderTest extends \MediaWikiTestCase {
 	public function testConstructor() {
 		$provider = new CheckBlocksSecondaryAuthenticationProvider();
 		$providerPriv = TestingAccessWrapper::newFromObject( $provider );
@@ -65,25 +63,24 @@ class CheckBlocksSecondaryAuthenticationProviderTest extends \MediaWikiIntegrati
 
 	private function getBlockedUser() {
 		$user = \User::newFromName( 'UTBlockee' );
-		if ( $user->getId() == 0 ) {
+		if ( $user->getID() == 0 ) {
 			$user->addToDatabase();
 			\TestUser::setPasswordForUser( $user, 'UTBlockeePassword' );
 			$user->saveSettings();
 		}
-		$oldBlock = DatabaseBlock::newFromTarget( 'UTBlockee' );
+		$oldBlock = \Block::newFromTarget( 'UTBlockee' );
 		if ( $oldBlock ) {
 			// An old block will prevent our new one from saving.
 			$oldBlock->delete();
 		}
 		$blockOptions = [
 			'address' => 'UTBlockee',
-			'user' => $user->getId(),
-			'by' => $this->getTestSysop()->getUser()->getId(),
+			'user' => $user->getID(),
 			'reason' => __METHOD__,
 			'expiry' => time() + 100500,
 			'createAccount' => true,
 		];
-		$block = new DatabaseBlock( $blockOptions );
+		$block = new \Block( $blockOptions );
 		$block->insert();
 		return $user;
 	}
@@ -121,7 +118,7 @@ class CheckBlocksSecondaryAuthenticationProviderTest extends \MediaWikiIntegrati
 		);
 		$provider->setLogger( new \Psr\Log\NullLogger() );
 		$provider->setConfig( new \HashConfig() );
-		$provider->setManager( MediaWikiServices::getInstance()->getAuthManager() );
+		$provider->setManager( AuthManager::singleton() );
 
 		$unblockedUser = \User::newFromName( 'UTSysop' );
 		$blockedUser = $this->getBlockedUser();
@@ -138,37 +135,34 @@ class CheckBlocksSecondaryAuthenticationProviderTest extends \MediaWikiIntegrati
 		);
 
 		$status = $provider->testUserForCreation( $blockedUser, AuthManager::AUTOCREATE_SOURCE_SESSION );
-		$this->assertInstanceOf( \StatusValue::class, $status );
+		$this->assertInstanceOf( 'StatusValue', $status );
 		$this->assertFalse( $status->isOK() );
-		$this->assertTrue( $status->hasMessage( 'blockedtext' ) );
+		$this->assertTrue( $status->hasMessage( 'cantcreateaccount-text' ) );
 
 		$status = $provider->testUserForCreation( $blockedUser, false );
-		$this->assertInstanceOf( \StatusValue::class, $status );
+		$this->assertInstanceOf( 'StatusValue', $status );
 		$this->assertFalse( $status->isOK() );
-		$this->assertTrue( $status->hasMessage( 'blockedtext' ) );
+		$this->assertTrue( $status->hasMessage( 'cantcreateaccount-text' ) );
 	}
 
-	public function testPartialBlock() {
+	public function testRangeBlock() {
 		$blockOptions = [
 			'address' => '127.0.0.0/24',
 			'reason' => __METHOD__,
-			'by' => $this->getTestSysop()->getUser()->getId(),
 			'expiry' => time() + 100500,
 			'createAccount' => true,
-			'sitewide' => false,
 		];
-		$block = new DatabaseBlock( $blockOptions );
+		$block = new \Block( $blockOptions );
 		$block->insert();
 		$scopeVariable = new \Wikimedia\ScopedCallback( [ $block, 'delete' ] );
 
 		$user = \User::newFromName( 'UTNormalUser' );
-		if ( $user->getId() == 0 ) {
+		if ( $user->getID() == 0 ) {
 			$user->addToDatabase();
 			\TestUser::setPasswordForUser( $user, 'UTNormalUserPassword' );
 			$user->saveSettings();
 		}
 		$this->setMwGlobals( [ 'wgUser' => $user ] );
-		\RequestContext::getMain()->setUser( $user );
 		$newuser = \User::newFromName( 'RandomUser' );
 
 		$provider = new CheckBlocksSecondaryAuthenticationProvider(
@@ -176,19 +170,19 @@ class CheckBlocksSecondaryAuthenticationProviderTest extends \MediaWikiIntegrati
 		);
 		$provider->setLogger( new \Psr\Log\NullLogger() );
 		$provider->setConfig( new \HashConfig() );
-		$provider->setManager( MediaWikiServices::getInstance()->getAuthManager() );
+		$provider->setManager( AuthManager::singleton() );
 
 		$ret = $provider->beginSecondaryAuthentication( $user, [] );
 		$this->assertEquals( AuthenticationResponse::FAIL, $ret->status );
 
 		$status = $provider->testUserForCreation( $newuser, AuthManager::AUTOCREATE_SOURCE_SESSION );
-		$this->assertInstanceOf( \StatusValue::class, $status );
+		$this->assertInstanceOf( 'StatusValue', $status );
 		$this->assertFalse( $status->isOK() );
-		$this->assertTrue( $status->hasMessage( 'blockedtext-partial' ) );
+		$this->assertTrue( $status->hasMessage( 'cantcreateaccount-range-text' ) );
 
 		$status = $provider->testUserForCreation( $newuser, false );
-		$this->assertInstanceOf( \StatusValue::class, $status );
+		$this->assertInstanceOf( 'StatusValue', $status );
 		$this->assertFalse( $status->isOK() );
-		$this->assertTrue( $status->hasMessage( 'blockedtext-partial' ) );
+		$this->assertTrue( $status->hasMessage( 'cantcreateaccount-range-text' ) );
 	}
 }

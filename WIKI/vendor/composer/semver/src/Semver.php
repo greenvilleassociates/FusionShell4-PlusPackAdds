@@ -37,15 +37,15 @@ class Semver
 
         $versionParser = self::$versionParser;
         $provider = new Constraint('==', $versionParser->normalize($version));
-        $parsedConstraints = $versionParser->parseConstraints($constraints);
+        $constraints = $versionParser->parseConstraints($constraints);
 
-        return $parsedConstraints->matches($provider);
+        return $constraints->matches($provider);
     }
 
     /**
      * Return all versions that satisfy given constraints.
      *
-     * @param array  $versions
+     * @param array $versions
      * @param string $constraints
      *
      * @return array
@@ -85,7 +85,7 @@ class Semver
 
     /**
      * @param array $versions
-     * @param int   $direction
+     * @param int $direction
      *
      * @return array
      */

@@ -21,8 +21,6 @@
  * @ingroup SpecialPage
  */
 
-use MediaWiki\MediaWikiServices;
-
 /**
  * This special page lists all defined user groups and the associated rights.
  * See also @ref $wgGroupPermissions.
@@ -31,7 +29,7 @@ use MediaWiki\MediaWikiServices;
  * @author Petr Kadlec <mormegil@centrum.cz>
  */
 class SpecialListGroupRights extends SpecialPage {
-	public function __construct() {
+	function __construct() {
 		parent::__construct( 'Listgrouprights' );
 	}
 
@@ -45,7 +43,6 @@ class SpecialListGroupRights extends SpecialPage {
 
 		$out = $this->getOutput();
 		$out->addModuleStyles( 'mediawiki.special' );
-		$this->addHelpLink( 'Help:User_rights_and_groups' );
 
 		$out->wrapWikiMsg( "<div class=\"mw-listgrouprights-key\">\n$1\n</div>", 'listgrouprights-key' );
 
@@ -77,16 +74,21 @@ class SpecialListGroupRights extends SpecialPage {
 		$linkRenderer = $this->getLinkRenderer();
 
 		foreach ( $allGroups as $group ) {
-			$permissions = $groupPermissions[$group] ?? [];
+			$permissions = isset( $groupPermissions[$group] )
+				? $groupPermissions[$group]
+				: [];
 			$groupname = ( $group == '*' ) // Replace * with a more descriptive groupname
 				? 'all'
 				: $group;
 
-			$groupnameLocalized = UserGroupMembership::getGroupName( $groupname );
+			$msg = $this->msg( 'group-' . $groupname );
+			$groupnameLocalized = !$msg->isBlank() ? $msg->text() : $groupname;
 
-			$grouppageLocalizedTitle = UserGroupMembership::getGroupPage( $groupname )
-				?: Title::newFromText( MediaWikiServices::getInstance()->getNamespaceInfo()->
-				getCanonicalName( NS_PROJECT ) . ':' . $groupname );
+			$msg = $this->msg( 'grouppage-' . $groupname )->inContentLanguage();
+			$grouppageLocalized = !$msg->isBlank() ?
+				$msg->text() :
+				MWNamespace::getCanonicalName( NS_PROJECT ) . ':' . $groupname;
+			$grouppageLocalizedTitle = Title::newFromText( $grouppageLocalized );
 
 			if ( $group == '*' || !$grouppageLocalizedTitle ) {
 				// Do not make a link for the generic * group or group with invalid group page
@@ -116,11 +118,13 @@ class SpecialListGroupRights extends SpecialPage {
 				$grouplink = '';
 			}
 
-			$revoke = $revokePermissions[$group] ?? [];
-			$addgroups = $addGroups[$group] ?? [];
-			$removegroups = $removeGroups[$group] ?? [];
-			$addgroupsSelf = $groupsAddToSelf[$group] ?? [];
-			$removegroupsSelf = $groupsRemoveFromSelf[$group] ?? [];
+			$revoke = isset( $revokePermissions[$group] ) ? $revokePermissions[$group] : [];
+			$addgroups = isset( $addGroups[$group] ) ? $addGroups[$group] : [];
+			$removegroups = isset( $removeGroups[$group] ) ? $removeGroups[$group] : [];
+			$addgroupsSelf = isset( $groupsAddToSelf[$group] ) ? $groupsAddToSelf[$group] : [];
+			$removegroupsSelf = isset( $groupsRemoveFromSelf[$group] )
+				? $groupsRemoveFromSelf[$group]
+				: [];
 
 			$id = $group == '*' ? false : Sanitizer::escapeIdForAttribute( $group );
 			$out->addHTML( Html::rawElement( 'tr', [ 'id' => $id ], "
@@ -137,6 +141,7 @@ class SpecialListGroupRights extends SpecialPage {
 	}
 
 	private function outputNamespaceProtectionInfo() {
+		global $wgParser, $wgContLang;
 		$out = $this->getOutput();
 		$namespaceProtection = $this->getConfig()->get( 'NamespaceProtection' );
 
@@ -144,11 +149,11 @@ class SpecialListGroupRights extends SpecialPage {
 			return;
 		}
 
-		$header = $this->msg( 'listgrouprights-namespaceprotection-header' )->text();
+		$header = $this->msg( 'listgrouprights-namespaceprotection-header' )->parse();
 		$out->addHTML(
 			Html::rawElement( 'h2', [], Html::element( 'span', [
 				'class' => 'mw-headline',
-				'id' => substr( Parser::guessSectionNameFromStrippedText( $header ), 1 )
+				'id' => $wgParser->guessSectionNameFromWikiText( $header )
 			], $header ) ) .
 			Xml::openElement( 'table', [ 'class' => 'wikitable' ] ) .
 			Html::element(
@@ -164,18 +169,15 @@ class SpecialListGroupRights extends SpecialPage {
 		);
 		$linkRenderer = $this->getLinkRenderer();
 		ksort( $namespaceProtection );
-		$validNamespaces =
-			MediaWikiServices::getInstance()->getNamespaceInfo()->getValidNamespaces();
-		$contLang = MediaWikiServices::getInstance()->getContentLanguage();
 		foreach ( $namespaceProtection as $namespace => $rights ) {
-			if ( !in_array( $namespace, $validNamespaces ) ) {
+			if ( !in_array( $namespace, MWNamespace::getValidNamespaces() ) ) {
 				continue;
 			}
 
 			if ( $namespace == NS_MAIN ) {
 				$namespaceText = $this->msg( 'blanknamespace' )->text();
 			} else {
-				$namespaceText = $contLang->convertNamespace( $namespace );
+				$namespaceText = $wgContLang->convertNamespace( $namespace );
 			}
 
 			$out->addHTML(
@@ -229,7 +231,7 @@ class SpecialListGroupRights extends SpecialPage {
 	 * @param array $remove Array of groups this group is allowed to remove or true
 	 * @param array $addSelf Array of groups this group is allowed to add to self or true
 	 * @param array $removeSelf Array of group this group is allowed to remove from self or true
-	 * @return string HTML list of all granted permissions
+	 * @return string List of all granted permissions, separated by comma separator
 	 */
 	private function formatPermissions( $permissions, $revoke, $add, $remove, $addSelf, $removeSelf ) {
 		$r = [];
@@ -264,7 +266,6 @@ class SpecialListGroupRights extends SpecialPage {
 		];
 
 		foreach ( $changeGroups as $messageKey => $changeGroup ) {
-			// @phan-suppress-next-line PhanTypeComparisonFromArray
 			if ( $changeGroup === true ) {
 				// For grep: listgrouprights-addgroup-all, listgrouprights-removegroup-all,
 				// listgrouprights-addgroup-self-all, listgrouprights-removegroup-self-all
@@ -284,7 +285,6 @@ class SpecialListGroupRights extends SpecialPage {
 			}
 		}
 
-		// @phan-suppress-next-line PhanImpossibleCondition
 		if ( empty( $r ) ) {
 			return '';
 		} else {

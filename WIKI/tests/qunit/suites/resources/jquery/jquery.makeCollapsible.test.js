@@ -1,4 +1,4 @@
-( function () {
+( function ( mw, $ ) {
 	var loremIpsum = 'Lorem ipsum dolor sit amet, consectetuer adipiscing elit.';
 
 	QUnit.module( 'jquery.makeCollapsible', QUnit.newMwEnvironment() );
@@ -22,17 +22,17 @@
 
 		// On collapse...
 		$collapsible.on( 'beforeCollapse.mw-collapsible', function () {
-			assert.assertTrue( $content.css( 'display' ) !== 'none', 'first beforeCollapseExpand: content is visible' );
+			assert.assertTrue( $content.is( ':visible' ), 'first beforeCollapseExpand: content is visible' );
 		} );
 		$collapsible.on( 'afterCollapse.mw-collapsible', function () {
-			assert.assertTrue( $content.css( 'display' ) === 'none', 'first afterCollapseExpand: content is hidden' );
+			assert.assertTrue( $content.is( ':hidden' ), 'first afterCollapseExpand: content is hidden' );
 
 			// On expand...
 			$collapsible.on( 'beforeExpand.mw-collapsible', function () {
-				assert.assertTrue( $content.css( 'display' ) === 'none', 'second beforeCollapseExpand: content is hidden' );
+				assert.assertTrue( $content.is( ':hidden' ), 'second beforeCollapseExpand: content is hidden' );
 			} );
 			$collapsible.on( 'afterExpand.mw-collapsible', function () {
-				assert.assertTrue( $content.css( 'display' ) !== 'none', 'second afterCollapseExpand: content is visible' );
+				assert.assertTrue( $content.is( ':visible' ), 'second afterCollapseExpand: content is visible' );
 			} );
 
 			// ...expanding happens here
@@ -50,16 +50,16 @@
 			$content = $collapsible.find( '.mw-collapsible-content' ),
 			$toggle = $collapsible.find( '.mw-collapsible-toggle' );
 
-		assert.strictEqual( $content.length, 1, 'content is present' );
-		assert.strictEqual( $content.find( $toggle ).length, 0, 'toggle is not a descendant of content' );
+		assert.equal( $content.length, 1, 'content is present' );
+		assert.equal( $content.find( $toggle ).length, 0, 'toggle is not a descendant of content' );
 
-		assert.assertTrue( $content.css( 'display' ) !== 'none', 'content is visible' );
+		assert.assertTrue( $content.is( ':visible' ), 'content is visible' );
 
 		$collapsible.on( 'afterCollapse.mw-collapsible', function () {
-			assert.assertTrue( $content.css( 'display' ) === 'none', 'after collapsing: content is hidden' );
+			assert.assertTrue( $content.is( ':hidden' ), 'after collapsing: content is hidden' );
 
 			$collapsible.on( 'afterExpand.mw-collapsible', function () {
-				assert.assertTrue( $content.css( 'display' ) !== 'none', 'after expanding: content is visible' );
+				assert.assertTrue( $content.is( ':visible' ), 'after expanding: content is visible' );
 			} );
 
 			$toggle.trigger( 'click' );
@@ -76,22 +76,22 @@
 					'<tr><td>' + loremIpsum + '</td><td>' + loremIpsum + '</td></tr>' +
 				'</table>'
 			),
-			$headerRow = $collapsible.find( 'tr' ).first(),
-			$contentRow = $collapsible.find( 'tr' ).last(),
-			$toggle = $headerRow.find( 'td' ).last().find( '.mw-collapsible-toggle' );
+			$headerRow = $collapsible.find( 'tr:first' ),
+			$contentRow = $collapsible.find( 'tr:last' ),
+			$toggle = $headerRow.find( 'td:last .mw-collapsible-toggle' );
 
-		assert.strictEqual( $toggle.length, 1, 'toggle is added to last cell of first row' );
+		assert.equal( $toggle.length, 1, 'toggle is added to last cell of first row' );
 
-		assert.assertTrue( $headerRow.css( 'display' ) !== 'none', 'headerRow is visible' );
-		assert.assertTrue( $contentRow.css( 'display' ) !== 'none', 'contentRow is visible' );
+		assert.assertTrue( $headerRow.is( ':visible' ), 'headerRow is visible' );
+		assert.assertTrue( $contentRow.is( ':visible' ), 'contentRow is visible' );
 
 		$collapsible.on( 'afterCollapse.mw-collapsible', function () {
-			assert.assertTrue( $headerRow.css( 'display' ) !== 'none', 'after collapsing: headerRow is still visible' );
-			assert.assertTrue( $contentRow.css( 'display' ) === 'none', 'after collapsing: contentRow is hidden' );
+			assert.assertTrue( $headerRow.is( ':visible' ), 'after collapsing: headerRow is still visible' );
+			assert.assertTrue( $contentRow.is( ':hidden' ), 'after collapsing: contentRow is hidden' );
 
 			$collapsible.on( 'afterExpand.mw-collapsible', function () {
-				assert.assertTrue( $headerRow.css( 'display' ) !== 'none', 'after expanding: headerRow is still visible' );
-				assert.assertTrue( $contentRow.css( 'display' ) !== 'none', 'after expanding: contentRow is visible' );
+				assert.assertTrue( $headerRow.is( ':visible' ), 'after expanding: headerRow is still visible' );
+				assert.assertTrue( $contentRow.is( ':visible' ), 'after expanding: contentRow is visible' );
 			} );
 
 			$toggle.trigger( 'click' );
@@ -102,25 +102,25 @@
 
 	function tableWithCaptionTest( $collapsible, test, assert ) {
 		var $caption = $collapsible.find( 'caption' ),
-			$headerRow = $collapsible.find( 'tr' ).first(),
-			$contentRow = $collapsible.find( 'tr' ).last(),
+			$headerRow = $collapsible.find( 'tr:first' ),
+			$contentRow = $collapsible.find( 'tr:last' ),
 			$toggle = $caption.find( '.mw-collapsible-toggle' );
 
-		assert.strictEqual( $toggle.length, 1, 'toggle is added to the end of the caption' );
+		assert.equal( $toggle.length, 1, 'toggle is added to the end of the caption' );
 
-		assert.assertTrue( $caption.css( 'display' ) !== 'none', 'caption is visible' );
-		assert.assertTrue( $headerRow.css( 'display' ) !== 'none', 'headerRow is visible' );
-		assert.assertTrue( $contentRow.css( 'display' ) !== 'none', 'contentRow is visible' );
+		assert.assertTrue( $caption.is( ':visible' ), 'caption is visible' );
+		assert.assertTrue( $headerRow.is( ':visible' ), 'headerRow is visible' );
+		assert.assertTrue( $contentRow.is( ':visible' ), 'contentRow is visible' );
 
 		$collapsible.on( 'afterCollapse.mw-collapsible', function () {
-			assert.assertTrue( $caption.css( 'display' ) !== 'none', 'after collapsing: caption is still visible' );
-			assert.assertTrue( $headerRow.css( 'display' ) === 'none', 'after collapsing: headerRow is hidden' );
-			assert.assertTrue( $contentRow.css( 'display' ) === 'none', 'after collapsing: contentRow is hidden' );
+			assert.assertTrue( $caption.is( ':visible' ), 'after collapsing: caption is still visible' );
+			assert.assertTrue( $headerRow.is( ':hidden' ), 'after collapsing: headerRow is hidden' );
+			assert.assertTrue( $contentRow.is( ':hidden' ), 'after collapsing: contentRow is hidden' );
 
 			$collapsible.on( 'afterExpand.mw-collapsible', function () {
-				assert.assertTrue( $caption.css( 'display' ) !== 'none', 'after expanding: caption is still visible' );
-				assert.assertTrue( $headerRow.css( 'display' ) !== 'none', 'after expanding: headerRow is visible' );
-				assert.assertTrue( $contentRow.css( 'display' ) !== 'none', 'after expanding: contentRow is visible' );
+				assert.assertTrue( $caption.is( ':visible' ), 'after expanding: caption is still visible' );
+				assert.assertTrue( $headerRow.is( ':visible' ), 'after expanding: headerRow is visible' );
+				assert.assertTrue( $contentRow.is( ':visible' ), 'after expanding: contentRow is visible' );
 			} );
 
 			$toggle.trigger( 'click' );
@@ -159,21 +159,21 @@
 				'</' + listType + '>'
 			),
 			$toggleItem = $collapsible.find( 'li.mw-collapsible-toggle-li:first-child' ),
-			$contentItem = $collapsible.find( 'li' ).last(),
+			$contentItem = $collapsible.find( 'li:last' ),
 			$toggle = $toggleItem.find( '.mw-collapsible-toggle' );
 
-		assert.strictEqual( $toggle.length, 1, 'toggle is present, added inside new zeroth list item' );
+		assert.equal( $toggle.length, 1, 'toggle is present, added inside new zeroth list item' );
 
-		assert.assertTrue( $toggleItem.css( 'display' ) !== 'none', 'toggleItem is visible' );
-		assert.assertTrue( $contentItem.css( 'display' ) !== 'none', 'contentItem is visible' );
+		assert.assertTrue( $toggleItem.is( ':visible' ), 'toggleItem is visible' );
+		assert.assertTrue( $contentItem.is( ':visible' ), 'contentItem is visible' );
 
 		$collapsible.on( 'afterCollapse.mw-collapsible', function () {
-			assert.assertTrue( $toggleItem.css( 'display' ) !== 'none', 'after collapsing: toggleItem is still visible' );
-			assert.assertTrue( $contentItem.css( 'display' ) === 'none', 'after collapsing: contentItem is hidden' );
+			assert.assertTrue( $toggleItem.is( ':visible' ), 'after collapsing: toggleItem is still visible' );
+			assert.assertTrue( $contentItem.is( ':hidden' ), 'after collapsing: contentItem is hidden' );
 
 			$collapsible.on( 'afterExpand.mw-collapsible', function () {
-				assert.assertTrue( $toggleItem.css( 'display' ) !== 'none', 'after expanding: toggleItem is still visible' );
-				assert.assertTrue( $contentItem.css( 'display' ) !== 'none', 'after expanding: contentItem is visible' );
+				assert.assertTrue( $toggleItem.is( ':visible' ), 'after expanding: toggleItem is still visible' );
+				assert.assertTrue( $contentItem.is( ':visible' ), 'after expanding: contentItem is visible' );
 			} );
 
 			$toggle.trigger( 'click' );
@@ -197,11 +197,11 @@
 			),
 			$content = $collapsible.find( '.mw-collapsible-content' );
 
-		assert.assertTrue( $content.css( 'display' ) !== 'none', 'content is visible' );
+		assert.assertTrue( $content.is( ':visible' ), 'content is visible' );
 
 		$collapsible.find( '.mw-collapsible-toggle' ).trigger( 'click' );
 
-		assert.assertTrue( $content.css( 'display' ) === 'none', 'after collapsing: content is hidden' );
+		assert.assertTrue( $content.is( ':hidden' ), 'after collapsing: content is hidden' );
 	} );
 
 	QUnit.test( 'mw-made-collapsible data added', function ( assert ) {
@@ -209,7 +209,7 @@
 			'<div>' + loremIpsum + '</div>'
 		);
 
-		assert.strictEqual( $collapsible.data( 'mw-made-collapsible' ), true, 'mw-made-collapsible data present' );
+		assert.equal( $collapsible.data( 'mw-made-collapsible' ), true, 'mw-made-collapsible data present' );
 	} );
 
 	QUnit.test( 'mw-collapsible added when missing', function ( assert ) {
@@ -217,7 +217,6 @@
 			'<div>' + loremIpsum + '</div>'
 		);
 
-		// eslint-disable-next-line no-jquery/no-class-state
 		assert.assertTrue( $collapsible.hasClass( 'mw-collapsible' ), 'mw-collapsible class present' );
 	} );
 
@@ -227,7 +226,6 @@
 			{ collapsed: true }
 		);
 
-		// eslint-disable-next-line no-jquery/no-class-state
 		assert.assertTrue( $collapsible.hasClass( 'mw-collapsed' ), 'mw-collapsed class present' );
 	} );
 
@@ -238,10 +236,10 @@
 			$content = $collapsible.find( '.mw-collapsible-content' );
 
 		// Synchronous - mw-collapsed should cause instantHide: true to be used on initial collapsing
-		assert.assertTrue( $content.css( 'display' ) === 'none', 'content is hidden' );
+		assert.assertTrue( $content.is( ':hidden' ), 'content is hidden' );
 
 		$collapsible.on( 'afterExpand.mw-collapsible', function () {
-			assert.assertTrue( $content.css( 'display' ) !== 'none', 'after expanding: content is visible' );
+			assert.assertTrue( $content.is( ':visible' ), 'after expanding: content is visible' );
 		} );
 
 		$collapsible.find( '.mw-collapsible-toggle' ).trigger( 'click' );
@@ -255,10 +253,10 @@
 			$content = $collapsible.find( '.mw-collapsible-content' );
 
 		// Synchronous - collapsed: true should cause instantHide: true to be used on initial collapsing
-		assert.assertTrue( $content.css( 'display' ) === 'none', 'content is hidden' );
+		assert.assertTrue( $content.is( ':hidden' ), 'content is hidden' );
 
 		$collapsible.on( 'afterExpand.mw-collapsible', function () {
-			assert.assertTrue( $content.css( 'display' ) !== 'none', 'after expanding: content is visible' );
+			assert.assertTrue( $content.is( ':visible' ), 'after expanding: content is visible' );
 		} );
 
 		$collapsible.find( '.mw-collapsible-toggle' ).trigger( 'click' );
@@ -278,10 +276,10 @@
 			$content = $collapsible.find( '.mw-collapsible-content' );
 
 		$collapsible.find( '.mw-collapsible-toggle a' ).trigger( 'click' );
-		assert.assertTrue( $content.css( 'display' ) !== 'none', 'click event on link inside toggle passes through (content not toggled)' );
+		assert.assertTrue( $content.is( ':visible' ), 'click event on link inside toggle passes through (content not toggled)' );
 
 		$collapsible.find( '.mw-collapsible-toggle b' ).trigger( 'click' );
-		assert.assertTrue( $content.css( 'display' ) === 'none', 'click event on non-link inside toggle toggles content' );
+		assert.assertTrue( $content.is( ':hidden' ), 'click event on non-link inside toggle toggles content' );
 	} );
 
 	QUnit.test( 'click on non-link inside toggler counts as trigger', function ( assert ) {
@@ -297,7 +295,7 @@
 			$content = $collapsible.find( '.mw-collapsible-content' );
 
 		$collapsible.find( '.mw-collapsible-toggle a' ).trigger( 'click' );
-		assert.assertTrue( $content.css( 'display' ) === 'none', 'click event on link (with no href) inside toggle toggles content' );
+		assert.assertTrue( $content.is( ':hidden' ), 'click event on link (with no href) inside toggle toggles content' );
 	} );
 
 	QUnit.test( 'collapse/expand text (data-collapsetext, data-expandtext)', function ( assert ) {
@@ -308,10 +306,10 @@
 			),
 			$toggleText = $collapsible.find( '.mw-collapsible-text' );
 
-		assert.strictEqual( $toggleText.text(), 'Collapse me!', 'data-collapsetext is respected' );
+		assert.equal( $toggleText.text(), 'Collapse me!', 'data-collapsetext is respected' );
 
 		$collapsible.on( 'afterCollapse.mw-collapsible', function () {
-			assert.strictEqual( $toggleText.text(), 'Expand me!', 'data-expandtext is respected' );
+			assert.equal( $toggleText.text(), 'Expand me!', 'data-expandtext is respected' );
 		} );
 
 		$collapsible.find( '.mw-collapsible-toggle' ).trigger( 'click' );
@@ -324,10 +322,10 @@
 			),
 			$toggleText = $collapsible.find( '.mw-collapsible-text' );
 
-		assert.strictEqual( $toggleText.text(), 'Collapse me!', 'options.collapseText is respected' );
+		assert.equal( $toggleText.text(), 'Collapse me!', 'options.collapseText is respected' );
 
 		$collapsible.on( 'afterCollapse.mw-collapsible', function () {
-			assert.strictEqual( $toggleText.text(), 'Expand me!', 'options.expandText is respected' );
+			assert.equal( $toggleText.text(), 'Expand me!', 'options.expandText is respected' );
 		} );
 
 		$collapsible.find( '.mw-collapsible-toggle' ).trigger( 'click' );
@@ -345,13 +343,13 @@
 			),
 			$toggleText = $collapsible.find( '.mw-collapsible-text' );
 
-		assert.strictEqual( $toggleText.text(), 'Toggle', 'predefined text remains' );
+		assert.equal( $toggleText.text(), 'Toggle', 'predefined text remains' );
 
 		$collapsible.on( 'afterCollapse.mw-collapsible', function () {
-			assert.strictEqual( $toggleText.text(), 'Show', 'predefined text is toggled' );
+			assert.equal( $toggleText.text(), 'Show', 'predefined text is toggled' );
 
 			$collapsible.on( 'afterExpand.mw-collapsible', function () {
-				assert.strictEqual( $toggleText.text(), 'Hide', 'predefined text is toggled back' );
+				assert.equal( $toggleText.text(), 'Hide', 'predefined text is toggled back' );
 			} );
 
 			$collapsible.find( '.mw-collapsible-toggle' ).trigger( 'click' );
@@ -368,36 +366,12 @@
 				.appendTo( '#qunit-fixture' ).makeCollapsible(),
 			$content = $clone.find( '.mw-collapsible-content' );
 
-		assert.assertTrue( $content.css( 'display' ) !== 'none', 'content is visible' );
+		assert.assertTrue( $content.is( ':visible' ), 'content is visible' );
 
 		$clone.on( 'afterCollapse.mw-collapsible', function () {
-			assert.assertTrue( $content.css( 'display' ) === 'none', 'after collapsing: content is hidden' );
+			assert.assertTrue( $content.is( ':hidden' ), 'after collapsing: content is hidden' );
 		} );
 
 		$clone.find( '.mw-collapsible-toggle a' ).trigger( 'click' );
 	} );
-
-	QUnit.test( 'T168689 - nested collapsible divs should keep independent state', function ( assert ) {
-		var $collapsible1 = prepareCollapsible(
-				'<div class="mw-collapsible">' + loremIpsum + '</div>'
-			),
-			$collapsible2 = prepareCollapsible(
-				'<div class="mw-collapsible">' + loremIpsum + '</div>'
-			);
-
-		$collapsible1
-			.append( $collapsible2 )
-			.appendTo( '#qunit-fixture' ).makeCollapsible();
-
-		$collapsible1.on( 'afterCollapse.mw-collapsible', function () {
-			// eslint-disable-next-line no-jquery/no-class-state
-			assert.assertTrue( $collapsible1.hasClass( 'mw-collapsed' ), 'after collapsing: parent is collapsed' );
-			// eslint-disable-next-line no-jquery/no-class-state
-			assert.assertFalse( $collapsible2.hasClass( 'mw-collapsed' ), 'after collapsing: child is not collapsed' );
-			// eslint-disable-next-line no-jquery/no-class-state
-			assert.assertTrue( $collapsible1.find( '> .mw-collapsible-toggle' ).hasClass( 'mw-collapsible-toggle-collapsed' ) );
-			// eslint-disable-next-line no-jquery/no-class-state
-			assert.assertFalse( $collapsible2.find( '> .mw-collapsible-toggle' ).hasClass( 'mw-collapsible-toggle-collapsed' ) );
-		} ).find( '> .mw-collapsible-toggle a' ).trigger( 'click' );
-	} );
-}() );
+}( mediaWiki, jQuery ) );

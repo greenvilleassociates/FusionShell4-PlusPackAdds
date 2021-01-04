@@ -4,7 +4,7 @@ namespace MediaWiki\Auth;
 
 /**
  * @group AuthManager
- * @covers \MediaWiki\Auth\ButtonAuthenticationRequest
+ * @covers MediaWiki\Auth\ButtonAuthenticationRequest
  */
 class ButtonAuthenticationRequestTest extends AuthenticationRequestTestCase {
 
@@ -48,8 +48,9 @@ class ButtonAuthenticationRequestTest extends AuthenticationRequestTestCase {
 		);
 		$reqs[] = new ButtonAuthenticationRequest( 'bar', wfMessage( 'msg1' ), wfMessage( 'help1' ) );
 		$reqs[] = new ButtonAuthenticationRequest( 'bar', wfMessage( 'msg2' ), wfMessage( 'help2' ) );
-		$reqs['testSub'] =
-			new ButtonAuthenticationRequest( 'subclass', wfMessage( 'msg3' ), wfMessage( 'help3' ) );
+		$reqs['testSub'] = $this->getMockBuilder( ButtonAuthenticationRequest::class )
+			->setConstructorArgs( [ 'subclass', wfMessage( 'msg3' ), wfMessage( 'help3' ) ] )
+			->getMock();
 
 		$this->assertNull( ButtonAuthenticationRequest::getRequestByName( $reqs, 'missing' ) );
 		$this->assertSame(

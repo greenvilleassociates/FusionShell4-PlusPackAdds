@@ -1,7 +1,6 @@
 {
 	"@metadata": {
 		"authors": [
-			"Reptilien.19831209BE1",
 			"Srtxg"
 		]
 	},
@@ -13,7 +12,7 @@
 	"vector-action-unprotect": "Candjî l' protedjaedje",
 	"vector-view-create": "Ahiver",
 	"vector-view-edit": "Candjî",
-	"vector-view-history": "Vey l’&nbsp;istwere",
+	"vector-view-history": "Vey l' istwere",
 	"vector-view-view": "Lére",
 	"vector-view-viewsource": "Vey côde sourdant",
 	"vector-more-actions": "Di pus"

@@ -1,13 +1,10 @@
 {
 	"@metadata": {
 		"authors": [
-			"Albinus",
-			"Manik Soren",
-			"Ramjit Tudu"
+			"Albinus"
 		]
 	},
-	"fancycaptcha-captcha": "ᱥᱤᱠᱤᱣᱨᱤᱴᱤ ᱵᱤᱰᱟᱹᱣ",
-	"fancycaptcha-accountcreate": "ᱟᱡᱛᱮ ᱠᱷᱟᱛᱟ ᱛᱮᱭᱟᱨ ᱠᱷᱚᱱ ᱣᱤᱠᱤ ᱵᱟᱧᱪᱟᱣ ᱞᱟᱹᱜᱤᱫᱛᱮ, ᱞᱟᱛᱟᱨ ᱨᱮ ᱧᱮᱞᱚᱜ-ᱠᱟᱱ ᱵᱟᱠᱥᱟ ᱨᱮᱱᱟᱜ ᱚᱞ ᱟᱫᱮᱨ ᱞᱟᱹᱜᱤᱫ ᱞᱮ ᱱᱮᱦᱚᱸᱨᱮᱫ ᱢᱮᱭᱟ ([[Special:Captcha/help|ᱵᱟᱹᱲᱛᱤ ᱠᱟᱛᱷᱟ]]):",
-	"fancycaptcha-imgcaptcha-ph": "ᱪᱤᱛᱟᱹᱨᱨᱮ ᱡᱟᱸᱦᱟᱸᱢ ᱧᱮᱞ ᱫᱟ ᱚᱱᱟ ᱚᱞ ᱢᱮ",
-	"fancycaptcha-reload-text": "ᱯᱷᱟᱨᱱᱟᱣ"
+	"fancycaptcha-captcha": "Security biḍao",
+	"fancycaptcha-imgcaptcha-ph": "Chubire okaṭakem ńelńamet́kan ona olme",
+	"fancycaptcha-reload-text": "Phạryạo"
 }

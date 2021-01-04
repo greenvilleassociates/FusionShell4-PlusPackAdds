@@ -1,6 +1,6 @@
 <?php
 
-use Wikimedia\Rdbms\ILoadBalancer;
+use Wikimedia\Rdbms\LoadBalancer;
 
 /**
  * Represents the site configuration of a wiki.
@@ -26,7 +26,7 @@ use Wikimedia\Rdbms\ILoadBalancer;
  * @file
  * @ingroup Site
  *
- * @license GPL-2.0-or-later
+ * @license GNU GPL v2+
  * @author Jeroen De Dauw < jeroendedauw@gmail.com >
  * @author Daniel Kinzler
  */
@@ -38,19 +38,19 @@ class DBSiteStore implements SiteStore {
 	protected $sites = null;
 
 	/**
-	 * @var ILoadBalancer
+	 * @var LoadBalancer
 	 */
 	private $dbLoadBalancer;
 
 	/**
 	 * @since 1.27
 	 *
-	 * @todo inject some kind of connection manager that is aware of the target wiki,
+	 * @todo: inject some kind of connection manager that is aware of the target wiki,
 	 * instead of injecting a LoadBalancer.
 	 *
-	 * @param ILoadBalancer $dbLoadBalancer
+	 * @param LoadBalancer $dbLoadBalancer
 	 */
-	public function __construct( ILoadBalancer $dbLoadBalancer ) {
+	public function __construct( LoadBalancer $dbLoadBalancer ) {
 		$this->dbLoadBalancer = $dbLoadBalancer;
 	}
 
@@ -75,7 +75,7 @@ class DBSiteStore implements SiteStore {
 	protected function loadSites() {
 		$this->sites = new SiteList();
 
-		$dbr = $this->dbLoadBalancer->getConnectionRef( DB_REPLICA );
+		$dbr = $this->dbLoadBalancer->getConnection( DB_REPLICA );
 
 		$res = $dbr->select(
 			'sites',
@@ -178,7 +178,7 @@ class DBSiteStore implements SiteStore {
 			return true;
 		}
 
-		$dbw = $this->dbLoadBalancer->getConnectionRef( DB_MASTER );
+		$dbw = $this->dbLoadBalancer->getConnection( DB_MASTER );
 
 		$dbw->startAtomic( __METHOD__ );
 
@@ -198,7 +198,7 @@ class DBSiteStore implements SiteStore {
 				'site_type' => $site->getType(),
 				'site_group' => $site->getGroup(),
 				'site_source' => $site->getSource(),
-				'site_language' => $site->getLanguageCode() ?? '',
+				'site_language' => $site->getLanguageCode() === null ? '' : $site->getLanguageCode(),
 				'site_protocol' => $site->getProtocol(),
 				'site_domain' => strrev( $site->getDomain() ) . '.',
 				'site_data' => serialize( $site->getExtraData() ),
@@ -269,7 +269,7 @@ class DBSiteStore implements SiteStore {
 	 * @return bool Success
 	 */
 	public function clear() {
-		$dbw = $this->dbLoadBalancer->getConnectionRef( DB_MASTER );
+		$dbw = $this->dbLoadBalancer->getConnection( DB_MASTER );
 
 		$dbw->startAtomic( __METHOD__ );
 		$ok = $dbw->delete( 'sites', '*', __METHOD__ );

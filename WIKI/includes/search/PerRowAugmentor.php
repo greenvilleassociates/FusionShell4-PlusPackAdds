@@ -20,10 +20,10 @@ class PerRowAugmentor implements ResultSetAugmentor {
 
 	/**
 	 * Produce data to augment search result set.
-	 * @param ISearchResultSet $resultSet
+	 * @param SearchResultSet $resultSet
 	 * @return array Data for all results
 	 */
-	public function augmentAll( ISearchResultSet $resultSet ) {
+	public function augmentAll( SearchResultSet $resultSet ) {
 		$data = [];
 		foreach ( $resultSet->extractResults() as $result ) {
 			$id = $result->getTitle()->getArticleID();

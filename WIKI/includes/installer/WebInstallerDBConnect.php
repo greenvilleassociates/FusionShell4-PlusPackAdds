@@ -16,7 +16,7 @@
  * http://www.gnu.org/copyleft/gpl.html
  *
  * @file
- * @ingroup Installer
+ * @ingroup Deployment
  */
 
 class WebInstallerDBConnect extends WebInstallerPage {
@@ -48,13 +48,14 @@ class WebInstallerDBConnect extends WebInstallerPage {
 		$settings = '';
 		$defaultType = $this->getVar( 'wgDBtype' );
 
-		// Messages: config-dbsupport-mysql, config-dbsupport-postgres, config-dbsupport-sqlite
+		// Messages: config-dbsupport-mysql, config-dbsupport-postgres, config-dbsupport-oracle,
+		// config-dbsupport-sqlite, config-dbsupport-mssql
 		$dbSupport = '';
 		foreach ( Installer::getDBTypes() as $type ) {
 			$dbSupport .= wfMessage( "config-dbsupport-$type" )->plain() . "\n";
 		}
 		$this->addHTML( $this->parent->getInfoBox(
-			wfMessage( 'config-support-info', trim( $dbSupport ) )->plain() ) );
+			wfMessage( 'config-support-info', trim( $dbSupport ) )->text() ) );
 
 		// It's possible that the library for the default DB type is not compiled in.
 		// In that case, instead select the first supported DB type in the list.
@@ -77,7 +78,8 @@ class WebInstallerDBConnect extends WebInstallerPage {
 				) .
 				"</li>\n";
 
-			// Messages: config-header-mysql, config-header-postgres, config-header-sqlite
+			// Messages: config-header-mysql, config-header-postgres, config-header-oracle,
+			// config-header-sqlite
 			$settings .= Html::openElement(
 					'div',
 					[

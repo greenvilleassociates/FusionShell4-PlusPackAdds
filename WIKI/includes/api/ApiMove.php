@@ -1,5 +1,9 @@
 <?php
 /**
+ *
+ *
+ * Created on Oct 31, 2007
+ *
  * Copyright © 2007 Roan Kattouw "<Firstname>.<Lastname>@gmail.com"
  *
  * This program is free software; you can redistribute it and/or modify
@@ -20,22 +24,11 @@
  * @file
  */
 
-use MediaWiki\MediaWikiServices;
-
 /**
  * API Module to move pages
  * @ingroup API
  */
 class ApiMove extends ApiBase {
-
-	use ApiWatchlistTrait;
-
-	public function __construct( ApiMain $mainModule, $moduleName, $modulePrefix = '' ) {
-		parent::__construct( $mainModule, $moduleName, $modulePrefix );
-
-		$this->watchlistExpiryEnabled = $this->getConfig()->get( 'WatchlistExpiry' );
-		$this->watchlistMaxDuration = $this->getConfig()->get( 'WatchlistExpiryMaxDuration' );
-	}
 
 	public function execute() {
 		$this->useTransactionalTimeLimit();
@@ -68,15 +61,13 @@ class ApiMove extends ApiBase {
 		}
 		$toTalk = $toTitle->getTalkPageIfDefined();
 
-		$repoGroup = MediaWikiServices::getInstance()->getRepoGroup();
 		if ( $toTitle->getNamespace() == NS_FILE
-			&& !$repoGroup->getLocalRepo()->findFile( $toTitle )
-			&& $repoGroup->findFile( $toTitle )
+			&& !RepoGroup::singleton()->getLocalRepo()->findFile( $toTitle )
+			&& wfFindFile( $toTitle )
 		) {
-			if ( !$params['ignorewarnings'] &&
-				 $this->getPermissionManager()->userHasRight( $user, 'reupload-shared' ) ) {
+			if ( !$params['ignorewarnings'] && $user->isAllowed( 'reupload-shared' ) ) {
 				$this->dieWithError( 'apierror-fileexists-sharedrepo-perm' );
-			} elseif ( !$this->getPermissionManager()->userHasRight( $user, 'reupload-shared' ) ) {
+			} elseif ( !$user->isAllowed( 'reupload-shared' ) ) {
 				$this->dieWithError( 'apierror-cantoverwrite-sharedfile' );
 			}
 		}
@@ -99,7 +90,6 @@ class ApiMove extends ApiBase {
 		$status = $this->movePage( $fromTitle, $toTitle, $params['reason'], !$params['noredirect'],
 			$params['tags'] ?: [] );
 		if ( !$status->isOK() ) {
-			$user->spreadAnyEditBlock();
 			$this->dieStatus( $status );
 		}
 
@@ -113,6 +103,7 @@ class ApiMove extends ApiBase {
 		// a redirect to the new title. This is not safe, but what we did before was
 		// even worse: we just determined whether a redirect should have been created,
 		// and reported that it was created if it should have, without any checks.
+		// Also note that isRedirect() is unreliable because of T39209.
 		$r['redirectcreated'] = $fromTitle->exists();
 
 		$r['moveoverredirect'] = $toTitleExists;
@@ -165,12 +156,15 @@ class ApiMove extends ApiBase {
 		$watch = 'preferences';
 		if ( isset( $params['watchlist'] ) ) {
 			$watch = $params['watchlist'];
+		} elseif ( $params['watch'] ) {
+			$watch = 'watch';
+		} elseif ( $params['unwatch'] ) {
+			$watch = 'unwatch';
 		}
-		$watchlistExpiry = $this->getExpiryFromParams( $params );
 
 		// Watch pages
-		$this->setWatch( $watch, $fromTitle, $user, 'watchmoves', $watchlistExpiry );
-		$this->setWatch( $watch, $toTitle, $user, 'watchmoves', $watchlistExpiry );
+		$this->setWatch( $watch, $fromTitle, 'watchmoves' );
+		$this->setWatch( $watch, $toTitle, 'watchmoves' );
 
 		$result->addValue( null, $this->getModuleName(), $r );
 	}
@@ -184,7 +178,7 @@ class ApiMove extends ApiBase {
 	 * @return Status
 	 */
 	protected function movePage( Title $from, Title $to, $reason, $createRedirect, $changeTags ) {
-		$mp = MediaWikiServices::getInstance()->getMovePageFactory()->newMovePage( $from, $to );
+		$mp = new MovePage( $from, $to );
 		$valid = $mp->isValidMove();
 		if ( !$valid->isOK() ) {
 			return $valid;
@@ -197,7 +191,7 @@ class ApiMove extends ApiBase {
 		}
 
 		// Check suppressredirect permission
-		if ( !$this->getPermissionManager()->userHasRight( $user, 'suppressredirect' ) ) {
+		if ( !$user->isAllowed( 'suppressredirect' ) ) {
 			$createRedirect = true;
 		}
 
@@ -215,23 +209,22 @@ class ApiMove extends ApiBase {
 	public function moveSubpages( $fromTitle, $toTitle, $reason, $noredirect, $changeTags = [] ) {
 		$retval = [];
 
-		$mp = new MovePage( $fromTitle, $toTitle );
-		$result =
-			$mp->moveSubpagesIfAllowed( $this->getUser(), $reason, !$noredirect, $changeTags );
-		if ( !$result->isOK() ) {
-			// This means the whole thing failed
-			return [ 'errors' => $this->getErrorFormatter()->arrayFromStatus( $result ) ];
+		$success = $fromTitle->moveSubpages( $toTitle, true, $reason, !$noredirect, $changeTags );
+		if ( isset( $success[0] ) ) {
+			$status = $this->errorArrayToStatus( $success );
+			return [ 'errors' => $this->getErrorFormatter()->arrayFromStatus( $status ) ];
 		}
 
 		// At least some pages could be moved
 		// Report each of them separately
-		foreach ( $result->getValue() as $oldTitle => $status ) {
-			/** @var Status $status */
+		foreach ( $success as $oldTitle => $newTitle ) {
 			$r = [ 'from' => $oldTitle ];
-			if ( $status->isOK() ) {
-				$r['to'] = $status->getValue();
-			} else {
+			if ( is_array( $newTitle ) ) {
+				$status = $this->errorArrayToStatus( $newTitle );
 				$r['errors'] = $this->getErrorFormatter()->arrayFromStatus( $status );
+			} else {
+				// Success
+				$r['to'] = $newTitle;
 			}
 			$retval[] = $r;
 		}
@@ -248,7 +241,7 @@ class ApiMove extends ApiBase {
 	}
 
 	public function getAllowedParams() {
-		$params = [
+		return [
 			'from' => null,
 			'fromid' => [
 				ApiBase::PARAM_TYPE => 'integer'
@@ -261,13 +254,23 @@ class ApiMove extends ApiBase {
 			'movetalk' => false,
 			'movesubpages' => false,
 			'noredirect' => false,
-		];
-
-		// Params appear in the docs in the order they are defined,
-		// which is why this is here and not at the bottom.
-		$params += $this->getWatchlistParams();
-
-		return $params + [
+			'watch' => [
+				ApiBase::PARAM_DFLT => false,
+				ApiBase::PARAM_DEPRECATED => true,
+			],
+			'unwatch' => [
+				ApiBase::PARAM_DFLT => false,
+				ApiBase::PARAM_DEPRECATED => true,
+			],
+			'watchlist' => [
+				ApiBase::PARAM_DFLT => 'preferences',
+				ApiBase::PARAM_TYPE => [
+					'watch',
+					'unwatch',
+					'preferences',
+					'nochange'
+				],
+			],
 			'ignorewarnings' => false,
 			'tags' => [
 				ApiBase::PARAM_TYPE => 'tags',

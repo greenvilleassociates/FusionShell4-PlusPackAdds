@@ -1,5 +1,7 @@
 <?php
 /**
+ * Created on December 31, 2012
+ *
  * Copyright © 2012 Wikimedia Foundation and contributors
  *
  * This program is free software; you can redistribute it and/or modify
@@ -46,7 +48,7 @@ class ApiQueryPagesWithProp extends ApiQueryGeneratorBase {
 	}
 
 	/**
-	 * @param ApiPageSet|null $resultPageSet
+	 * @param ApiPageSet $resultPageSet
 	 * @return void
 	 */
 	private function run( $resultPageSet = null ) {
@@ -87,13 +89,7 @@ class ApiQueryPagesWithProp extends ApiQueryGeneratorBase {
 
 		$result = $this->getResult();
 		$count = 0;
-		$res = $this->select( __METHOD__ );
-
-		if ( $fld_title && $resultPageSet === null ) {
-			$this->executeGenderCacheFromResultWrapper( $res, __METHOD__ );
-		}
-
-		foreach ( $res as $row ) {
+		foreach ( $this->select( __METHOD__ ) as $row ) {
 			if ( ++$count > $limit ) {
 				// We've reached the one extra which shows that there are
 				// additional pages to be had. Stop here...

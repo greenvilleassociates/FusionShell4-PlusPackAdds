@@ -8,7 +8,9 @@
 					"mw",
 					"mw.Message",
 					"mw.loader",
+					"mw.loader.store",
 					"mw.html",
+					"mw.html.Cdata",
 					"mw.html.Raw",
 					"mw.hook",
 					"mw.template",
@@ -20,7 +22,7 @@
 				"classes": [
 					"mw.Title",
 					"mw.Uri",
-					"mw.String",
+					"mw.RegExp",
 					"mw.messagePoster.*",
 					"mw.notification",
 					"mw.Notification_",
@@ -32,8 +34,12 @@
 					"mw.cookie",
 					"mw.experiments",
 					"mw.viewport",
-					"mw.visibleTimeout"
+					"mw.htmlform.*"
 				]
+			},
+			{
+				"name": "Actions",
+				"classes": ["mw.toolbar"]
 			},
 			{
 				"name": "API",
@@ -45,6 +51,12 @@
 					"mw.language*",
 					"mw.cldr",
 					"mw.jqueryMsg"
+				]
+			},
+			{
+				"name": "Page",
+				"classes": [
+					"mw.page*"
 				]
 			},
 			{
@@ -75,6 +87,7 @@
 				"classes": [
 					"mw.log",
 					"mw.inspect",
+					"mw.inspect.reports",
 					"mw.Debug"
 				]
 			}
@@ -89,17 +102,6 @@
 					"jQuery.client",
 					"jQuery.colorUtil",
 					"jQuery.plugin.*"
-				]
-			}
-		]
-	},
-	{
-		"name": "Vue",
-		"groups": [
-			{
-				"name": "Plugins",
-				"classes": [
-					"Vue"
 				]
 			}
 		]

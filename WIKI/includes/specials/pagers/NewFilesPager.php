@@ -22,7 +22,6 @@
 /**
  * @ingroup Pager
  */
-use MediaWiki\Linker\LinkRenderer;
 use MediaWiki\MediaWikiServices;
 
 class NewFilesPager extends RangeChronologicalPager {
@@ -40,12 +39,9 @@ class NewFilesPager extends RangeChronologicalPager {
 	/**
 	 * @param IContextSource $context
 	 * @param FormOptions $opts
-	 * @param LinkRenderer $linkRenderer
 	 */
-	public function __construct( IContextSource $context, FormOptions $opts,
-		LinkRenderer $linkRenderer
-	) {
-		parent::__construct( $context, $linkRenderer );
+	function __construct( IContextSource $context, FormOptions $opts ) {
+		parent::__construct( $context );
 
 		$this->opts = $opts;
 		$this->setLimit( $opts->getValue( 'limit' ) );
@@ -61,25 +57,39 @@ class NewFilesPager extends RangeChronologicalPager {
 		$this->getDateRangeCond( $startTimestamp, $endTimestamp );
 	}
 
-	public function getQueryInfo() {
+	function getQueryInfo() {
 		$opts = $this->opts;
-		$conds = [];
-		$actorQuery = ActorMigration::newMigration()->getJoin( 'img_user' );
-		$tables = [ 'image' ] + $actorQuery['tables'];
-		$fields = [ 'img_name', 'img_timestamp' ] + $actorQuery['fields'];
+		$conds = $jconds = [];
+		$tables = [ 'image' ];
+		$fields = [ 'img_name', 'img_user', 'img_timestamp' ];
 		$options = [];
-		$jconds = $actorQuery['joins'];
 
 		$user = $opts->getValue( 'user' );
 		if ( $user !== '' ) {
-			$conds[] = ActorMigration::newMigration()
-				->getWhere( wfGetDB( DB_REPLICA ), 'img_user', User::newFromName( $user, false ) )['conds'];
+			$userId = User::idFromName( $user );
+			if ( $userId ) {
+				$conds['img_user'] = $userId;
+			} else {
+				$conds['img_user_text'] = $user;
+			}
+		}
+
+		if ( $opts->getValue( 'newbies' ) ) {
+			// newbie = most recent 1% of users
+			$dbr = wfGetDB( DB_REPLICA );
+			$max = $dbr->selectField( 'user', 'max(user_id)', false, __METHOD__ );
+			$conds[] = 'img_user >' . (int)( $max - $max / 100 );
+
+			// there's no point in looking for new user activity in a far past;
+			// beyond a certain point, we'd just end up scanning the rest of the
+			// table even though the users we're looking for didn't yet exist...
+			// see T140537, (for ContribsPages, but similar to this)
+			$conds[] = 'img_timestamp > ' .
+				$dbr->addQuotes( $dbr->timestamp( wfTimestamp() - 30 * 24 * 60 * 60 ) );
 		}
 
 		if ( !$opts->getValue( 'showbots' ) ) {
-			$groupsWithBotPermission = MediaWikiServices::getInstance()
-				->getPermissionManager()
-				->getGroupsWithPermission( 'bot' );
+			$groupsWithBotPermission = User::getGroupsWithPermission( 'bot' );
 
 			if ( count( $groupsWithBotPermission ) ) {
 				$dbr = wfGetDB( DB_REPLICA );
@@ -89,7 +99,7 @@ class NewFilesPager extends RangeChronologicalPager {
 					'LEFT JOIN',
 					[
 						'ug_group' => $groupsWithBotPermission,
-						'ug_user = ' . $actorQuery['fields']['img_user'],
+						'ug_user = img_user',
 						'ug_expiry IS NULL OR ug_expiry >= ' . $dbr->addQuotes( $dbr->timestamp() )
 					]
 				];
@@ -100,17 +110,20 @@ class NewFilesPager extends RangeChronologicalPager {
 			$tables[] = 'recentchanges';
 			$conds['rc_type'] = RC_LOG;
 			$conds['rc_log_type'] = 'upload';
-			$conds['rc_patrolled'] = RecentChange::PRC_UNPATROLLED;
+			$conds['rc_patrolled'] = 0;
 			$conds['rc_namespace'] = NS_FILE;
-
 			$jconds['recentchanges'] = [
-				'JOIN',
+				'INNER JOIN',
 				[
 					'rc_title = img_name',
-					'rc_actor = ' . $actorQuery['fields']['img_actor'],
+					'rc_user = img_user',
 					'rc_timestamp = img_timestamp'
 				]
 			];
+			// We're ordering by img_timestamp, so we have to make sure MariaDB queries `image` first.
+			// It sometimes decides to query `recentchanges` first and filesort the result set later
+			// to get the right ordering. T124205 / https://mariadb.atlassian.net/browse/MDEV-8880
+			$options[] = 'STRAIGHT_JOIN';
 		}
 
 		if ( $opts->getValue( 'mediatype' ) ) {
@@ -131,11 +144,6 @@ class NewFilesPager extends RangeChronologicalPager {
 			}
 		}
 
-		// We're ordering by img_timestamp, but MariaDB sometimes likes to query other tables first
-		// and filesort the result set later.
-		// See T124205 / https://mariadb.atlassian.net/browse/MDEV-8880, and T244533
-		$options[] = 'STRAIGHT_JOIN';
-
 		$query = [
 			'tables' => $tables,
 			'fields' => $fields,
@@ -147,11 +155,11 @@ class NewFilesPager extends RangeChronologicalPager {
 		return $query;
 	}
 
-	public function getIndexField() {
+	function getIndexField() {
 		return 'img_timestamp';
 	}
 
-	protected function getStartBody() {
+	function getStartBody() {
 		if ( !$this->gallery ) {
 			// Note that null for mode is taken to mean use default.
 			$mode = $this->getRequest()->getVal( 'gallerymode', null );
@@ -166,45 +174,26 @@ class NewFilesPager extends RangeChronologicalPager {
 		return '';
 	}
 
-	protected function getEndBody() {
+	function getEndBody() {
 		return $this->gallery->toHTML();
 	}
 
-	protected function doBatchLookups() {
-		$userIds = [];
-		$this->mResult->seek( 0 );
-		foreach ( $this->mResult as $row ) {
-			$userIds[] = $row->img_user;
-		}
-		// Do a link batch query for names and userpages
-		UserCache::singleton()->doQuery( $userIds, [ 'userpage' ], __METHOD__ );
-	}
-
-	public function formatRow( $row ) {
+	function formatRow( $row ) {
 		$name = $row->img_name;
-		$username = UserCache::singleton()->getUserName( $row->img_user, $row->img_user_text );
+		$user = User::newFromId( $row->img_user );
 
 		$title = Title::makeTitle( NS_FILE, $name );
-		if ( ExternalUserNames::isExternal( $username ) ) {
-			$ul = htmlspecialchars( $username );
-		} else {
-			$ul = $this->getLinkRenderer()->makeLink(
-				Title::makeTitle( NS_USER, $username ),
-				$username
-			);
-		}
+		$ul = MediaWikiServices::getInstance()->getLinkRenderer()->makeLink(
+			$user->getUserPage(),
+			$user->getName()
+		);
 		$time = $this->getLanguage()->userTimeAndDate( $row->img_timestamp, $this->getUser() );
 
 		$this->gallery->add(
 			$title,
 			"$ul<br />\n<i>"
 			. htmlspecialchars( $time )
-			. "</i><br />\n",
-			'',
-			'',
-			[],
-			ImageGalleryBase::LOADING_LAZY
+			. "</i><br />\n"
 		);
-		return '';
 	}
 }

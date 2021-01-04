@@ -18,7 +18,7 @@ class RCCacheEntryFactoryTest extends MediaWikiLangTestCase {
 	private $testRecentChangesHelper;
 
 	/**
-	 * @var LinkRenderer
+	 * @var LinkRenderer;
 	 */
 	private $linkRenderer;
 
@@ -28,7 +28,7 @@ class RCCacheEntryFactoryTest extends MediaWikiLangTestCase {
 		$this->testRecentChangesHelper = new TestRecentChangesHelper();
 	}
 
-	protected function setUp() : void {
+	protected function setUp() {
 		parent::setUp();
 
 		$this->setMwGlobals( [
@@ -57,12 +57,12 @@ class RCCacheEntryFactoryTest extends MediaWikiLangTestCase {
 		);
 		$cacheEntry = $cacheEntryFactory->newFromRecentChange( $recentChange, false );
 
-		$this->assertInstanceOf( RCCacheEntry::class, $cacheEntry );
+		$this->assertInstanceOf( 'RCCacheEntry', $cacheEntry );
 
-		$this->assertFalse( $cacheEntry->watched, 'watched' );
+		$this->assertEquals( false, $cacheEntry->watched, 'watched' );
 		$this->assertEquals( '21:21', $cacheEntry->timestamp, 'timestamp' );
-		$this->assertSame( 0, $cacheEntry->numberofWatchingusers, 'watching users' );
-		$this->assertFalse( $cacheEntry->unpatrolled, 'unpatrolled' );
+		$this->assertEquals( 0, $cacheEntry->numberofWatchingusers, 'watching users' );
+		$this->assertEquals( false, $cacheEntry->unpatrolled, 'unpatrolled' );
 
 		$this->assertUserLinks( $user->getName(), $cacheEntry );
 		$this->assertTitleLink( 'Xyz', $cacheEntry );
@@ -92,12 +92,12 @@ class RCCacheEntryFactoryTest extends MediaWikiLangTestCase {
 		);
 		$cacheEntry = $cacheEntryFactory->newFromRecentChange( $recentChange, false );
 
-		$this->assertInstanceOf( RCCacheEntry::class, $cacheEntry );
+		$this->assertInstanceOf( 'RCCacheEntry', $cacheEntry );
 
-		$this->assertFalse( $cacheEntry->watched, 'watched' );
+		$this->assertEquals( false, $cacheEntry->watched, 'watched' );
 		$this->assertEquals( '21:21', $cacheEntry->timestamp, 'timestamp' );
-		$this->assertSame( 0, $cacheEntry->numberofWatchingusers, 'watching users' );
-		$this->assertFalse( $cacheEntry->unpatrolled, 'unpatrolled' );
+		$this->assertEquals( 0, $cacheEntry->numberofWatchingusers, 'watching users' );
+		$this->assertEquals( false, $cacheEntry->unpatrolled, 'unpatrolled' );
 
 		$this->assertDeleteLogLink( $cacheEntry );
 		$this->assertUserLinks( $user->getName(), $cacheEntry );
@@ -126,12 +126,12 @@ class RCCacheEntryFactoryTest extends MediaWikiLangTestCase {
 		);
 		$cacheEntry = $cacheEntryFactory->newFromRecentChange( $recentChange, false );
 
-		$this->assertInstanceOf( RCCacheEntry::class, $cacheEntry );
+		$this->assertInstanceOf( 'RCCacheEntry', $cacheEntry );
 
-		$this->assertFalse( $cacheEntry->watched, 'watched' );
+		$this->assertEquals( false, $cacheEntry->watched, 'watched' );
 		$this->assertEquals( '21:21', $cacheEntry->timestamp, 'timestamp' );
-		$this->assertSame( 0, $cacheEntry->numberofWatchingusers, 'watching users' );
-		$this->assertFalse( $cacheEntry->unpatrolled, 'unpatrolled' );
+		$this->assertEquals( 0, $cacheEntry->numberofWatchingusers, 'watching users' );
+		$this->assertEquals( false, $cacheEntry->unpatrolled, 'unpatrolled' );
 
 		$this->assertRevDel( $cacheEntry );
 		$this->assertTitleLink( 'Zzz', $cacheEntry );
@@ -143,7 +143,7 @@ class RCCacheEntryFactoryTest extends MediaWikiLangTestCase {
 
 	private function assertValidHTML( $actual ) {
 		// Throws if invalid
-		$doc = \PHPUnit\Util\Xml::load( $actual, /* isHtml */ true );
+		$doc = PHPUnit_Util_XML::load( $actual, /* isHtml */ true );
 	}
 
 	private function assertUserLinks( $user, $cacheEntry ) {
@@ -156,15 +156,14 @@ class RCCacheEntryFactoryTest extends MediaWikiLangTestCase {
 
 		$this->assertValidHTML( $cacheEntry->usertalklink );
 		$this->assertRegExp(
-			'#^ <span class="mw-usertoollinks mw-changeslist-links">.*<span><a .+>talk</a></span>.*</span>#',
+			'#^ <span class="mw-usertoollinks">\(.*<a .+>talk</a>.*\)</span>#',
 			$cacheEntry->usertalklink,
 			'verify user talk link'
 		);
 
 		$this->assertValidHTML( $cacheEntry->usertalklink );
 		$this->assertRegExp(
-			'#^ <span class="mw-usertoollinks mw-changeslist-links">.*<span><a .+>' .
-				'contribs</a></span>.*</span>$#',
+			'#^ <span class="mw-usertoollinks">\(.*<a .+>contribs</a>.*\)</span>$#',
 			$cacheEntry->usertalklink,
 			'verify user tool links'
 		);

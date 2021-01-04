@@ -1,5 +1,9 @@
 <?php
 /**
+ *
+ *
+ * Created on Jan 4, 2008
+ *
  * Copyright © 2008 Yuri Astrakhan "<Firstname><Lastname>@gmail.com",
  *
  * This program is free software; you can redistribute it and/or modify
@@ -56,19 +60,7 @@ class ApiLogout extends ApiBase {
 
 		// Give extensions to do something after user logout
 		$injected_html = '';
-		$this->getHookRunner()->onUserLogoutComplete( $user, $injected_html, $oldName );
-	}
-
-	public function mustBePosted() {
-		return true;
-	}
-
-	public function needsToken() {
-		return 'csrf';
-	}
-
-	protected function getWebUITokenSalt( array $params ) {
-		return 'logoutToken';
+		Hooks::run( 'UserLogoutComplete', [ &$user, &$injected_html, $oldName ] );
 	}
 
 	public function isReadMode() {
@@ -77,7 +69,7 @@ class ApiLogout extends ApiBase {
 
 	protected function getExamplesMessages() {
 		return [
-			'action=logout&token=123ABC'
+			'action=logout'
 				=> 'apihelp-logout-example-logout',
 		];
 	}

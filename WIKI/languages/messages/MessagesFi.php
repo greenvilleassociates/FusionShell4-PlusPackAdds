@@ -42,7 +42,6 @@ $specialPageAliases = [
 	'Blankpage'                 => [ 'Tyhjä_sivu' ],
 	'Block'                     => [ 'Estä' ],
 	'Booksources'               => [ 'Kirjalähteet' ],
-	'BotPasswords'              => [ 'Bottisalasanat' ],
 	'BrokenRedirects'           => [ 'Virheelliset_ohjaukset', 'Virheelliset_uudelleenohjaukset' ],
 	'Categories'                => [ 'Luokat' ],
 	'ChangeEmail'               => [ 'Muuta_sähköpostiosoite' ],
@@ -55,7 +54,6 @@ $specialPageAliases = [
 	'DeletedContributions'      => [ 'Poistetut_muokkaukset' ],
 	'Diff'                      => [ 'Ero' ],
 	'DoubleRedirects'           => [ 'Kaksinkertaiset_ohjaukset', 'Kaksinkertaiset_uudelleenohjaukset' ],
-	'EditPage'                  => [ 'Muokkaa_sivua' ],
 	'EditWatchlist'             => [ 'Muokkaa_tarkkailulistaa' ],
 	'Emailuser'                 => [ 'Lähetä_sähköpostia' ],
 	'ExpandTemplates'           => [ 'Mallineiden_laajennus' ],
@@ -97,11 +95,7 @@ $specialPageAliases = [
 	'Myuploads'                 => [ 'Omat_tiedostot' ],
 	'Newimages'                 => [ 'Uudet_tiedostot', 'Uudet_kuvat' ],
 	'Newpages'                  => [ 'Uudet_sivut' ],
-	'NewSection'                => [ 'Uusi_osio' ],
-	'PageHistory'               => [ 'Sivun_historia' ],
-	'PageInfo'                  => [ 'Sivun_tiedot' ],
 	'PageLanguage'              => [ 'Sivun_kieli' ],
-	'PasswordPolicies'          => [ 'Salasanakäytännöt' ],
 	'PasswordReset'             => [ 'Unohtuneen_salasanan_vaihto' ],
 	'PermanentLink'             => [ 'Ikilinkki' ],
 	'Preferences'               => [ 'Asetukset' ],
@@ -111,7 +105,6 @@ $specialPageAliases = [
 	'Randompage'                => [ 'Satunnainen_sivu' ],
 	'RandomInCategory'          => [ 'Satunnainen_kohde_luokasta' ],
 	'Randomredirect'            => [ 'Satunnainen_ohjaus', 'Satunnainen_uudelleenohjaus' ],
-	'Randomrootpage'            => [ 'Satunnainen_juurisivu' ],
 	'Recentchanges'             => [ 'Tuoreet_muutokset' ],
 	'Recentchangeslinked'       => [ 'Linkitetyt_muutokset' ],
 	'Redirect'                  => [ 'Ohjaus' ],
@@ -252,7 +245,7 @@ $magicWords = [
 	'protectionlevel'           => [ '1', 'SUOJAUSTASO', 'PROTECTIONLEVEL' ],
 ];
 
-$separatorTransformTable = [ ',' => "\u{00A0}", '.' => ',' ];
+$separatorTransformTable = [ ',' => "\xc2\xa0", '.' => ',' ];
 
 $datePreferences = [
 	'default',

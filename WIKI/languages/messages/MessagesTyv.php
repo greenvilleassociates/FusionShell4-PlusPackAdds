@@ -48,8 +48,6 @@ $namespaceAliases = [
 	'Категория_чугаазы'  => NS_CATEGORY_TALK,
 ];
 
-$namespaceGenderAliases = []; // T259003
-
 $specialPageAliases = [
 	'Activeusers'               => [ 'Идекпейжилер' ],
 	'Allmessages'               => [ 'Шупту_медеглелдер' ],

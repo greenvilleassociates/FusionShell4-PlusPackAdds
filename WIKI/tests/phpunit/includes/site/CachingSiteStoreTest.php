@@ -27,7 +27,7 @@
  *
  * @author Jeroen De Dauw < jeroendedauw@gmail.com >
  */
-class CachingSiteStoreTest extends \MediaWikiIntegrationTestCase {
+class CachingSiteStoreTest extends MediaWikiTestCase {
 
 	/**
 	 * @covers CachingSiteStore::getSites
@@ -37,18 +37,18 @@ class CachingSiteStoreTest extends \MediaWikiIntegrationTestCase {
 
 		$store = new CachingSiteStore(
 			$this->getHashSiteStore( $testSites ),
-			ObjectCache::getLocalClusterInstance()
+			wfGetMainCache()
 		);
 
 		$sites = $store->getSites();
 
-		$this->assertInstanceOf( SiteList::class, $sites );
+		$this->assertInstanceOf( 'SiteList', $sites );
 
 		/**
 		 * @var Site $site
 		 */
 		foreach ( $sites as $site ) {
-			$this->assertInstanceOf( Site::class, $site );
+			$this->assertInstanceOf( 'Site', $site );
 		}
 
 		foreach ( $testSites as $site ) {
@@ -62,9 +62,7 @@ class CachingSiteStoreTest extends \MediaWikiIntegrationTestCase {
 	 * @covers CachingSiteStore::saveSites
 	 */
 	public function testSaveSites() {
-		$store = new CachingSiteStore(
-			new HashSiteStore(), ObjectCache::getLocalClusterInstance()
-		);
+		$store = new CachingSiteStore( new HashSiteStore(), wfGetMainCache() );
 
 		$sites = [];
 
@@ -81,11 +79,11 @@ class CachingSiteStoreTest extends \MediaWikiIntegrationTestCase {
 		$this->assertTrue( $store->saveSites( $sites ) );
 
 		$site = $store->getSite( 'ertrywuutr' );
-		$this->assertInstanceOf( Site::class, $site );
+		$this->assertInstanceOf( 'Site', $site );
 		$this->assertEquals( 'en', $site->getLanguageCode() );
 
 		$site = $store->getSite( 'sdfhxujgkfpth' );
-		$this->assertInstanceOf( Site::class, $site );
+		$this->assertInstanceOf( 'Site', $site );
 		$this->assertEquals( 'nl', $site->getLanguageCode() );
 	}
 
@@ -93,7 +91,7 @@ class CachingSiteStoreTest extends \MediaWikiIntegrationTestCase {
 	 * @covers CachingSiteStore::reset
 	 */
 	public function testReset() {
-		$dbSiteStore = $this->getMockBuilder( SiteStore::class )
+		$dbSiteStore = $this->getMockBuilder( 'SiteStore' )
 			->disableOriginalConstructor()
 			->getMock();
 
@@ -110,7 +108,7 @@ class CachingSiteStoreTest extends \MediaWikiIntegrationTestCase {
 				return $siteList;
 			} ) );
 
-		$store = new CachingSiteStore( $dbSiteStore, ObjectCache::getLocalClusterInstance() );
+		$store = new CachingSiteStore( $dbSiteStore, wfGetMainCache() );
 
 		// initialize internal cache
 		$this->assertGreaterThan( 0, $store->getSites()->count(), 'count sites' );
@@ -140,16 +138,14 @@ class CachingSiteStoreTest extends \MediaWikiIntegrationTestCase {
 	 * @covers CachingSiteStore::clear
 	 */
 	public function testClear() {
-		$store = new CachingSiteStore(
-			new HashSiteStore(), ObjectCache::getLocalClusterInstance()
-		);
+		$store = new CachingSiteStore( new HashSiteStore(), wfGetMainCache() );
 		$this->assertTrue( $store->clear() );
 
 		$site = $store->getSite( 'enwiki' );
 		$this->assertNull( $site );
 
 		$sites = $store->getSites();
-		$this->assertSame( 0, $sites->count() );
+		$this->assertEquals( 0, $sites->count() );
 	}
 
 	/**

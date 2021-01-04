@@ -1,7 +1,6 @@
 {
 	"@metadata": {
 		"authors": [
-			"Chabi1",
 			"Universal Life"
 		]
 	},
@@ -10,8 +9,8 @@
 	"vector-action-move": "Taşirear",
 	"vector-action-protect": "Guadrar",
 	"vector-action-undelete": "Traer atrás",
-	"vector-action-unprotect": "Trokar proteksyon",
-	"vector-view-create": "Kriar",
+	"vector-action-unprotect": "Trocar proteksyon",
+	"vector-view-create": "Criar",
 	"vector-view-edit": "Trocar",
 	"vector-view-history": "Ver la istoria",
 	"vector-view-view": "Meldar",

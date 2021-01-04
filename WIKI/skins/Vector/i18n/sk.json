@@ -2,11 +2,10 @@
 	"@metadata": {
 		"authors": [
 			"Helix84",
-			"KuboF",
-			"Mikulas1",
-			"Robert Važan",
 			"Rudko",
-			"Sudo77(new)"
+			"Sudo77(new)",
+			"KuboF",
+			"Mikulas1"
 		]
 	},
 	"skinname-vector": "Vector",
@@ -23,6 +22,6 @@
 	"vector-view-edit": "Upraviť",
 	"vector-view-history": "Zobraziť históriu",
 	"vector-view-view": "Čítať",
-	"vector-view-viewsource": "Zobraziť kód",
+	"vector-view-viewsource": "Zobraziť zdroj",
 	"vector-more-actions": "Viac"
 }

@@ -1,9 +1,5 @@
 <?php
 
-use MediaWiki\MediaWikiServices;
-use MediaWiki\Revision\SlotRecord;
-use MediaWiki\Revision\SlotRenderingProvider;
-
 /**
  * @group ContentHandler
  */
@@ -13,11 +9,10 @@ class WikitextContentHandlerTest extends MediaWikiLangTestCase {
 	 */
 	private $handler;
 
-	protected function setUp() : void {
+	protected function setUp() {
 		parent::setUp();
 
-		$this->handler = MediaWikiServices::getInstance()->getContentHandlerFactory()
-			->getContentHandler( CONTENT_MODEL_WIKITEXT );
+		$this->handler = ContentHandler::getForModelID( CONTENT_MODEL_WIKITEXT );
 	}
 
 	/**
@@ -45,10 +40,10 @@ class WikitextContentHandlerTest extends MediaWikiLangTestCase {
 	 */
 	public function testUnserializeContent() {
 		$content = $this->handler->unserializeContent( 'hello world' );
-		$this->assertEquals( 'hello world', $content->getText() );
+		$this->assertEquals( 'hello world', $content->getNativeData() );
 
 		$content = $this->handler->unserializeContent( 'hello world', CONTENT_FORMAT_WIKITEXT );
-		$this->assertEquals( 'hello world', $content->getText() );
+		$this->assertEquals( 'hello world', $content->getNativeData() );
 
 		try {
 			$this->handler->unserializeContent( 'hello world', 'dummy/foo' );
@@ -65,7 +60,7 @@ class WikitextContentHandlerTest extends MediaWikiLangTestCase {
 		$content = $this->handler->makeEmptyContent();
 
 		$this->assertTrue( $content->isEmpty() );
-		$this->assertSame( '', $content->getText() );
+		$this->assertEquals( '', $content->getNativeData() );
 	}
 
 	public static function dataIsSupportedFormat() {
@@ -83,9 +78,10 @@ class WikitextContentHandlerTest extends MediaWikiLangTestCase {
 	 * @covers WikitextContentHandler::makeRedirectContent
 	 */
 	public function testMakeRedirectContent( $title, $expected ) {
-		MediaWikiServices::getInstance()->getContentLanguage()->resetNamespaces();
+		global $wgContLang;
+		$wgContLang->resetNamespaces();
 
-		MediaWikiServices::getInstance()->resetServiceForTesting( 'MagicWordFactory' );
+		MagicWord::clearCache();
 
 		if ( is_string( $title ) ) {
 			$title = Title::newFromText( $title );
@@ -119,9 +115,6 @@ class WikitextContentHandlerTest extends MediaWikiLangTestCase {
 		$this->assertEquals( $supported, $this->handler->isSupportedFormat( $format ) );
 	}
 
-	/**
-	 * @covers WikitextContentHandler::supportsDirectEditing
-	 */
 	public function testSupportsDirectEditing() {
 		$handler = new WikiTextContentHandler();
 		$this->assertTrue( $handler->supportsDirectEditing(), 'direct editing is supported' );
@@ -173,7 +166,7 @@ class WikitextContentHandlerTest extends MediaWikiLangTestCase {
 
 		$merged = $this->handler->merge3( $oldContent, $myContent, $yourContent );
 
-		$this->assertEquals( $expected, $merged ? $merged->getText() : $merged );
+		$this->assertEquals( $expected, $merged ? $merged->getNativeData() : $merged );
 	}
 
 	public static function dataGetAutosummary() {
@@ -190,13 +183,6 @@ class WikitextContentHandlerTest extends MediaWikiLangTestCase {
 				'Hello world!',
 				EDIT_NEW,
 				'/^Created page .*Hello/'
-			],
-
-			[
-				null,
-				'',
-				EDIT_NEW,
-				'/^Created blank page$/'
 			],
 
 			[
@@ -230,8 +216,8 @@ class WikitextContentHandlerTest extends MediaWikiLangTestCase {
 	 * @covers WikitextContentHandler::getAutosummary
 	 */
 	public function testGetAutosummary( $old, $new, $flags, $expected ) {
-		$oldContent = $old === null ? null : new WikitextContent( $old );
-		$newContent = $new === null ? null : new WikitextContent( $new );
+		$oldContent = is_null( $old ) ? null : new WikitextContent( $old );
+		$newContent = is_null( $new ) ? null : new WikitextContent( $new );
 
 		$summary = $this->handler->getAutosummary( $oldContent, $newContent, $flags );
 
@@ -241,109 +227,25 @@ class WikitextContentHandlerTest extends MediaWikiLangTestCase {
 		);
 	}
 
-	public static function dataGetChangeTag() {
-		return [
-			[
-				null,
-				'#REDIRECT [[Foo]]',
-				0,
-				'mw-new-redirect'
-			],
-
-			[
-				'Lorem ipsum dolor',
-				'#REDIRECT [[Foo]]',
-				0,
-				'mw-new-redirect'
-			],
-
-			[
-				'#REDIRECT [[Foo]]',
-				'Lorem ipsum dolor',
-				0,
-				'mw-removed-redirect'
-			],
-
-			[
-				'#REDIRECT [[Foo]]',
-				'#REDIRECT [[Bar]]',
-				0,
-				'mw-changed-redirect-target'
-			],
-
-			[
-				null,
-				'Lorem ipsum dolor',
-				EDIT_NEW,
-				null // mw-newpage is not defined as a tag
-			],
-
-			[
-				null,
-				'',
-				EDIT_NEW,
-				null // mw-newblank is not defined as a tag
-			],
-
-			[
-				'Lorem ipsum dolor',
-				'',
-				0,
-				'mw-blank'
-			],
-
-			[
-				'Lorem ipsum dolor sit amet, consetetur sadipscing elitr, sed diam nonumy
-				eirmod tempor invidunt ut labore et dolore magna aliquyam erat, sed diam
-				voluptua. At vero eos et accusam et justo duo dolores et ea rebum. Stet
-				clita kasd gubergren, no sea takimata sanctus est Lorem ipsum dolor sit amet.',
-				'Ipsum',
-				0,
-				'mw-replace'
-			],
-
-			[
-				'Lorem ipsum dolor sit amet, consetetur sadipscing elitr, sed diam nonumy
-				eirmod tempor invidunt ut labore et dolore magna aliquyam erat, sed diam
-				voluptua. At vero eos et accusam et justo duo dolores et ea rebum. Stet
-				clita kasd gubergren, no sea takimata sanctus est Lorem ipsum dolor sit amet.',
-				'Duis purus odio, rhoncus et finibus dapibus, facilisis ac urna. Pellentesque
-				arcu, tristique nec tempus nec, suscipit vel arcu. Sed non dolor nec ligula
-				congue tempor. Quisque pellentesque finibus orci a molestie. Nam maximus, purus
-				euismod finibus mollis, dui ante malesuada felis, dignissim rutrum diam sapien.',
-				0,
-				null
-			],
-		];
-	}
+	/**
+	 * @todo Text case requires database, should be done by a test class in the Database group
+	 */
+	/*
+	public function testGetAutoDeleteReason( Title $title, &$hasHistory ) {}
+	*/
 
 	/**
-	 * @dataProvider dataGetChangeTag
-	 * @covers WikitextContentHandler::getChangeTag
+	 * @todo Text case requires database, should be done by a test class in the Database group
 	 */
-	public function testGetChangeTag( $old, $new, $flags, $expected ) {
-		$this->setMwGlobals( 'wgSoftwareTags', [
-			'mw-new-redirect' => true,
-			'mw-removed-redirect' => true,
-			'mw-changed-redirect-target' => true,
-			'mw-newpage' => true,
-			'mw-newblank' => true,
-			'mw-blank' => true,
-			'mw-replace' => true,
-		] );
-		$oldContent = $old === null ? null : new WikitextContent( $old );
-		$newContent = $new === null ? null : new WikitextContent( $new );
-
-		$tag = $this->handler->getChangeTag( $oldContent, $newContent, $flags );
-
-		$this->assertSame( $expected, $tag );
+	/*
+	public function testGetUndoContent( Revision $current, Revision $undo,
+		Revision $undoafter = null
+	) {
 	}
+	*/
 
-	/**
-	 * @covers WikitextContentHandler::getDataForSearchIndex
-	 */
 	public function testDataIndexFieldsFile() {
-		$mockEngine = $this->createMock( SearchEngine::class );
+		$mockEngine = $this->createMock( 'SearchEngine' );
 		$title = Title::newFromText( 'Somefile.jpg', NS_FILE );
 		$page = new WikiPage( $title );
 
@@ -366,36 +268,4 @@ class WikitextContentHandlerTest extends MediaWikiLangTestCase {
 		$this->assertArrayHasKey( 'file_text', $data );
 		$this->assertEquals( 'This is file content', $data['file_text'] );
 	}
-
-	/**
-	 * @covers ContentHandler::getSecondaryDataUpdates
-	 */
-	public function testGetSecondaryDataUpdates() {
-		$title = Title::newFromText( 'Somefile.jpg', NS_FILE );
-		$content = new WikitextContent( '' );
-
-		/** @var SlotRenderingProvider $srp */
-		$srp = $this->createMock( SlotRenderingProvider::class );
-
-		$handler = new WikitextContentHandler();
-		$updates = $handler->getSecondaryDataUpdates( $title, $content, SlotRecord::MAIN, $srp );
-
-		$this->assertEquals( [], $updates );
-	}
-
-	/**
-	 * @covers ContentHandler::getDeletionUpdates
-	 */
-	public function testGetDeletionUpdates() {
-		$title = Title::newFromText( 'Somefile.jpg', NS_FILE );
-		$content = new WikitextContent( '' );
-
-		$srp = $this->createMock( SlotRenderingProvider::class );
-
-		$handler = new WikitextContentHandler();
-		$updates = $handler->getDeletionUpdates( $title, SlotRecord::MAIN );
-
-		$this->assertEquals( [], $updates );
-	}
-
 }

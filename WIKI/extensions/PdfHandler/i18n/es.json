@@ -2,10 +2,10 @@
 	"@metadata": {
 		"authors": [
 			"Armando-Martin",
-			"Dgstranz",
-			"Fitoschido",
+			"Sanbec",
 			"Macofe",
-			"Sanbec"
+			"Dgstranz",
+			"Fitoschido"
 		]
 	},
 	"pdf-desc": "Controlador para ver archivos PDF en modo imagen.",

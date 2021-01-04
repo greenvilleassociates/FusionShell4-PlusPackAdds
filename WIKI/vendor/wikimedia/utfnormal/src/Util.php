@@ -33,8 +33,8 @@ class Utils {
 	/**
 	 * Return UTF-8 sequence for a given Unicode code point.
 	 *
-	 * @param int $codepoint
-	 * @return string
+	 * @param $codepoint Integer:
+	 * @return String
 	 * @throws InvalidArgumentException if fed out of range data.
 	 */
 	public static function codepointToUtf8( $codepoint ) {
@@ -68,8 +68,8 @@ class Utils {
 	 * Unicode code points and return a UTF-8 string composed of those
 	 * characters. Used by UTF-8 data generation and testing routines.
 	 *
-	 * @param string $sequence
-	 * @return string
+	 * @param $sequence String
+	 * @return String
 	 * @throws InvalidArgumentException if fed out of range data.
 	 * @private Used in tests and data table generation
 	 */
@@ -104,8 +104,8 @@ class Utils {
 	 * Determine the Unicode codepoint of a single-character UTF-8 sequence.
 	 * Does not check for invalid input data.
 	 *
-	 * @param string $char
-	 * @return int
+	 * @param $char String
+	 * @return Integer
 	 */
 	public static function utf8ToCodepoint( $char ) {
 		# Find the length
@@ -144,14 +144,14 @@ class Utils {
 	/**
 	 * Escape a string for inclusion in a PHP single-quoted string literal.
 	 *
-	 * @param string $string String to be escaped.
-	 * @return string Escaped string.
+	 * @param string $string string to be escaped.
+	 * @return String: escaped string.
 	 */
 	public static function escapeSingleString( $string ) {
 		return strtr( $string,
-			[
+			array(
 				'\\' => '\\\\',
 				'\'' => '\\\''
-			] );
+			) );
 	}
 }

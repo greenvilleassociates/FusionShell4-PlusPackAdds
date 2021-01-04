@@ -5,9 +5,7 @@
  * @file
  */
 
-/** Tests for  srpskohrvatski / српскохрватски / Serbocroatian
- * @group Language
- */
+/** Tests for  srpskohrvatski / српскохрватски / Serbocroatian */
 class LanguageShTest extends LanguageClassesTestCase {
 	/**
 	 * @dataProvider providePlural

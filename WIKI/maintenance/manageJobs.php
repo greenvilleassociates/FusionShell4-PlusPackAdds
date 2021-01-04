@@ -48,7 +48,7 @@ class ManageJobs extends Maintenance {
 		} elseif ( $action === 'repush-abandoned' ) {
 			$this->repushAbandoned( $queue );
 		} else {
-			$this->fatalError( "Invalid action '$action'." );
+			$this->error( "Invalid action '$action'.", 1 );
 		}
 	}
 
@@ -60,7 +60,7 @@ class ManageJobs extends Maintenance {
 
 	private function repushAbandoned( JobQueue $queue ) {
 		$cache = ObjectCache::getInstance( CACHE_DB );
-		$key = $cache->makeGlobalKey( 'last-job-repush', $queue->getDomain(), $queue->getType() );
+		$key = $cache->makeGlobalKey( 'last-job-repush', $queue->getWiki(), $queue->getType() );
 
 		$now = wfTimestampNow();
 		$lastRepushTime = $cache->get( $key );
@@ -82,7 +82,7 @@ class ManageJobs extends Maintenance {
 			$queue->push( $job );
 			++$count;
 
-			if ( ( $count % $this->getBatchSize() ) == 0 ) {
+			if ( ( $count % $this->mBatchSize ) == 0 ) {
 				$queue->waitForBackups();
 			}
 		}
@@ -93,5 +93,5 @@ class ManageJobs extends Maintenance {
 	}
 }
 
-$maintClass = ManageJobs::class;
+$maintClass = "ManageJobs";
 require_once RUN_MAINTENANCE_IF_MAIN;

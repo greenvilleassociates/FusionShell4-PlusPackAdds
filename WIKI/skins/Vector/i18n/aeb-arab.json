@@ -1,12 +1,11 @@
 {
 	"@metadata": {
 		"authors": [
-			"Csisc",
-			"Meno25",
-			"علاء"
+			"علاء",
+			"Csisc"
 		]
 	},
-	"vector-action-addsection": "أضف موضوعا",
+	"vector-action-addsection": "أضف موضوعاً",
 	"vector-action-delete": "احذف",
 	"vector-action-move": "حوّل",
 	"vector-action-protect": "احم",
@@ -16,6 +15,6 @@
 	"vector-view-edit": "بدّل",
 	"vector-view-history": "ورّي الپاج",
 	"vector-view-view": "أقرا",
-	"vector-view-viewsource": "عرض المصدر",
+	"vector-view-viewsource": "اعرض المصدر",
 	"vector-more-actions": "زادة"
 }

@@ -1,5 +1,9 @@
 <?php
 /**
+ *
+ *
+ * Created on Sep 19, 2006
+ *
  * Copyright © 2006 Yuri Astrakhan "<Firstname><Lastname>@gmail.com"
  *
  * This program is free software; you can redistribute it and/or modify
@@ -79,9 +83,7 @@ class ApiFormatFeedWrapper extends ApiFormatBase {
 
 		$data = $this->getResult()->getResultData();
 		if ( isset( $data['_feed'] ) && isset( $data['_feeditems'] ) ) {
-			/** @var ChannelFeed $feed */
-			$feed = $data['_feed'];
-			$feed->httpHeaders();
+			$data['_feed']->httpHeaders();
 		} else {
 			// Error has occurred, print something useful
 			ApiBase::dieDebug( __METHOD__, 'Invalid feed class/item' );
@@ -96,7 +98,6 @@ class ApiFormatFeedWrapper extends ApiFormatBase {
 	public function execute() {
 		$data = $this->getResult()->getResultData();
 		if ( isset( $data['_feed'] ) && isset( $data['_feeditems'] ) ) {
-			/** @var ChannelFeed $feed */
 			$feed = $data['_feed'];
 			$items = $data['_feeditems'];
 

@@ -19,24 +19,14 @@
  * @ingroup RevisionDelete
  */
 
-use MediaWiki\MediaWikiServices;
-use MediaWiki\Revision\RevisionFactory;
-
 /**
  * Item class for a archive table row
  */
 class RevDelArchiveItem extends RevDelRevisionItem {
-	protected static function initRevisionRecord( $list, $row ) {
-		$revRecord = MediaWikiServices::getInstance()
-			->getRevisionFactory()
-			->newRevisionFromArchiveRow(
-				$row,
-				RevisionFactory::READ_NORMAL,
-				null,
-				[ 'page_id' => $list->title->getArticleID() ]
-			);
-
-		return $revRecord;
+	public function __construct( $list, $row ) {
+		RevDelItem::__construct( $list, $row );
+		$this->revision = Revision::newFromArchiveRow( $row,
+			[ 'page' => $this->list->title->getArticleID() ] );
 	}
 
 	public function getIdField() {
@@ -55,13 +45,9 @@ class RevDelArchiveItem extends RevDelRevisionItem {
 		return 'ar_user_text';
 	}
 
-	public function getAuthorActorField() {
-		return 'ar_actor';
-	}
-
 	public function getId() {
 		# Convert DB timestamp to MW timestamp
-		return $this->revisionRecord->getTimestamp();
+		return $this->revision->getTimestamp();
 	}
 
 	public function setBits( $bits ) {
@@ -83,7 +69,7 @@ class RevDelArchiveItem extends RevDelRevisionItem {
 
 	protected function getRevisionLink() {
 		$date = $this->list->getLanguage()->userTimeAndDate(
-			$this->revisionRecord->getTimestamp(), $this->list->getUser() );
+			$this->revision->getTimestamp(), $this->list->getUser() );
 
 		if ( $this->isDeleted() && !$this->canViewContent() ) {
 			return htmlspecialchars( $date );
@@ -95,7 +81,7 @@ class RevDelArchiveItem extends RevDelRevisionItem {
 			[],
 			[
 				'target' => $this->list->title->getPrefixedText(),
-				'timestamp' => $this->revisionRecord->getTimestamp()
+				'timestamp' => $this->revision->getTimestamp()
 			]
 		);
 	}
@@ -112,7 +98,7 @@ class RevDelArchiveItem extends RevDelRevisionItem {
 			[
 				'target' => $this->list->title->getPrefixedText(),
 				'diff' => 'prev',
-				'timestamp' => $this->revisionRecord->getTimestamp()
+				'timestamp' => $this->revision->getTimestamp()
 			]
 		);
 	}

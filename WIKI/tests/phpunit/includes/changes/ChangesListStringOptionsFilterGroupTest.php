@@ -5,8 +5,10 @@ use Wikimedia\TestingAccessWrapper;
 /**
  * @covers ChangesListStringOptionsFilterGroup
  */
-class ChangesListStringOptionsFilterGroupTest extends MediaWikiIntegrationTestCase {
-
+class ChangesListStringOptionsFilterGroupTest extends MediaWikiTestCase {
+	/**
+	 * @expectedException MWException
+	 */
 	public function testIsFullCoverage() {
 		$falseGroup = TestingAccessWrapper::newFromObject(
 			new ChangesListStringOptionsFilterGroup( [
@@ -14,8 +16,7 @@ class ChangesListStringOptionsFilterGroupTest extends MediaWikiIntegrationTestCa
 				'filters' => [],
 				'isFullCoverage' => false,
 				'queryCallable' => function () {
-				},
-				'default' => '',
+				}
 			] )
 		);
 
@@ -24,8 +25,7 @@ class ChangesListStringOptionsFilterGroupTest extends MediaWikiIntegrationTestCa
 			$falseGroup->isFullCoverage
 		);
 
-		$this->expectException( MWException::class );
-		$this->expectExceptionMessage( 'You must specify isFullCoverage' );
+		// Should throw due to missing isFullCoverage
 		$undefinedFullCoverageGroup = new ChangesListStringOptionsFilterGroup( [
 			'name' => 'othergroup',
 			'filters' => [],
@@ -168,7 +168,7 @@ class ChangesListStringOptionsFilterGroupTest extends MediaWikiIntegrationTestCa
 	}
 
 	protected function getSpecialPage() {
-		return $this->getMockBuilder( ChangesListSpecialPage::class )
+		return $this->getMockBuilder( 'ChangesListSpecialPage' )
 			->setConstructorArgs( [
 					'ChangesListSpecialPage',
 					'',
@@ -179,17 +179,17 @@ class ChangesListStringOptionsFilterGroupTest extends MediaWikiIntegrationTestCa
 	/**
 	 * @param array $groupDefinition Group definition
 	 * @param string $input Value in URL
+	 *
+	 * @dataProvider provideModifyQuery
 	 */
 	protected function modifyQueryHelper( $groupDefinition, $input ) {
-		$ctx = $this->createMock( IContextSource::class );
-		$dbr = $this->createMock( Wikimedia\Rdbms\IDatabase::class );
+		$ctx = $this->createMock( 'IContextSource' );
+		$dbr = $this->createMock( 'IDatabase' );
 		$tables = $fields = $conds = $query_options = $join_conds = [];
 
 		$group = new ChangesListStringOptionsFilterGroup( $groupDefinition );
 
 		$specialPage = $this->getSpecialPage();
-		$opts = new FormOptions();
-		$opts->add( $groupDefinition[ 'name' ], $input );
 
 		$group->modifyQuery(
 			$dbr,
@@ -199,8 +199,7 @@ class ChangesListStringOptionsFilterGroupTest extends MediaWikiIntegrationTestCa
 			$conds,
 			$query_options,
 			$join_conds,
-			$opts,
-			true
+			$input
 		);
 	}
 
@@ -248,7 +247,6 @@ class ChangesListStringOptionsFilterGroupTest extends MediaWikiIntegrationTestCa
 						'cssClass' => null,
 						'conflicts' => [],
 						'subset' => [],
-						'defaultHighlightColor' => null,
 					],
 					[
 						'name' => 'foo',
@@ -258,7 +256,6 @@ class ChangesListStringOptionsFilterGroupTest extends MediaWikiIntegrationTestCa
 						'cssClass' => null,
 						'conflicts' => [],
 						'subset' => [],
-						'defaultHighlightColor' => null,
 					],
 				],
 				'conflicts' => [],

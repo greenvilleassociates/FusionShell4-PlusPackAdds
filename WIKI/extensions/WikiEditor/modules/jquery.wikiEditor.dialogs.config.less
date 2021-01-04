@@ -4,7 +4,7 @@
  * CSS for WikiEditor Dialogs
  */
 
-/* stylelint-disable selector-max-id */
+/* stylelint-disable selector-no-id */
 
 /* Replace Dialog */
 #wikieditor-toolbar-replace-search,
@@ -57,7 +57,7 @@
 	}
 
 	.ui-dialog-buttonpane {
-		border-top: 1px solid #c8ccd1 !important;
+		border-top: 1px solid #ccc !important;
 	}
 }
 /* stylelint-enable declaration-no-important */
@@ -77,7 +77,6 @@
 /* Insert Link Dialog */
 #wikieditor-toolbar-link-int-target-status {
 	float: right;
-	line-height: 1.7em;
 }
 
 #wikieditor-toolbar-link-int-target,
@@ -201,7 +200,7 @@ body.rtl {
 
 	.wikiEditor-template-dialog-field-wrapper {
 		padding: 0.75em 0.33em;
-		border-bottom: 1px dashed #c8ccd1;
+		border-bottom: 1px dashed #c0c0c0;
 		clear: both;
 
 		&:first-child {
@@ -225,8 +224,35 @@ body.rtl {
 	height: 0;
 }
 
+/* Hides from IE-mac \*/
+* html {
+	.wikieditor-toolbar-table-dimension-fields,
+	.wikieditor-toolbar-dialog-wrapper {
+		height: 1%;
+	}
+}
+
 .wikieditor-toolbar-table-dimension-fields,
 .wikieditor-toolbar-dialog-wrapper {
 	display: inline-table;
 	display: block;
+}
+
+/* End hide from IE-mac */
+/* Edit dialog */
+.wikiEditor-dialog-editoptions {
+	margin-top: 15px;
+}
+
+/* Publish dialog */
+.wikiEditor-publish-dialog-copywarn {
+	margin-top: 0.5em;
+}
+
+.wikiEditor-publish-dialog-summary {
+	margin-top: 1.5em;
+}
+
+.wikiEditor-publish-dialog-options {
+	margin-top: 1.5em;
 }

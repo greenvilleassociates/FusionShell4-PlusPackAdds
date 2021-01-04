@@ -1,5 +1,9 @@
 <?php
 /**
+ *
+ *
+ * Created on June 14, 2007
+ *
  * Copyright © 2006 Yuri Astrakhan "<Firstname><Lastname>@gmail.com"
  *
  * This program is free software; you can redistribute it and/or modify
@@ -53,7 +57,7 @@ class ApiQueryCategoryMembers extends ApiQueryGeneratorBase {
 	}
 
 	/**
-	 * @param ApiPageSet|null $resultPageSet
+	 * @param ApiPageSet $resultPageSet
 	 * @return void
 	 */
 	private function run( $resultPageSet = null ) {
@@ -72,7 +76,7 @@ class ApiQueryCategoryMembers extends ApiQueryGeneratorBase {
 		$fld_timestamp = isset( $prop['timestamp'] );
 		$fld_type = isset( $prop['type'] );
 
-		if ( $resultPageSet === null ) {
+		if ( is_null( $resultPageSet ) ) {
 			$this->addFields( [ 'cl_from', 'cl_sortkey', 'cl_type', 'page_namespace', 'page_title' ] );
 			$this->addFieldsIf( 'page_id', $fld_ids );
 			$this->addFieldsIf( 'cl_sortkey_prefix', $fld_sortkeyprefix );
@@ -93,7 +97,7 @@ class ApiQueryCategoryMembers extends ApiQueryGeneratorBase {
 		// how to have efficient subcategory access :-) ~~~~ (oh well, domas)
 		$miser_ns = [];
 		if ( $this->getConfig()->get( 'MiserMode' ) ) {
-			$miser_ns = $params['namespace'] ?: [];
+			$miser_ns = $params['namespace'];
 		} else {
 			$this->addWhereFld( 'page_namespace', $params['namespace'] );
 		}
@@ -108,7 +112,7 @@ class ApiQueryCategoryMembers extends ApiQueryGeneratorBase {
 			// Include in ORDER BY for uniqueness
 			$this->addWhereRange( 'cl_from', $dir, null, null );
 
-			if ( $params['continue'] !== null ) {
+			if ( !is_null( $params['continue'] ) ) {
 				$cont = explode( '|', $params['continue'] );
 				$this->dieContinueUsageIf( count( $cont ) != 2 );
 				$op = ( $dir === 'newer' ? '>' : '<' );
@@ -135,7 +139,7 @@ class ApiQueryCategoryMembers extends ApiQueryGeneratorBase {
 				// Add a WHERE clause for sortkey and from
 				$this->dieContinueUsageIf( !$this->validateHexSortkey( $cont[1] ) );
 				$escSortkey = $this->getDB()->addQuotes( hex2bin( $cont[1] ) );
-				$from = (int)$cont[2];
+				$from = intval( $cont[2] );
 				$op = $dir == 'newer' ? '>' : '<';
 				// $contWhere is used further down
 				$contWhere = "cl_sortkey $op $escSortkey OR " .
@@ -199,9 +203,6 @@ class ApiQueryCategoryMembers extends ApiQueryGeneratorBase {
 					$extraConds[] = $contWhere;
 				}
 				$res = $this->select( __METHOD__, [ 'where' => $extraConds ] );
-				if ( $type === 'page' && $resultPageSet === null ) {
-					$this->executeGenderCacheFromResultWrapper( $res, __METHOD__ );
-				}
 				$rows = array_merge( $rows, iterator_to_array( $res ) );
 				if ( count( $rows ) >= $limit + 1 ) {
 					break;
@@ -213,9 +214,6 @@ class ApiQueryCategoryMembers extends ApiQueryGeneratorBase {
 			// No need to worry about per-type queries because we
 			// aren't sorting or filtering by type anyway
 			$res = $this->select( __METHOD__ );
-			if ( $resultPageSet === null ) {
-				$this->executeGenderCacheFromResultWrapper( $res, __METHOD__ );
-			}
 			$rows = iterator_to_array( $res );
 		}
 
@@ -246,12 +244,12 @@ class ApiQueryCategoryMembers extends ApiQueryGeneratorBase {
 				continue;
 			}
 
-			if ( $resultPageSet === null ) {
+			if ( is_null( $resultPageSet ) ) {
 				$vals = [
 					ApiResult::META_TYPE => 'assoc',
 				];
 				if ( $fld_ids ) {
-					$vals['pageid'] = (int)$row->page_id;
+					$vals['pageid'] = intval( $row->page_id );
 				}
 				if ( $fld_title ) {
 					$title = Title::makeTitle( $row->page_namespace, $row->page_title );
@@ -287,7 +285,7 @@ class ApiQueryCategoryMembers extends ApiQueryGeneratorBase {
 			}
 		}
 
-		if ( $resultPageSet === null ) {
+		if ( is_null( $resultPageSet ) ) {
 			$result->addIndexedTagName(
 				[ 'query', $this->getModuleName() ], 'cm' );
 		}

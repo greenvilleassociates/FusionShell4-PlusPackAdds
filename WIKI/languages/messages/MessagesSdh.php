@@ -8,6 +8,6 @@
  *
  */
 
-$fallback = 'cbk, fa';
+$fallback = 'fa';
 
 $rtl = true;

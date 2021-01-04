@@ -18,21 +18,29 @@
  * http://www.gnu.org/copyleft/gpl.html
  *
  * @file
+ * @license GPL 2+
  * @author Matthew Flaschen
  */
 
 use Wikimedia\Rdbms\IDatabase;
 
 /**
- * Represents a hide-based boolean filter (used on ChangesListSpecialPage and descendants)
+ * An individual filter in a boolean group
  *
  * @since 1.29
  */
 class ChangesListBooleanFilter extends ChangesListFilter {
+	// This can sometimes be different on Special:RecentChanges
+	// and Special:Watchlist, due to the double-legacy hooks
+	// (SpecialRecentChangesFilters and SpecialWatchlistFilters)
+
+	// but there will be separate sets of ChangesListFilterGroup and ChangesListFilter instances
+	// for those pages (it should work even if they're both loaded
+	// at once, but that can't happen).
 	/**
 	 * Main unstructured UI i18n key
 	 *
-	 * @var string
+	 * @var string $showHide
 	 */
 	protected $showHide;
 
@@ -40,28 +48,28 @@ class ChangesListBooleanFilter extends ChangesListFilter {
 	 * Whether there is a feature designed to replace this filter available on the
 	 * structured UI
 	 *
-	 * @var bool
+	 * @var bool $isReplacedInStructuredUi
 	 */
 	protected $isReplacedInStructuredUi;
 
 	/**
 	 * Default
 	 *
-	 * @var bool
+	 * @var bool $defaultValue
 	 */
 	protected $defaultValue;
 
 	/**
 	 * Callable used to do the actual query modification; see constructor
 	 *
-	 * @var callable
+	 * @var callable $queryCallable
 	 */
 	protected $queryCallable;
 
 	/**
 	 * Value that defined when this filter is considered active
 	 *
-	 * @var bool
+	 * @var bool $activeValue
 	 */
 	protected $activeValue;
 
@@ -112,7 +120,11 @@ class ChangesListBooleanFilter extends ChangesListFilter {
 			$this->showHide = $filterDefinition['showHide'];
 		}
 
-		$this->isReplacedInStructuredUi = $filterDefinition['isReplacedInStructuredUi'] ?? false;
+		if ( isset( $filterDefinition['isReplacedInStructuredUi'] ) ) {
+			$this->isReplacedInStructuredUi = $filterDefinition['isReplacedInStructuredUi'];
+		} else {
+			$this->isReplacedInStructuredUi = false;
+		}
 
 		if ( isset( $filterDefinition['default'] ) ) {
 			$this->setDefault( $filterDefinition['default'] );
@@ -124,7 +136,11 @@ class ChangesListBooleanFilter extends ChangesListFilter {
 			$this->queryCallable = $filterDefinition['queryCallable'];
 		}
 
-		$this->activeValue = $filterDefinition['activeValue'] ?? true;
+		if ( isset( $filterDefinition['activeValue'] ) ) {
+			$this->activeValue = $filterDefinition['activeValue'];
+		} else {
+			$this->activeValue = true;
+		}
 	}
 
 	/**
@@ -161,7 +177,7 @@ class ChangesListBooleanFilter extends ChangesListFilter {
 	 * @inheritDoc
 	 */
 	public function displaysOnUnstructuredUi() {
-		return (bool)$this->showHide;
+		return !!$this->showHide;
 	}
 
 	/**
@@ -191,15 +207,18 @@ class ChangesListBooleanFilter extends ChangesListFilter {
 			return;
 		}
 
-		( $this->queryCallable )(
-			get_class( $specialPage ),
-			$specialPage->getContext(),
-			$dbr,
-			$tables,
-			$fields,
-			$conds,
-			$query_options,
-			$join_conds
+		call_user_func_array(
+			$this->queryCallable,
+			[
+				get_class( $specialPage ),
+				$specialPage->getContext(),
+				$dbr,
+				&$tables,
+				&$fields,
+				&$conds,
+				&$query_options,
+				&$join_conds
+			]
 		);
 	}
 

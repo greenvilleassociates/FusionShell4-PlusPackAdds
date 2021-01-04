@@ -35,7 +35,9 @@ class SpecialListUsers extends IncludableSpecialPage {
 	}
 
 	/**
-	 * @param string|null $par (optional) A group to list users from
+	 * Show the special page
+	 *
+	 * @param string $par (optional) A group to list users from
 	 */
 	public function execute( $par ) {
 		$this->setHeaders();
@@ -59,9 +61,7 @@ class SpecialListUsers extends IncludableSpecialPage {
 			$s .= $this->msg( 'listusers-noresult' )->parseAsBlock();
 		}
 
-		$out = $this->getOutput();
-		$out->addHTML( $s );
-		$out->addModuleStyles( 'mediawiki.interface.helpers.styles' );
+		$this->getOutput()->addHTML( $s );
 	}
 
 	/**
@@ -75,5 +75,27 @@ class SpecialListUsers extends IncludableSpecialPage {
 
 	protected function getGroupName() {
 		return 'users';
+	}
+}
+
+/**
+ * Redirect page: Special:ListAdmins --> Special:ListUsers/sysop.
+ *
+ * @ingroup SpecialPage
+ */
+class SpecialListAdmins extends SpecialRedirectToSpecial {
+	function __construct() {
+		parent::__construct( 'Listadmins', 'Listusers', 'sysop' );
+	}
+}
+
+/**
+ * Redirect page: Special:ListBots --> Special:ListUsers/bot.
+ *
+ * @ingroup SpecialPage
+ */
+class SpecialListBots extends SpecialRedirectToSpecial {
+	function __construct() {
+		parent::__construct( 'Listbots', 'Listusers', 'bot' );
 	}
 }

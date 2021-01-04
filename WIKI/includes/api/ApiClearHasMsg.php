@@ -1,6 +1,8 @@
 <?php
 
 /**
+ * Created on August 26, 2014
+ *
  * Copyright © 2014 Petr Bena (benapetr@gmail.com)
  *
  * This program is free software; you can redistribute it and/or modify
@@ -21,8 +23,6 @@
  * @file
  */
 
-use MediaWiki\MediaWikiServices;
-
 /**
  * API module that clears the hasmsg flag for current user
  * @ingroup API
@@ -30,10 +30,7 @@ use MediaWiki\MediaWikiServices;
 class ApiClearHasMsg extends ApiBase {
 	public function execute() {
 		$user = $this->getUser();
-		MediaWikiServices::getInstance()
-			->getTalkPageNotificationManager()
-			->removeUserHasNewMessages( $user );
-
+		$user->setNewtalk( false );
 		$this->getResult()->addValue( null, $this->getModuleName(), 'success' );
 	}
 

@@ -1,5 +1,4 @@
 <?php
-
 use MediaWiki\MediaWikiServices;
 
 /**
@@ -11,9 +10,10 @@ use MediaWiki\MediaWikiServices;
  */
 class ApiSetNotificationTimestampIntegrationTest extends ApiTestCase {
 
-	protected function setUp() : void {
+	protected function setUp() {
 		parent::setUp();
 		self::$users[__CLASS__] = new TestUser( __CLASS__ );
+		$this->doLogin( __CLASS__ );
 	}
 
 	public function testStuff() {

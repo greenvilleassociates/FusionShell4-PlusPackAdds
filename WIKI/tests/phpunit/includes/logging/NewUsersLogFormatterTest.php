@@ -1,21 +1,20 @@
 <?php
 
 /**
- * @covers NewUsersLogFormatter
  * @group Database
  */
 class NewUsersLogFormatterTest extends LogFormatterTestCase {
 
-	protected function setUp() : void {
+	protected function setUp() {
 		parent::setUp();
 
 		// Register LogHandler, see $wgNewUserLog in Setup.php
 		$this->mergeMwGlobalArrayValue( 'wgLogActionsHandlers', [
-			'newusers/newusers' => NewUsersLogFormatter::class,
-			'newusers/create' => NewUsersLogFormatter::class,
-			'newusers/create2' => NewUsersLogFormatter::class,
-			'newusers/byemail' => NewUsersLogFormatter::class,
-			'newusers/autocreate' => NewUsersLogFormatter::class,
+			'newusers/newusers' => 'NewUsersLogFormatter',
+			'newusers/create' => 'NewUsersLogFormatter',
+			'newusers/create2' => 'NewUsersLogFormatter',
+			'newusers/byemail' => 'NewUsersLogFormatter',
+			'newusers/autocreate' => 'NewUsersLogFormatter',
 		] );
 	}
 

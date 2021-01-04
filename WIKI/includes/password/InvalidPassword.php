@@ -20,8 +20,6 @@
  * @file
  */
 
-declare( strict_types = 1 );
-
 /**
  * Represents an invalid password hash. It is represented as the empty string (i.e.,
  * a password hash with no type).
@@ -32,18 +30,18 @@ declare( strict_types = 1 );
  * @since 1.24
  */
 class InvalidPassword extends Password {
-	public function crypt( string $plaintext ) : void {
+	public function crypt( $plaintext ) {
 	}
 
-	public function toString() : string {
+	public function toString() {
 		return '';
 	}
 
-	public function verify( string $password ) : bool {
+	public function equals( $other ) {
 		return false;
 	}
 
-	public function needsUpdate() : bool {
+	public function needsUpdate() {
 		return false;
 	}
 }

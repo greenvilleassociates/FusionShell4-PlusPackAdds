@@ -1,5 +1,9 @@
 <?php
 /**
+ *
+ *
+ * Created on May 13, 2007
+ *
  * Copyright © 2006 Yuri Astrakhan "<Firstname><Lastname>@gmail.com"
  *
  * This program is free software; you can redistribute it and/or modify
@@ -44,7 +48,7 @@ class ApiQueryCategories extends ApiQueryGeneratorBase {
 	}
 
 	/**
-	 * @param ApiPageSet|null $resultPageSet
+	 * @param ApiPageSet $resultPageSet
 	 */
 	private function run( $resultPageSet = null ) {
 		if ( $this->getPageSet()->getGoodTitleCount() == 0 ) {
@@ -65,7 +69,7 @@ class ApiQueryCategories extends ApiQueryGeneratorBase {
 
 		$this->addTables( 'categorylinks' );
 		$this->addWhereFld( 'cl_from', array_keys( $this->getPageSet()->getGoodTitles() ) );
-		if ( $params['categories'] ) {
+		if ( !is_null( $params['categories'] ) ) {
 			$cats = [];
 			foreach ( $params['categories'] as $cat ) {
 				$title = Title::newFromText( $cat );
@@ -75,18 +79,14 @@ class ApiQueryCategories extends ApiQueryGeneratorBase {
 					$cats[] = $title->getDBkey();
 				}
 			}
-			if ( !$cats ) {
-				// No titles so no results
-				return;
-			}
 			$this->addWhereFld( 'cl_to', $cats );
 		}
 
-		if ( $params['continue'] !== null ) {
+		if ( !is_null( $params['continue'] ) ) {
 			$cont = explode( '|', $params['continue'] );
 			$this->dieContinueUsageIf( count( $cont ) != 2 );
 			$op = $params['dir'] == 'descending' ? '<' : '>';
-			$clfrom = (int)$cont[0];
+			$clfrom = intval( $cont[0] );
 			$clto = $this->getDB()->addQuotes( $cont[1] );
 			$this->addWhere(
 				"cl_from $op $clfrom OR " .
@@ -127,12 +127,11 @@ class ApiQueryCategories extends ApiQueryGeneratorBase {
 				'cl_to' . $sort
 			] );
 		}
-		$this->addOption( 'LIMIT', $params['limit'] + 1 );
 
 		$res = $this->select( __METHOD__ );
 
 		$count = 0;
-		if ( $resultPageSet === null ) {
+		if ( is_null( $resultPageSet ) ) {
 			foreach ( $res as $row ) {
 				if ( ++$count > $params['limit'] ) {
 					// We've reached the one extra which shows that
@@ -152,7 +151,7 @@ class ApiQueryCategories extends ApiQueryGeneratorBase {
 					$vals['timestamp'] = wfTimestamp( TS_ISO_8601, $row->cl_timestamp );
 				}
 				if ( isset( $prop['hidden'] ) ) {
-					$vals['hidden'] = $row->pp_propname !== null;
+					$vals['hidden'] = !is_null( $row->pp_propname );
 				}
 
 				$fit = $this->addPageSubItem( $row->cl_from, $vals );

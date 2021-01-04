@@ -7,9 +7,9 @@ use RemexHtml\Serializer\Serializer;
 use RemexHtml\Serializer\SerializerNode;
 use RemexHtml\Tokenizer\Attributes;
 use RemexHtml\Tokenizer\PlainAttributes;
-use RemexHtml\TreeBuilder\Element;
 use RemexHtml\TreeBuilder\TreeBuilder;
 use RemexHtml\TreeBuilder\TreeHandler;
+use RemexHtml\TreeBuilder\Element;
 
 /**
  * @internal
@@ -28,7 +28,6 @@ class RemexCompatMunger implements TreeHandler {
 		"button" => true,
 		"cite" => true,
 		"code" => true,
-		"del" => true,
 		"dfn" => true,
 		"em" => true,
 		"font" => true,
@@ -36,7 +35,6 @@ class RemexCompatMunger implements TreeHandler {
 		"iframe" => true,
 		"img" => true,
 		"input" => true,
-		"ins" => true,
 		"kbd" => true,
 		"label" => true,
 		"legend" => true,
@@ -63,28 +61,6 @@ class RemexCompatMunger implements TreeHandler {
 		"tt" => true,
 		"u" => true,
 		"var" => true,
-		// Those defined in tidy.conf
-		"video" => true,
-		"audio" => true,
-		"bdi" => true,
-		"data" => true,
-		"time" => true,
-		"mark" => true,
-	];
-
-	/**
-	 * For the purposes of this class, "metadata" elements are those that
-	 * should neither trigger p-wrapping nor stop an outer p-wrapping,
-	 * typically those that are themselves invisible in a browser's rendering.
-	 * This isn't a complete list, it's just the tags that we're likely to
-	 * encounter in practice.
-	 * @var array
-	 */
-	private static $metadataElements = [
-		'style' => true,
-		'script' => true,
-		'link' => true,
-		'meta' => true,
 	];
 
 	private static $formattingElements = [
@@ -104,19 +80,11 @@ class RemexCompatMunger implements TreeHandler {
 		'u' => true,
 	];
 
-	/** @var Serializer */
-	private $serializer;
-
-	/** @var bool */
-	private $trace;
-
 	/**
 	 * @param Serializer $serializer
-	 * @param bool $trace
 	 */
-	public function __construct( Serializer $serializer, $trace = false ) {
+	public function __construct( Serializer $serializer ) {
 		$this->serializer = $serializer;
-		$this->trace = $trace;
 	}
 
 	public function startDocument( $fragmentNamespace, $fragmentName ) {
@@ -206,12 +174,6 @@ class RemexCompatMunger implements TreeHandler {
 			$length, $sourceStart, $sourceLength );
 	}
 
-	private function trace( $msg ) {
-		if ( $this->trace ) {
-			wfDebug( "[RCM] $msg" );
-		}
-	}
-
 	/**
 	 * Insert or reparent an element. Create p-wrappers or split the tag stack
 	 * as necessary.
@@ -270,39 +232,35 @@ class RemexCompatMunger implements TreeHandler {
 	) {
 		list( $parent, $newRef ) = $this->getParentForInsert( $preposition, $refElement );
 		$parentData = $parent->snData;
+		$parentNs = $parent->namespace;
+		$parentName = $parent->name;
 		$elementName = $element->htmlName;
 
 		$inline = isset( self::$onlyInlineElements[$elementName] );
 		$under = $preposition === TreeBuilder::UNDER;
-		$elementToEnd = null;
 
-		if ( isset( self::$metadataElements[$elementName] ) ) {
-			// The element is a metadata element, that we allow to appear in
-			// both inline and block contexts.
-			$this->trace( 'insert metadata' );
-		} elseif ( $under && $parentData->isPWrapper && !$inline ) {
+		if ( $under && $parentData->isPWrapper && !$inline ) {
 			// [B/b] The element is non-inline and the parent is a p-wrapper,
 			// close the parent and insert into its parent instead
-			$this->trace( 'insert B/b' );
 			$newParent = $this->serializer->getParentNode( $parent );
 			$parent = $newParent;
 			$parentData = $parent->snData;
+			$pElement = $parentData->childPElement;
 			$parentData->childPElement = null;
 			$newRef = $refElement->userData;
+			$this->endTag( $pElement, $sourceStart, 0 );
 		} elseif ( $under && $parentData->isSplittable
 			&& (bool)$parentData->ancestorPNode !== $inline
 		) {
 			// [CS/b, DS/i] The parent is splittable and the current element is
 			// inline in block context, or if the current element is a block
 			// under a p-wrapper, split the tag stack.
-			$this->trace( $inline ? 'insert DS/i' : 'insert CS/b' );
 			$newRef = $this->splitTagStack( $newRef, $inline, $sourceStart );
 			$parent = $newRef;
 			$parentData = $parent->snData;
 		} elseif ( $under && $parentData->needsPWrapping && $inline ) {
 			// [A/i] If the element is inline and we are in body/blockquote,
 			// we need to create a p-wrapper
-			$this->trace( 'insert A/i' );
 			$newRef = $this->insertPWrapper( $newRef, $sourceStart );
 			$parent = $newRef;
 			$parentData = $parent->snData;
@@ -310,12 +268,9 @@ class RemexCompatMunger implements TreeHandler {
 			// [CU/b] If the element is non-inline and (despite attempting to
 			// split above) there is still an ancestor p-wrap, disable that
 			// p-wrap
-			$this->trace( 'insert CU/b' );
 			$this->disablePWrapper( $parent, $sourceStart );
-		} else {
-			// [A/b, B/i, C/i, D/b, DU/i] insert as normal
-			$this->trace( 'insert normal' );
 		}
+		// else [A/b, B/i, C/i, D/b, DU/i] insert as normal
 
 		// An element with element children is a non-blank element
 		$parentData->nonblankNodeCount++;
@@ -376,6 +331,7 @@ class RemexCompatMunger implements TreeHandler {
 		$root = $serializer->getRootNode();
 		$nodes = [];
 		$removableNodes = [];
+		$haveContent = false;
 		while ( $node !== $cloneEnd ) {
 			$nextParent = $serializer->getParentNode( $node );
 			if ( $nextParent === $root ) {
@@ -434,8 +390,6 @@ class RemexCompatMunger implements TreeHandler {
 	/**
 	 * Find the ancestor of $node which is a child of a p-wrapper, and
 	 * reparent that node so that it is placed after the end of the p-wrapper
-	 * @param SerializerNode $node
-	 * @param int $sourceStart
 	 */
 	private function disablePWrapper( SerializerNode $node, $sourceStart ) {
 		$nodeData = $node->snData;
@@ -479,13 +433,14 @@ class RemexCompatMunger implements TreeHandler {
 	}
 
 	public function doctype( $name, $public, $system, $quirks, $sourceStart, $sourceLength ) {
-		$this->serializer->doctype( $name, $public, $system, $quirks,
+		$this->serializer->doctype( $name, $public,  $system, $quirks,
 			$sourceStart, $sourceLength );
 	}
 
 	public function comment( $preposition, $refElement, $text, $sourceStart, $sourceLength ) {
-		list( , $refNode ) = $this->getParentForInsert( $preposition, $refElement );
-		$this->serializer->comment( $preposition, $refNode, $text, $sourceStart, $sourceLength );
+		list( $parent, $refNode ) = $this->getParentForInsert( $preposition, $refElement );
+		$this->serializer->comment( $preposition, $refNode, $text,
+			$sourceStart, $sourceLength );
 	}
 
 	public function error( $text, $pos ) {
@@ -502,20 +457,6 @@ class RemexCompatMunger implements TreeHandler {
 
 	public function reparentChildren( Element $element, Element $newParent, $sourceStart ) {
 		$self = $element->userData;
-		if ( $self->snData->childPElement ) {
-			// Reparent under the p-wrapper instead, so that e.g.
-			//   <blockquote><mw:p-wrap>...</mw:p-wrap></blockquote>
-			// becomes
-			//   <blockquote><mw:p-wrap><i>...</i></mw:p-wrap></blockquote>
-
-			// The formatting element should not be the parent of the p-wrap.
-			// Without this special case, the insertElement() of the <i> below
-			// would be diverted into the p-wrapper, causing infinite recursion
-			// (T178632)
-			$this->reparentChildren( $self->snData->childPElement, $newParent, $sourceStart );
-			return;
-		}
-
 		$children = $self->children;
 		$self->children = [];
 		$this->insertElement( TreeBuilder::UNDER, $element, $newParent, false, $sourceStart, 0 );
@@ -523,7 +464,6 @@ class RemexCompatMunger implements TreeHandler {
 		$newParentId = $newParentNode->id;
 		foreach ( $children as $child ) {
 			if ( is_object( $child ) ) {
-				$this->trace( "reparent <{$child->name}>" );
 				$child->parentId = $newParentId;
 			}
 		}

@@ -21,12 +21,8 @@
  * @ingroup Content
  */
 
-use MediaWiki\MediaWikiServices;
-
 /**
- * Content handler for code content such as CSS, JavaScript, JSON, etc.
- *
- * @stable to extend
+ * Content handler for code content such as CSS, JavaScript, JSON, etc
  * @since 1.24
  * @ingroup Content
  */
@@ -35,38 +31,32 @@ abstract class CodeContentHandler extends TextContentHandler {
 	/**
 	 * Returns the English language, because code is English, and should be handled as such.
 	 *
-	 * @stable to override
-	 *
 	 * @param Title $title
-	 * @param Content|null $content
+	 * @param Content $content
 	 *
 	 * @return Language
 	 *
 	 * @see ContentHandler::getPageLanguage()
 	 */
 	public function getPageLanguage( Title $title, Content $content = null ) {
-		return MediaWikiServices::getInstance()->getLanguageFactory()->getLanguage( 'en' );
+		return Language::factory( 'en' );
 	}
 
 	/**
 	 * Returns the English language, because code is English, and should be handled as such.
 	 *
-	 * @stable to override
-	 *
 	 * @param Title $title
-	 * @param Content|null $content
+	 * @param Content $content
 	 *
 	 * @return Language
 	 *
 	 * @see ContentHandler::getPageViewLanguage()
 	 */
 	public function getPageViewLanguage( Title $title, Content $content = null ) {
-		return MediaWikiServices::getInstance()->getLanguageFactory()->getLanguage( 'en' );
+		return Language::factory( 'en' );
 	}
 
 	/**
-	 * @stable to override
-	 *
 	 * @return string
 	 * @throws MWException
 	 */

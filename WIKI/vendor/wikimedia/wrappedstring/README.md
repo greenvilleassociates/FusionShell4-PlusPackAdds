@@ -8,12 +8,12 @@ HTML open/close tags and JavaScript boilerplate.
 Here is how you use it:
 
 <pre lang="php">
-use Wikimedia\WrappedString;
+use WrappedString\WrappedString;
 
-$buffer = [
+$buffer = array(
 	new WrappedString( '[foo]', '[', ']' ),
 	new WrappedString( '[bar]', '[', ']' ),
-];
+);
 $output = WrappedString::join( "\n", $buffer );
 // Result: '[foobar]'
 </pre>

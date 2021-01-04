@@ -18,13 +18,10 @@
  * @file
  */
 
-use MediaWiki\MediaWikiServices;
-
 /**
  * Show an error when a user tries to do something they do not have the necessary
  * permissions for.
  *
- * @newable
  * @since 1.18
  * @ingroup Exception
  */
@@ -32,8 +29,6 @@ class PermissionsError extends ErrorPageError {
 	public $permission, $errors;
 
 	/**
-	 * @stable to call
-	 *
 	 * @param string|null $permission A permission name or null if unknown
 	 * @param array $errors Error message keys or [key, param...] arrays; must not be empty if
 	 *   $permission is null
@@ -51,9 +46,7 @@ class PermissionsError extends ErrorPageError {
 
 		if ( !count( $errors ) ) {
 			$groups = [];
-			foreach ( MediaWikiServices::getInstance()
-						  ->getPermissionManager()
-						  ->getGroupsWithPermission( $this->permission ) as $group ) {
+			foreach ( User::getGroupsWithPermission( $this->permission ) as $group ) {
 				$groups[] = UserGroupMembership::getLink( $group, RequestContext::getMain(), 'wiki' );
 			}
 
@@ -70,12 +63,10 @@ class PermissionsError extends ErrorPageError {
 		parent::__construct( 'permissionserrors', Message::newFromSpecifier( $errors[0] ) );
 	}
 
-	public function report( $action = self::SEND_OUTPUT ) {
+	public function report() {
 		global $wgOut;
 
 		$wgOut->showPermissionsErrorPage( $this->errors, $this->permission );
-		if ( $action === self::SEND_OUTPUT ) {
-			$wgOut->output();
-		}
+		$wgOut->output();
 	}
 }

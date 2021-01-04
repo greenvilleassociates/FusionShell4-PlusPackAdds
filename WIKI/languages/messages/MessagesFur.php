@@ -104,4 +104,4 @@ $dateFormats = [
 	'dmy both' => 'j "di" M Y "a lis" H:i',
 ];
 
-$separatorTransformTable = [ ',' => "\u{00A0}", '.' => ',' ];
+$separatorTransformTable = [ ',' => "\xc2\xa0", '.' => ',' ];

@@ -18,15 +18,13 @@
  * http://www.gnu.org/copyleft/gpl.html
  *
  * @file
- * @ingroup Installer
+ * @ingroup Deployment
  */
-
-use MediaWiki\MediaWikiServices;
 
 /**
  * Class for the core installer web interface.
  *
- * @ingroup Installer
+ * @ingroup Deployment
  * @since 1.17
  */
 class WebInstaller extends Installer {
@@ -87,6 +85,7 @@ class WebInstaller extends Installer {
 	 */
 	protected $otherPages = [
 		'Restart',
+		'Readme',
 		'ReleaseNotes',
 		'Copying',
 		'UpgradeDoc', // Can't use Upgrade due to Upgrade step
@@ -124,13 +123,6 @@ class WebInstaller extends Installer {
 	protected $tabIndex = 1;
 
 	/**
-	 * Numeric index of the help box
-	 *
-	 * @var int
-	 */
-	protected $helpBoxId = 1;
-
-	/**
 	 * Name of the page we're on
 	 *
 	 * @var string
@@ -144,6 +136,11 @@ class WebInstaller extends Installer {
 		parent::__construct();
 		$this->output = new WebInstallerOutput( $this );
 		$this->request = $request;
+
+		// Add parser hooks
+		global $wgParser;
+		$wgParser->setHook( 'downloadlink', [ $this, 'downloadLinkHook' ] );
+		$wgParser->setHook( 'doclink', [ $this, 'docLink' ] );
 	}
 
 	/**
@@ -158,10 +155,6 @@ class WebInstaller extends Installer {
 
 		if ( isset( $session['settings'] ) ) {
 			$this->settings = $session['settings'] + $this->settings;
-			// T187586 MediaWikiServices works with globals
-			foreach ( $this->settings as $key => $val ) {
-				$GLOBALS[$key] = $val;
-			}
 		}
 
 		$this->setupLanguage();
@@ -169,7 +162,18 @@ class WebInstaller extends Installer {
 		if ( ( $this->getVar( '_InstallDone' ) || $this->getVar( '_UpgradeDone' ) )
 			&& $this->request->getVal( 'localsettings' )
 		) {
-			$this->outputLS();
+			$this->request->response()->header( 'Content-type: application/x-httpd-php' );
+			$this->request->response()->header(
+				'Content-Disposition: attachment; filename="LocalSettings.php"'
+			);
+
+			$ls = InstallerOverrides::getLocalSettingsGenerator( $this );
+			$rightsProfile = $this->rightsProfiles[$this->getVar( '_RightsProfile' )];
+			foreach ( $rightsProfile as $group => $rightsArr ) {
+				$ls->setGroupRights( $group, $rightsArr );
+			}
+			echo $ls->getText();
+
 			return $this->session;
 		}
 
@@ -179,17 +183,23 @@ class WebInstaller extends Installer {
 			return $this->session;
 		}
 
-		$this->happyPages = $session['happyPages'] ?? [];
+		if ( isset( $session['happyPages'] ) ) {
+			$this->happyPages = $session['happyPages'];
+		} else {
+			$this->happyPages = [];
+		}
 
-		$this->skippedPages = $session['skippedPages'] ?? [];
+		if ( isset( $session['skippedPages'] ) ) {
+			$this->skippedPages = $session['skippedPages'];
+		} else {
+			$this->skippedPages = [];
+		}
 
 		$lowestUnhappy = $this->getLowestUnhappy();
 
 		# Special case for Creative Commons partner chooser box.
 		if ( $this->request->getVal( 'SubmitCC' ) ) {
-			/** @var WebInstallerOptions $page */
 			$page = $this->getPageByName( 'Options' );
-			'@phan-var WebInstallerOptions $page';
 			$this->output->useShortHeader();
 			$this->output->allowFrames();
 			$page->submitCC();
@@ -198,9 +208,7 @@ class WebInstaller extends Installer {
 		}
 
 		if ( $this->request->getVal( 'ShowCC' ) ) {
-			/** @var WebInstallerOptions $page */
 			$page = $this->getPageByName( 'Options' );
-			'@phan-var WebInstallerOptions $page';
 			$this->output->useShortHeader();
 			$this->output->allowFrames();
 			$this->output->addHTML( $page->getCCDoneBox() );
@@ -329,17 +337,11 @@ class WebInstaller extends Installer {
 			return true;
 		}
 
-		// Use secure cookies if we are on HTTPS
-		$options = [];
-		if ( $this->request->getProtocol() === 'https' ) {
-			$options['cookie_secure'] = '1';
-		}
-
 		$this->phpErrors = [];
 		set_error_handler( [ $this, 'errorHandler' ] );
 		try {
 			session_name( 'mw_installer_session' );
-			session_start( $options );
+			session_start();
 		} catch ( Exception $e ) {
 			restore_error_handler();
 			throw $e;
@@ -377,7 +379,7 @@ class WebInstaller extends Installer {
 		return md5( serialize( [
 			'local path' => dirname( __DIR__ ),
 			'url' => $url,
-			'version' => MW_VERSION
+			'version' => $GLOBALS['wgVersion']
 		] ) );
 	}
 
@@ -385,18 +387,16 @@ class WebInstaller extends Installer {
 	 * Show an error message in a box. Parameters are like wfMessage(), or
 	 * alternatively, pass a Message object in.
 	 * @param string|Message $msg
-	 * @param mixed ...$params
 	 */
-	public function showError( $msg, ...$params ) {
+	public function showError( $msg /*...*/ ) {
 		if ( !( $msg instanceof Message ) ) {
-			$msg = wfMessage(
-				$msg,
-				array_map( 'htmlspecialchars', $params )
-			);
+			$args = func_get_args();
+			array_shift( $args );
+			$args = array_map( 'htmlspecialchars', $args );
+			$msg = wfMessage( $msg, $args );
 		}
-		$text = $msg->useDatabase( false )->parse();
-		$box = Html::errorBox( $text, '', 'config-error-box' );
-		$this->output->addHTML( $box );
+		$text = $msg->useDatabase( false )->plain();
+		$this->output->addHTML( $this->getErrorBox( $text ) );
 	}
 
 	/**
@@ -468,12 +468,16 @@ class WebInstaller extends Installer {
 	 * Get a session variable.
 	 *
 	 * @param string $name
-	 * @param array|null $default
+	 * @param array $default
 	 *
 	 * @return array
 	 */
 	public function getSession( $name, $default = null ) {
-		return $this->session[$name] ?? $default;
+		if ( !isset( $this->session[$name] ) ) {
+			return $default;
+		} else {
+			return $this->session[$name];
+		}
 	}
 
 	/**
@@ -503,15 +507,14 @@ class WebInstaller extends Installer {
 
 		if ( $this->getSession( 'test' ) === null && !$this->request->wasPosted() ) {
 			$wgLanguageCode = $this->getAcceptLanguage();
-			$wgLang = MediaWikiServices::getInstance()->getLanguageFactory()
-				->getLanguage( $wgLanguageCode );
+			$wgLang = $wgContLang = Language::factory( $wgLanguageCode );
 			RequestContext::getMain()->setLanguage( $wgLang );
 			$this->setVar( 'wgLanguageCode', $wgLanguageCode );
 			$this->setVar( '_UserLang', $wgLanguageCode );
 		} else {
 			$wgLanguageCode = $this->getVar( 'wgLanguageCode' );
+			$wgContLang = Language::factory( $wgLanguageCode );
 		}
-		$wgContLang = MediaWikiServices::getInstance()->getContentLanguage();
 	}
 
 	/**
@@ -522,9 +525,7 @@ class WebInstaller extends Installer {
 	public function getAcceptLanguage() {
 		global $wgLanguageCode, $wgRequest;
 
-		$mwLanguages = MediaWikiServices::getInstance()
-			->getLanguageNameUtils()
-			->getLanguageNames( null, 'mwfile' );
+		$mwLanguages = Language::fetchLanguageNames();
 		$headerLanguages = array_keys( $wgRequest->getAcceptLang() );
 
 		foreach ( $headerLanguages as $lang ) {
@@ -568,7 +569,7 @@ class WebInstaller extends Installer {
 		// Messages:
 		// config-page-language, config-page-welcome, config-page-dbconnect, config-page-upgrade,
 		// config-page-dbsettings, config-page-name, config-page-options, config-page-install,
-		// config-page-complete, config-page-restart, config-page-releasenotes,
+		// config-page-complete, config-page-restart, config-page-readme, config-page-releasenotes,
 		// config-page-copying, config-page-upgradedoc, config-page-existingwiki
 		$s .= Html::element( 'h2', [],
 			wfMessage( 'config-page-' . strtolower( $currentPageName ) )->text() );
@@ -591,7 +592,7 @@ class WebInstaller extends Installer {
 		// Messages:
 		// config-page-language, config-page-welcome, config-page-dbconnect, config-page-upgrade,
 		// config-page-dbsettings, config-page-name, config-page-options, config-page-install,
-		// config-page-complete, config-page-restart, config-page-releasenotes,
+		// config-page-complete, config-page-restart, config-page-readme, config-page-releasenotes,
 		// config-page-copying, config-page-upgradedoc, config-page-existingwiki
 		$name = wfMessage( 'config-page-' . strtolower( $pageName ) )->text();
 
@@ -644,23 +645,44 @@ class WebInstaller extends Installer {
 	}
 
 	/**
-	 * Get HTML for an information message box with an icon.
+	 * Get HTML for an error box with an icon.
 	 *
-	 * @param string|HtmlArmor $text Wikitext to be parsed (from Message::plain) or raw HTML.
+	 * @param string $text Wikitext, get this with wfMessage()->plain()
+	 *
+	 * @return string
+	 */
+	public function getErrorBox( $text ) {
+		return $this->getInfoBox( $text, 'critical-32.png', 'config-error-box' );
+	}
+
+	/**
+	 * Get HTML for a warning box with an icon.
+	 *
+	 * @param string $text Wikitext, get this with wfMessage()->plain()
+	 *
+	 * @return string
+	 */
+	public function getWarningBox( $text ) {
+		return $this->getInfoBox( $text, 'warning-32.png', 'config-warning-box' );
+	}
+
+	/**
+	 * Get HTML for an info box with an icon.
+	 *
+	 * @param string $text Wikitext, get this with wfMessage()->plain()
 	 * @param string|bool $icon Icon name, file in mw-config/images. Default: false
 	 * @param string|bool $class Additional class name to add to the wrapper div. Default: false.
-	 * @return string HTML
+	 *
+	 * @return string
 	 */
 	public function getInfoBox( $text, $icon = false, $class = false ) {
-		$html = ( $text instanceof HtmlArmor ) ?
-			HtmlArmor::getHtml( $text ) :
-			$this->parse( $text, true );
+		$text = $this->parse( $text, true );
 		$icon = ( $icon == false ) ?
 			'images/info-32.png' :
 			'images/' . $icon;
 		$alt = wfMessage( 'config-information' )->text();
 
-		return Html::infoBox( $html, $icon, $alt, $class );
+		return Html::infoBox( $text, $icon, $alt, $class );
 	}
 
 	/**
@@ -668,20 +690,19 @@ class WebInstaller extends Installer {
 	 * Parameters like wfMessage().
 	 *
 	 * @param string $msg
-	 * @param mixed ...$args
 	 * @return string
 	 */
-	public function getHelpBox( $msg, ...$args ) {
+	public function getHelpBox( $msg /*, ... */ ) {
+		$args = func_get_args();
+		array_shift( $args );
 		$args = array_map( 'htmlspecialchars', $args );
 		$text = wfMessage( $msg, $args )->useDatabase( false )->plain();
 		$html = $this->parse( $text, true );
-		$id = 'helpBox-' . $this->helpBoxId++;
 
 		return "<div class=\"config-help-field-container\">\n" .
-			"<input type=\"checkbox\" class=\"config-help-field-checkbox\" id=\"$id\" />" .
-			"<label class=\"config-help-field-hint\" for=\"$id\" title=\"" .
+			"<span class=\"config-help-field-hint\" title=\"" .
 			wfMessage( 'config-help-tooltip' )->escaped() . "\">" .
-			wfMessage( 'config-help' )->escaped() . "</label>\n" .
+			wfMessage( 'config-help' )->escaped() . "</span>\n" .
 			"<div class=\"config-help-field-data\">" . $html . "</div>\n" .
 			"</div>\n";
 	}
@@ -689,10 +710,10 @@ class WebInstaller extends Installer {
 	/**
 	 * Output a help box.
 	 * @param string $msg Key for wfMessage()
-	 * @param mixed ...$params
 	 */
-	public function showHelpBox( $msg, ...$params ) {
-		$html = $this->getHelpBox( $msg, ...$params );
+	public function showHelpBox( $msg /*, ... */ ) {
+		$args = func_get_args();
+		$html = call_user_func_array( [ $this, 'getHelpBox' ], $args );
 		$this->output->addHTML( $html );
 	}
 
@@ -701,11 +722,12 @@ class WebInstaller extends Installer {
 	 * Output looks like a list.
 	 *
 	 * @param string $msg
-	 * @param mixed ...$params
 	 */
-	public function showMessage( $msg, ...$params ) {
+	public function showMessage( $msg /*, ... */ ) {
+		$args = func_get_args();
+		array_shift( $args );
 		$html = '<div class="config-message">' .
-			$this->parse( wfMessage( $msg, $params )->useDatabase( false )->plain() ) .
+			$this->parse( wfMessage( $msg, $args )->useDatabase( false )->plain() ) .
 			"</div>\n";
 		$this->output->addHTML( $html );
 	}
@@ -716,7 +738,7 @@ class WebInstaller extends Installer {
 	public function showStatusMessage( Status $status ) {
 		$errors = array_merge( $status->getErrorsArray(), $status->getWarningsArray() );
 		foreach ( $errors as $error ) {
-			$this->showMessage( ...$error );
+			call_user_func_array( [ $this, 'showMessage' ], $error );
 		}
 	}
 
@@ -732,7 +754,7 @@ class WebInstaller extends Installer {
 	 */
 	public function label( $msg, $forId, $contents, $helpData = "" ) {
 		if ( strval( $msg ) == '' ) {
-			$labelText = "\u{00A0}";
+			$labelText = '&#160;';
 		} else {
 			$labelText = wfMessage( $msg )->escaped();
 		}
@@ -889,7 +911,6 @@ class WebInstaller extends Installer {
 	 *    Parameters are:
 	 *      var:         The variable to be configured (required)
 	 *      label:       The message name for the label (required)
-	 *      labelAttribs:Additional attributes for the label element (optional)
 	 *      attribs:     Additional attributes for the input element (optional)
 	 *      controlName: The name for the input element (optional)
 	 *      value:       The current value of the variable (optional)
@@ -912,26 +933,25 @@ class WebInstaller extends Installer {
 		if ( !isset( $params['help'] ) ) {
 			$params['help'] = "";
 		}
-		if ( !isset( $params['labelAttribs'] ) ) {
-			$params['labelAttribs'] = [];
+		if ( isset( $params['rawtext'] ) ) {
+			$labelText = $params['rawtext'];
+		} else {
+			$labelText = $this->parse( wfMessage( $params['label'] )->text() );
 		}
-		$labelText = $params['rawtext'] ?? $this->parse( wfMessage( $params['label'] )->plain() );
 
 		return "<div class=\"config-input-check\">\n" .
 			$params['help'] .
-			Html::rawElement(
-				'label',
-				$params['labelAttribs'],
-				Xml::check(
-					$params['controlName'],
-					$params['value'],
-					$params['attribs'] + [
-						'id' => $params['controlName'],
-						'tabindex' => $this->nextTabIndex(),
-					]
-				) .
-				$labelText . "\n"
-				) .
+			"<label>\n" .
+			Xml::check(
+				$params['controlName'],
+				$params['value'],
+				$params['attribs'] + [
+					'id' => $params['controlName'],
+					'tabindex' => $this->nextTabIndex(),
+				]
+			) .
+			$labelText . "\n" .
+			"</label>\n" .
 			"</div>\n";
 	}
 
@@ -957,7 +977,11 @@ class WebInstaller extends Installer {
 	public function getRadioSet( $params ) {
 		$items = $this->getRadioElements( $params );
 
-		$label = $params['label'] ?? '';
+		if ( !isset( $params['label'] ) ) {
+			$label = '';
+		} else {
+			$label = $params['label'];
+		}
 
 		if ( !isset( $params['controlName'] ) ) {
 			$params['controlName'] = 'config_' . $params['var'];
@@ -1013,7 +1037,7 @@ class WebInstaller extends Installer {
 
 			$items[$value] =
 				Xml::radio( $params['controlName'], $value, $checked, $itemAttribs ) .
-				"\u{00A0}" .
+				'&#160;' .
 				Xml::tags( 'label', [ 'for' => $id ], $this->parse(
 					isset( $params['itemLabels'] ) ?
 						wfMessage( $params['itemLabels'][$value] )->plain() :
@@ -1034,9 +1058,9 @@ class WebInstaller extends Installer {
 			$text = $status->getWikiText();
 
 			if ( $status->isOK() ) {
-				$box = Html::warningBox( $text, 'config-warning-box' );
+				$box = $this->getWarningBox( $text );
 			} else {
-				$box = Html::errorBox( $text, '', 'config-error-box' );
+				$box = $this->getErrorBox( $text );
 			}
 
 			$this->output->addHTML( $box );
@@ -1067,10 +1091,12 @@ class WebInstaller extends Installer {
 			if ( $value === null ) {
 				// Checkbox?
 				$this->setVar( $name, false );
-			} elseif ( stripos( $name, 'password' ) !== false ) {
-				$this->setPassword( $name, $value );
 			} else {
-				$this->setVar( $name, $value );
+				if ( stripos( $name, 'password' ) !== false ) {
+					$this->setPassword( $name, $value );
+				} else {
+					$this->setVar( $name, $value );
+				}
 			}
 		}
 
@@ -1078,43 +1104,49 @@ class WebInstaller extends Installer {
 	}
 
 	/**
-	 * Helper for WebInstallerOutput
+	 * Helper for Installer::docLink()
 	 *
-	 * @internal For use by WebInstallerOutput
 	 * @param string $page
+	 *
 	 * @return string
 	 */
-	public function getDocUrl( $page ) {
-		$query = [ 'page' => $page ];
+	protected function getDocUrl( $page ) {
+		$url = "{$_SERVER['PHP_SELF']}?page=" . urlencode( $page );
 
 		if ( in_array( $this->currentPageName, $this->pageSequence ) ) {
-			$query['lastPage'] = $this->currentPageName;
+			$url .= '&lastPage=' . urlencode( $this->currentPageName );
 		}
 
-		return $this->getUrl( $query );
+		return $url;
 	}
 
 	/**
-	 * Helper for sidebar links.
+	 * Extension tag hook for a documentation link.
 	 *
-	 * @internal For use in WebInstallerOutput class
-	 * @param string $url
 	 * @param string $linkText
-	 * @return string HTML
+	 * @param string[] $attribs
+	 * @param Parser $parser Unused
+	 *
+	 * @return string
 	 */
-	public function makeLinkItem( $url, $linkText ) {
-		return Html::rawElement( 'li', [],
-			Html::element( 'a', [ 'href' => $url ], $linkText )
-		);
+	public function docLink( $linkText, $attribs, $parser ) {
+		$url = $this->getDocUrl( $attribs['href'] );
+
+		return '<a href="' . htmlspecialchars( $url ) . '">' .
+			htmlspecialchars( $linkText ) .
+			'</a>';
 	}
 
 	/**
-	 * Helper for "Download LocalSettings" link.
+	 * Helper for "Download LocalSettings" link on WebInstall_Complete
 	 *
-	 * @internal For use in WebInstallerComplete class
+	 * @param string $text Unused
+	 * @param string[] $attribs Unused
+	 * @param Parser $parser Unused
+	 *
 	 * @return string Html for download link
 	 */
-	public function makeDownloadLinkHtml() {
+	public function downloadLinkHook( $text, $attribs, $parser ) {
 		$anchor = Html::rawElement( 'a',
 			[ 'href' => $this->getUrl( [ 'localsettings' => 1 ] ) ],
 			wfMessage( 'config-download-localsettings' )->parse()
@@ -1189,25 +1221,6 @@ class WebInstaller extends Installer {
 	 */
 	protected function envGetDefaultServer() {
 		return WebRequest::detectServer();
-	}
-
-	/**
-	 * Actually output LocalSettings.php for download
-	 *
-	 * @suppress SecurityCheck-XSS
-	 */
-	private function outputLS() {
-		$this->request->response()->header( 'Content-type: application/x-httpd-php' );
-		$this->request->response()->header(
-			'Content-Disposition: attachment; filename="LocalSettings.php"'
-		);
-
-		$ls = InstallerOverrides::getLocalSettingsGenerator( $this );
-		$rightsProfile = $this->rightsProfiles[$this->getVar( '_RightsProfile' )];
-		foreach ( $rightsProfile as $group => $rightsArr ) {
-			$ls->setGroupRights( $group, $rightsArr );
-		}
-		echo $ls->getText();
 	}
 
 	/**

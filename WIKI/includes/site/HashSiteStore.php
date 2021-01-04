@@ -87,7 +87,11 @@ class HashSiteStore implements SiteStore {
 	 * @return Site|null
 	 */
 	public function getSite( $globalId, $source = 'cache' ) {
-		return $this->sites[$globalId] ?? null;
+		if ( isset( $this->sites[$globalId] ) ) {
+			return $this->sites[$globalId];
+		} else {
+			return null;
+		}
 	}
 
 	/**

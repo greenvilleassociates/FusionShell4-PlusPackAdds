@@ -5,11 +5,7 @@
  * @file
  */
 
-/**
- * Tests for Armenian (Հայերեն)
- * @group Language
- * @covers LanguageHy
- */
+/** Tests for Armenian (Հայերեն) */
 class LanguageHyTest extends LanguageClassesTestCase {
 	/**
 	 * @dataProvider providePlural

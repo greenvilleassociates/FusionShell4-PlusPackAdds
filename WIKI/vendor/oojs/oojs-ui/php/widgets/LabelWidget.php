@@ -23,7 +23,7 @@ class LabelWidget extends Widget {
 
 	/**
 	 * @param array $config Configuration options
-	 *      - InputWidget $config['input'] Input widget this label is for
+	 * @param InputWidget $config['input'] Input widget this label is for
 	 */
 	public function __construct( array $config = [] ) {
 		// Parent constructor
@@ -31,11 +31,10 @@ class LabelWidget extends Widget {
 
 		// Traits
 		$this->initializeLabelElement(
-			array_merge( [ 'labelElement' => $this ], $config )
-		);
+			array_merge( $config, [ 'labelElement' => $this ] ) );
 
 		// Properties
-		$this->input = $config['input'] ?? null;
+		$this->input = isset( $config['input'] ) ? $config['input'] : null;
 
 		// Initialization
 		if ( $this->input && $this->input->getInputId() ) {

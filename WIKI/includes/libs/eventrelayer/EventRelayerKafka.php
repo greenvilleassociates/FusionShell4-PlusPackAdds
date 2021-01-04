@@ -1,5 +1,4 @@
 <?php
-
 use Kafka\Produce;
 
 /**

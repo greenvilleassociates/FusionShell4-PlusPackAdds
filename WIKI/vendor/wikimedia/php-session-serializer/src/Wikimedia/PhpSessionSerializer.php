@@ -44,7 +44,6 @@ class PhpSessionSerializer {
 
 	/**
 	 * Set the logger to which to log
-	 * @param LoggerInterface $logger The logger
 	 */
 	public static function setLogger( LoggerInterface $logger ) {
 		self::$logger = $logger;
@@ -59,16 +58,16 @@ class PhpSessionSerializer {
 	 * @throws \\DomainException
 	 */
 	public static function setSerializeHandler() {
-		$formats = [
+		$formats = array(
 			'php_serialize',
 			'php',
 			'php_binary',
-		];
+		);
 
 		// First, try php_serialize since that's the only one that doesn't suck in some way.
-		\Wikimedia\suppressWarnings();
+		\MediaWiki\suppressWarnings();
 		ini_set( 'session.serialize_handler', 'php_serialize' );
-		\Wikimedia\restoreWarnings();
+		\MediaWiki\restoreWarnings();
 		if ( ini_get( 'session.serialize_handler' ) === 'php_serialize' ) {
 			return 'php_serialize';
 		}
@@ -81,9 +80,9 @@ class PhpSessionSerializer {
 
 		// Last chance, see if any of our supported formats are accepted.
 		foreach ( $formats as $format ) {
-			\Wikimedia\suppressWarnings();
+			\MediaWiki\suppressWarnings();
 			ini_set( 'session.serialize_handler', $format );
-			\Wikimedia\restoreWarnings();
+			\MediaWiki\restoreWarnings();
 			if ( ini_get( 'session.serialize_handler' ) === $format ) {
 				return $format;
 			}
@@ -91,7 +90,7 @@ class PhpSessionSerializer {
 
 		throw new \DomainException(
 			'Failed to set serialize handler to a supported format.' .
-				' Supported formats are: ' . implode( ', ', $formats ) . '.'
+				' Supported formats are: ' . join( ', ', $formats ) . '.'
 		);
 	}
 
@@ -187,7 +186,7 @@ class PhpSessionSerializer {
 
 		if ( $error !== null ) {
 			self::$logger->error( 'Value unserialization failed: ' . $error );
-			return [ false, null ];
+			return array( false, null );
 		}
 
 		$serialized = serialize( $ret );
@@ -196,11 +195,11 @@ class PhpSessionSerializer {
 			self::$logger->error(
 				'Value unserialization failed: read value does not match original string'
 			);
-			return [ false, null ];
+			return array( false, null );
 		}
 
 		$string = substr( $string, $l );
-		return [ true, $ret ];
+		return array( true, $ret );
 	}
 
 	/**
@@ -242,7 +241,7 @@ class PhpSessionSerializer {
 			throw new \InvalidArgumentException( '$data must be a string' );
 		}
 
-		$ret = [];
+		$ret = array();
 		while ( $data !== '' && $data !== false ) {
 			$i = strpos( $data, '|' );
 			if ( $i === false ) {
@@ -313,7 +312,7 @@ class PhpSessionSerializer {
 			throw new \InvalidArgumentException( '$data must be a string' );
 		}
 
-		$ret = [];
+		$ret = array();
 		while ( $data !== '' && $data !== false ) {
 			$l = ord( $data[0] );
 			if ( strlen( $data ) < ( $l & 127 ) + 1 ) {
@@ -396,4 +395,4 @@ class PhpSessionSerializer {
 
 }
 
-PhpSessionSerializer::setLogger( new \Psr\Log\NullLogger() ); // @codeCoverageIgnore
+PhpSessionSerializer::setLogger( new \Psr\Log\NullLogger() );

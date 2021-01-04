@@ -1,69 +1,30 @@
 <?php
-
 /**
- * @covers LanguageAr
+ * Based on LanguagMlTest
+ * @file
  */
-class LanguageArTest extends LanguageClassesTestCase {
 
+/** Tests for MediaWiki languages/LanguageAr.php */
+class LanguageArTest extends LanguageClassesTestCase {
 	/**
 	 * @covers Language::formatNum
-	 * @dataProvider provideFormatNum
+	 * @todo split into a test and a dataprovider
 	 */
-	public function testFormatNum( $num, $formatted ) {
-		$this->assertEquals( $formatted, $this->getLang()->formatNum( $num ) );
-	}
-
-	public static function provideFormatNum() {
-		return [
-			[ '1234567', '١٬٢٣٤٬٥٦٧' ],
-			[ -12.89, '-١٢٫٨٩' ],
-		];
-	}
-
-	/**
-	 * @covers LanguageAr::normalize
-	 * @covers Language::normalize
-	 * @dataProvider provideNormalize
-	 */
-	public function testNormalize( $input, $expected ) {
-		if ( $input === $expected ) {
-			throw new Exception( 'Expected output must differ.' );
-		}
-
-		$this->assertSame(
-			$expected,
-			$this->getLang()->normalize( $input ),
-			'ar-normalised form'
-		);
-	}
-
-	public static function provideNormalize() {
-		return [
-			[
-				'ﷅ',
-				'صمم',
-			],
-			[
-				'ﻴ',
-				'ي',
-			],
-			[
-				'ﻬ',
-				'ه',
-			],
-		];
+	public function testFormatNum() {
+		$this->assertEquals( '١٬٢٣٤٬٥٦٧', $this->getLang()->formatNum( '1234567' ) );
+		$this->assertEquals( '-١٢٫٨٩', $this->getLang()->formatNum( -12.89 ) );
 	}
 
 	/**
 	 * Mostly to test the raw ascii feature.
-	 * @dataProvider provideSprintfDate
+	 * @dataProvider providerSprintfDate
 	 * @covers Language::sprintfDate
 	 */
 	public function testSprintfDate( $format, $date, $expected ) {
 		$this->assertEquals( $expected, $this->getLang()->sprintfDate( $format, $date ) );
 	}
 
-	public static function provideSprintfDate() {
+	public static function providerSprintfDate() {
 		return [
 			[
 				'xg "vs" g',

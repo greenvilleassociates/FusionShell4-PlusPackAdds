@@ -4,7 +4,7 @@
  * @covers UserNotLoggedIn
  * @author Addshore
  */
-class UserNotLoggedInTest extends MediaWikiIntegrationTestCase {
+class UserNotLoggedInTest extends MediaWikiTestCase {
 
 	public function testConstruction() {
 		$e = new UserNotLoggedIn();

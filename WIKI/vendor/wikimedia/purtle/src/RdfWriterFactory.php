@@ -7,7 +7,7 @@ use InvalidArgumentException;
 /**
  * @since 0.5
  *
- * @license GPL-2.0-or-later
+ * @license GPL-2.0+
  * @author Daniel Kinzler
  */
 class RdfWriterFactory {
@@ -20,7 +20,7 @@ class RdfWriterFactory {
 	 * @return string[]
 	 */
 	public function getSupportedFormats() {
-		return [ 'n3', 'turtle', 'ntriples', 'rdfxml', 'jsonld' ];
+		return [ 'n3', 'turtle', 'ntriples', 'rdfxml' ];
 	}
 
 	/**
@@ -32,10 +32,10 @@ class RdfWriterFactory {
 	 * @return string[]
 	 */
 	public function getMimeTypes( $format ) {
-		// NOTE: Maintaining mime types and file extensions in the RdfWriter implementations
-		// is tempting, but means we have to load all these classes to find the right
-		// one for a requested name. Better avoid that overhead when serving lots of
-		// HTTP requests.
+		//NOTE: Maintaining mime types and file extensions in the RdfWriter implementations
+		//      is tempting, but means we have to load all these classes to find the right
+		//      one for a requested name. Better avoid that overhead when serving lots of
+		//      HTTP requests.
 
 		switch ( strtolower( $format ) ) {
 			case 'n3':
@@ -49,9 +49,6 @@ class RdfWriterFactory {
 
 			case 'rdfxml':
 				return [ 'application/rdf+xml', 'application/xml', 'text/xml' ];
-
-			case 'jsonld':
-				return [ 'application/ld+json', 'application/json' ];
 
 			default:
 				throw new InvalidArgumentException( 'Bad format: ' . $format );
@@ -80,9 +77,6 @@ class RdfWriterFactory {
 			case 'rdfxml':
 				return 'rdf';
 
-			case 'jsonld':
-				return 'jsonld';
-
 			default:
 				throw new InvalidArgumentException( 'Bad format: ' . $format );
 		}
@@ -92,27 +86,23 @@ class RdfWriterFactory {
 	 * Returns an RdfWriter for the given format name.
 	 *
 	 * @param string $format a format name, as returned by getSupportedFormats() or getFormatName().
-	 * @param BNodeLabeler|null $labeler Optional labeler
 	 *
- 	 * @throws InvalidArgumentException if $format is not a canonical format name
+	 * @throws InvalidArgumentException if $format is not a cononical format name
 	 * @return RdfWriter the format object, or null if not found.
 	 */
-	public function getWriter( $format, BNodeLabeler $labeler = null ) {
+	public function getWriter( $format ) {
 		switch ( strtolower( $format ) ) {
 			case 'n3':
 				// falls through to turtle
 
 			case 'turtle':
-				return new TurtleRdfWriter( RdfWriterBase::DOCUMENT_ROLE, $labeler );
+				return new TurtleRdfWriter();
 
 			case 'ntriples':
-				return new NTriplesRdfWriter( RdfWriterBase::DOCUMENT_ROLE, $labeler );
+				return new NTriplesRdfWriter();
 
 			case 'rdfxml':
-				return new XmlRdfWriter( RdfWriterBase::DOCUMENT_ROLE, $labeler );
-
-			case 'jsonld':
-				return new JsonLdRdfWriter( RdfWriterBase::DOCUMENT_ROLE, $labeler );
+				return new XmlRdfWriter();
 
 			default:
 				throw new InvalidArgumentException( 'Bad format: ' . $format );
@@ -158,12 +148,6 @@ class RdfWriterFactory {
 			case 'application/xml':
 			case 'text/xml':
 				return 'rdfxml';
-
-			case 'json':
-			case 'jsonld':
-			case 'application/ld+json':
-			case 'application/json':
-				return 'jsonld';
 
 			default:
 				return false;

@@ -43,7 +43,7 @@ class UnregisteredLocalFile extends File {
 	/** @var bool|string */
 	protected $mime;
 
-	/** @var array[]|bool[] Dimension data */
+	/** @var array Dimension data */
 	protected $dims;
 
 	/** @var bool|string Handler-specific metadata which will be saved in the img_metadata field */
@@ -55,19 +55,19 @@ class UnregisteredLocalFile extends File {
 	/**
 	 * @param string $path Storage path
 	 * @param string $mime
-	 * @return static
+	 * @return UnregisteredLocalFile
 	 */
-	public static function newFromPath( $path, $mime ) {
-		return new static( false, false, $path, $mime );
+	static function newFromPath( $path, $mime ) {
+		return new self( false, false, $path, $mime );
 	}
 
 	/**
 	 * @param Title $title
 	 * @param FileRepo $repo
-	 * @return static
+	 * @return UnregisteredLocalFile
 	 */
-	public static function newFromTitle( $title, $repo ) {
-		return new static( $title, $repo, false, false );
+	static function newFromTitle( $title, $repo ) {
+		return new self( $title, $repo, false, false );
 	}
 
 	/**
@@ -80,7 +80,7 @@ class UnregisteredLocalFile extends File {
 	 * @param string|bool $path
 	 * @param string|bool $mime
 	 */
-	public function __construct( $title = false, $repo = false, $path = false, $mime = false ) {
+	function __construct( $title = false, $repo = false, $path = false, $mime = false ) {
 		if ( !( $title && $repo ) && !$path ) {
 			throw new MWException( __METHOD__ .
 				': not enough parameters, must specify title and repo, or a full path' );
@@ -108,7 +108,7 @@ class UnregisteredLocalFile extends File {
 
 	/**
 	 * @param int $page
-	 * @return array|bool
+	 * @return bool
 	 */
 	private function cachePageDimensions( $page = 1 ) {
 		$page = (int)$page;
@@ -130,28 +130,28 @@ class UnregisteredLocalFile extends File {
 	 * @param int $page
 	 * @return int
 	 */
-	public function getWidth( $page = 1 ) {
+	function getWidth( $page = 1 ) {
 		$dim = $this->cachePageDimensions( $page );
 
-		return $dim['width'] ?? 0;
+		return $dim['width'];
 	}
 
 	/**
 	 * @param int $page
 	 * @return int
 	 */
-	public function getHeight( $page = 1 ) {
+	function getHeight( $page = 1 ) {
 		$dim = $this->cachePageDimensions( $page );
 
-		return $dim['height'] ?? 0;
+		return $dim['height'];
 	}
 
 	/**
 	 * @return bool|string
 	 */
-	public function getMimeType() {
+	function getMimeType() {
 		if ( !isset( $this->mime ) ) {
-			$magic = MediaWiki\MediaWikiServices::getInstance()->getMimeAnalyzer();
+			$magic = MimeMagic::singleton();
 			$this->mime = $magic->guessMimeType( $this->getLocalRefPath() );
 		}
 
@@ -162,7 +162,7 @@ class UnregisteredLocalFile extends File {
 	 * @param string $filename
 	 * @return array|bool
 	 */
-	protected function getImageSize( $filename ) {
+	function getImageSize( $filename ) {
 		if ( !$this->getHandler() ) {
 			return false;
 		}
@@ -173,7 +173,7 @@ class UnregisteredLocalFile extends File {
 	/**
 	 * @return int
 	 */
-	public function getBitDepth() {
+	function getBitDepth() {
 		$gis = $this->getImageSize( $this->getLocalRefPath() );
 
 		if ( !$gis || !isset( $gis['bits'] ) ) {
@@ -183,9 +183,9 @@ class UnregisteredLocalFile extends File {
 	}
 
 	/**
-	 * @return string|false
+	 * @return bool
 	 */
-	public function getMetadata() {
+	function getMetadata() {
 		if ( !isset( $this->metadata ) ) {
 			if ( !$this->getHandler() ) {
 				$this->metadata = false;
@@ -200,7 +200,7 @@ class UnregisteredLocalFile extends File {
 	/**
 	 * @return bool|string
 	 */
-	public function getURL() {
+	function getURL() {
 		if ( $this->repo ) {
 			return $this->repo->getZoneUrl( 'public' ) . '/' .
 				$this->repo->getHashPath( $this->name ) . rawurlencode( $this->name );
@@ -210,9 +210,9 @@ class UnregisteredLocalFile extends File {
 	}
 
 	/**
-	 * @return false|int
+	 * @return bool|int
 	 */
-	public function getSize() {
+	function getSize() {
 		$this->assertRepoDefined();
 
 		return $this->repo->getFileSize( $this->path );

@@ -1,7 +1,5 @@
 <?php
 
-use MediaWiki\MediaWikiServices;
-
 /**
  * Content handler for File: files
  * TODO: this handler s not used directly now,
@@ -11,7 +9,6 @@ use MediaWiki\MediaWikiServices;
 class FileContentHandler extends WikitextContentHandler {
 
 	public function getFieldsForSearchIndex( SearchEngine $engine ) {
-		$fields = [];
 		$fields['file_media_type'] =
 			$engine->makeSearchFieldMapping( 'file_media_type', SearchIndexField::INDEX_TYPE_KEYWORD );
 		$fields['file_media_type']->setFlag( SearchIndexField::FLAG_CASEFOLD );
@@ -44,8 +41,7 @@ class FileContentHandler extends WikitextContentHandler {
 		if ( NS_FILE != $title->getNamespace() ) {
 			return [];
 		}
-		$file = MediaWikiServices::getInstance()->getRepoGroup()->getLocalRepo()
-			->newFile( $title );
+		$file = wfLocalFile( $title );
 		if ( !$file || !$file->exists() ) {
 			return [];
 		}

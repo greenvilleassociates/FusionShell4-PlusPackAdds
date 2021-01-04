@@ -1,8 +1,7 @@
 {
 	"@metadata": {
 		"authors": [
-			"Olsi",
-			"Techlik"
+			"Olsi"
 		]
 	},
 	"titleblacklist-desc": "Lejon administruesit të ndalojnë krijimin e faqeve dhe llogarive të përdoruesve për një [[MediaWiki:Titleblacklist|listë të zezë]] dhe [[MediaWiki:Titlewhitelist|listë të bardhë]]",

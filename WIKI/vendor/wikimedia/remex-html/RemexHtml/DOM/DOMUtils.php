@@ -1,7 +1,6 @@
 <?php
 
 namespace RemexHtml\DOM;
-
 use RemexHtml\HTMLData;
 
 class DOMUtils {

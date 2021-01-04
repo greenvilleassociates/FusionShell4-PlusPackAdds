@@ -11,13 +11,10 @@
 	],
 	"url": "https://www.mediawiki.org/wiki/Extension:SyntaxHighlight",
 	"descriptionmsg": "syntaxhighlight-desc",
-	"license-name": "GPL-2.0-or-later",
+	"license-name": "GPL-2.0+",
 	"type": "parserhook",
 	"requires": {
-		"MediaWiki": ">= 1.34",
-		"platform": {
-			"ability-shell": true
-		}
+		"MediaWiki": ">= 1.27"
 	},
 	"MessagesDirs": {
 		"SyntaxHighlight_GeSHi": [
@@ -25,10 +22,13 @@
 		]
 	},
 	"AutoloadClasses": {
-		"SyntaxHighlight": "includes/SyntaxHighlight.php",
-		"SyntaxHighlightAce": "includes/SyntaxHighlightAce.php",
-		"SyntaxHighlightGeSHiCompat": "includes/SyntaxHighlightGeSHiCompat.php",
-		"ResourceLoaderSyntaxHighlightVisualEditorModule": "includes/ResourceLoaderSyntaxHighlightVisualEditorModule.php"
+		"SyntaxHighlight": "SyntaxHighlight.class.php",
+		"SyntaxHighlight_GeSHi": "SyntaxHighlight.class.php",
+		"GeSHi": "SyntaxHighlight.GeSHi.php",
+		"SyntaxHighlightAce": "SyntaxHighlight.ace.php",
+		"SyntaxHighlightGeSHiCompat": "SyntaxHighlight.GeSHi.compat.php",
+		"ResourceLoaderGeSHiVisualEditorModule": "ResourceLoaderSyntaxHighlightVisualEditorModule.php",
+		"ResourceLoaderSyntaxHighlightVisualEditorModule": "ResourceLoaderSyntaxHighlightVisualEditorModule.php"
 	},
 	"ResourceFileModulePaths": {
 		"localBasePath": "modules",
@@ -36,6 +36,7 @@
 	},
 	"ResourceModules": {
 		"ext.pygments": {
+			"position": "top",
 			"targets": [
 				"desktop",
 				"mobile"
@@ -60,28 +61,22 @@
 			"SyntaxHighlight::onResourceLoaderRegisterModules"
 		]
 	},
-	"attributes": {
-		"SyntaxHighlight": {
-			"Models" : {
-				"css": "css",
-				"javascript": "javascript"
-			}
-		},
-		"VisualEditor": {
-			"PluginModules": [
-				"ext.geshi.visualEditor"
-			]
-		}
+	"SyntaxHighlightModels": {
+		"css": "css",
+		"javascript": "javascript"
 	},
+	"VisualEditorPluginModules": [
+		"ext.geshi.visualEditor"
+	],
 	"config": {
-		"PygmentizePath": {
-			"value": false
-		}
+		"PygmentizePath": false
 	},
 	"TrackingCategories": [
-		"syntaxhighlight-error-category",
-		"syntaxhighlight-enclose-category",
-		"syntaxhighlight-source-category"
+		"syntaxhighlight-error-category"
 	],
-	"manifest_version": 2
+	"ParserTestFiles": [
+		"tests/parserTests.txt"
+	],
+	"load_composer_autoloader": true,
+	"manifest_version": 1
 }

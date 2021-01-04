@@ -26,8 +26,8 @@
  *
  * @ingroup SpecialPage
  */
-class SpecialUserLogout extends FormSpecialPage {
-	public function __construct() {
+class SpecialUserLogout extends UnlistedSpecialPage {
+	function __construct() {
 		parent::__construct( 'Userlogout' );
 	}
 
@@ -35,49 +35,19 @@ class SpecialUserLogout extends FormSpecialPage {
 		return true;
 	}
 
-	public function isListed() {
-		return false;
-	}
-
-	protected function getGroupName() {
-		return 'login';
-	}
-
-	protected function getFormFields() {
-		return [];
-	}
-
-	protected function getDisplayFormat() {
-		return 'ooui';
-	}
-
-	public function execute( $par ) {
-		if ( $this->getUser()->isAnon() ) {
-			$this->setHeaders();
-			$this->showSuccess();
-			return;
+	function execute( $par ) {
+		/**
+		 * Some satellite ISPs use broken precaching schemes that log people out straight after
+		 * they're logged in (T19790). Luckily, there's a way to detect such requests.
+		 */
+		if ( isset( $_SERVER['REQUEST_URI'] ) && strpos( $_SERVER['REQUEST_URI'], '&amp;' ) !== false ) {
+			wfDebug( "Special:UserLogout request {$_SERVER['REQUEST_URI']} looks suspicious, denying.\n" );
+			throw new HttpError( 400, $this->msg( 'suspicious-userlogout' ), $this->msg( 'loginerror' ) );
 		}
 
-		parent::execute( $par );
-	}
+		$this->setHeaders();
+		$this->outputHeader();
 
-	public function alterForm( HTMLForm $form ) {
-		$form->setTokenSalt( 'logoutToken' );
-		$form->addHeaderText( $this->msg( 'userlogout-continue' ) );
-
-		$form->addHiddenFields( $this->getRequest()->getValues( 'returnto', 'returntoquery' ) );
-	}
-
-	/**
-	 * Process the form.  At this point we know that the user passes all the criteria in
-	 * userCanExecute(), and if the data array contains 'Username', etc, then Username
-	 * resets are allowed.
-	 * @param array $data
-	 * @throws MWException
-	 * @throws ThrottledError|PermissionsError
-	 * @return Status
-	 */
-	public function onSubmit( array $data ) {
 		// Make sure it's possible to log out
 		$session = MediaWiki\Session\SessionManager::getGlobalSession();
 		if ( !$session->canSetUser() ) {
@@ -91,38 +61,25 @@ class SpecialUserLogout extends FormSpecialPage {
 		}
 
 		$user = $this->getUser();
+		$oldName = $user->getName();
 
 		$user->logout();
-		return new Status();
-	}
 
-	public function onSuccess() {
-		$this->showSuccess();
-
-		$user = $this->getUser();
-		$oldName = $user->getName();
-		$out = $this->getOutput();
-		// Hook.
-		$injected_html = '';
-		$this->getHookRunner()->onUserLogoutComplete( $user, $injected_html, $oldName );
-		$out->addHTML( $injected_html );
-	}
-
-	private function showSuccess() {
 		$loginURL = SpecialPage::getTitleFor( 'Userlogin' )->getFullURL(
 			$this->getRequest()->getValues( 'returnto', 'returntoquery' ) );
 
 		$out = $this->getOutput();
 		$out->addWikiMsg( 'logouttext', $loginURL );
 
+		// Hook.
+		$injected_html = '';
+		Hooks::run( 'UserLogoutComplete', [ &$user, &$injected_html, $oldName ] );
+		$out->addHTML( $injected_html );
+
 		$out->returnToMain();
 	}
 
-	/**
-	 * Let blocked users to log out and come back with their sockpuppets
-	 * @return bool
-	 */
-	public function requiresUnblock() {
-		return false;
+	protected function getGroupName() {
+		return 'login';
 	}
 }

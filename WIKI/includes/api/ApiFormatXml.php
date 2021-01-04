@@ -1,5 +1,9 @@
 <?php
 /**
+ *
+ *
+ * Created on Sep 19, 2006
+ *
  * Copyright © 2006 Yuri Astrakhan "<Firstname><Lastname>@gmail.com"
  *
  * This program is free software; you can redistribute it and/or modify
@@ -45,7 +49,7 @@ class ApiFormatXml extends ApiFormatBase {
 		$this->mXslt = $params['xslt'];
 
 		$this->printText( '<?xml version="1.0"?>' );
-		if ( $this->mXslt !== null ) {
+		if ( !is_null( $this->mXslt ) ) {
 			$this->addXslt();
 		}
 
@@ -104,18 +108,26 @@ class ApiFormatXml extends ApiFormatBase {
 			$value = (array)$value;
 		}
 		if ( is_array( $value ) ) {
-			$contentKey = $value[ApiResult::META_CONTENT] ?? '*';
-			$subelementKeys = $value[ApiResult::META_SUBELEMENTS] ?? [];
+			$contentKey = isset( $value[ApiResult::META_CONTENT] )
+				? $value[ApiResult::META_CONTENT]
+				: '*';
+			$subelementKeys = isset( $value[ApiResult::META_SUBELEMENTS] )
+				? $value[ApiResult::META_SUBELEMENTS]
+				: [];
 			if ( isset( $value[ApiResult::META_BC_SUBELEMENTS] ) ) {
 				$subelementKeys = array_merge(
 					$subelementKeys, $value[ApiResult::META_BC_SUBELEMENTS]
 				);
 			}
-			$preserveKeys = $value[ApiResult::META_PRESERVE_KEYS] ?? [];
+			$preserveKeys = isset( $value[ApiResult::META_PRESERVE_KEYS] )
+				? $value[ApiResult::META_PRESERVE_KEYS]
+				: [];
 			$indexedTagName = isset( $value[ApiResult::META_INDEXED_TAG_NAME] )
 				? self::mangleName( $value[ApiResult::META_INDEXED_TAG_NAME], $preserveKeys )
 				: '_v';
-			$bcBools = $value[ApiResult::META_BC_BOOLS] ?? [];
+			$bcBools = isset( $value[ApiResult::META_BC_BOOLS] )
+				? $value[ApiResult::META_BC_BOOLS]
+				: [];
 			$indexSubelements = isset( $value[ApiResult::META_TYPE] )
 				? $value[ApiResult::META_TYPE] !== 'array'
 				: false;
@@ -256,7 +268,7 @@ class ApiFormatXml extends ApiFormatBase {
 
 	protected function addXslt() {
 		$nt = Title::newFromText( $this->mXslt );
-		if ( $nt === null || !$nt->exists() ) {
+		if ( is_null( $nt ) || !$nt->exists() ) {
 			$this->addWarning( 'apiwarn-invalidxmlstylesheet' );
 
 			return;

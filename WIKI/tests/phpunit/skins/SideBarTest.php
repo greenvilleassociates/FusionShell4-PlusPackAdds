@@ -1,7 +1,5 @@
 <?php
 
-use MediaWiki\MediaWikiServices;
-
 /**
  * @group Skin
  */
@@ -28,11 +26,10 @@ class SideBarTest extends MediaWikiLangTestCase {
 			'helppage',
 		];
 
-		$messageCache = MediaWikiServices::getInstance()->getMessageCache();
 		# We're assuming that isValidURI works as advertised: it's also
 		# tested separately, in tests/phpunit/includes/HttpTest.php.
 		foreach ( $URL_messages as $m ) {
-			$titleName = $messageCache->get( $m );
+			$titleName = MessageCache::singleton()->get( $m );
 			if ( Http::isValidURI( $titleName ) ) {
 				$this->messages[$m]['href'] = $titleName;
 			} else {
@@ -42,11 +39,11 @@ class SideBarTest extends MediaWikiLangTestCase {
 		}
 	}
 
-	protected function setUp() : void {
+	protected function setUp() {
 		parent::setUp();
 		$this->initMessagesHref();
 		$this->skin = new SkinTemplate();
-		$this->skin->getContext()->setLanguage( 'en' );
+		$this->skin->getContext()->setLanguage( Language::factory( 'en' ) );
 	}
 
 	/**
@@ -107,10 +104,10 @@ class SideBarTest extends MediaWikiLangTestCase {
 		] );
 		$this->assertSideBar(
 			[ 'Title' => [
-				# ** https://www.mediawiki.org/| Home
+				# ** http://www.mediawiki.org/| Home
 				[
 					'text' => 'Home',
-					'href' => 'https://www.mediawiki.org/',
+					'href' => 'http://www.mediawiki.org/',
 					'id' => 'n-Home',
 					'active' => null,
 					'rel' => 'nofollow',
@@ -119,7 +116,7 @@ class SideBarTest extends MediaWikiLangTestCase {
 				# ... skipped since it is missing a pipe with a description
 			] ],
 			'* Title
-** https://www.mediawiki.org/| Home
+** http://www.mediawiki.org/| Home
 ** http://valid.no.desc.org/
 '
 		);
@@ -163,7 +160,7 @@ class SideBarTest extends MediaWikiLangTestCase {
 	private function getAttribs() {
 		# Sidebar text we will use everytime
 		$text = '* Title
-** https://www.mediawiki.org/| Home';
+** http://www.mediawiki.org/| Home';
 
 		$bar = [];
 		$this->skin->addToSidebarPlain( $bar, $text );
@@ -173,7 +170,6 @@ class SideBarTest extends MediaWikiLangTestCase {
 
 	/**
 	 * Simple test to verify our helper assertAttribs() is functional
-	 * @coversNothing
 	 */
 	public function testTestAttributesAssertionHelper() {
 		$this->setMwGlobals( [
@@ -192,7 +188,6 @@ class SideBarTest extends MediaWikiLangTestCase {
 
 	/**
 	 * Test $wgNoFollowLinks in sidebar
-	 * @covers Skin::addToSidebarPlain
 	 */
 	public function testRespectWgnofollowlinks() {
 		$this->setMwGlobals( 'wgNoFollowLinks', false );
@@ -206,7 +201,6 @@ class SideBarTest extends MediaWikiLangTestCase {
 	/**
 	 * Test $wgExternaLinkTarget in sidebar
 	 * @dataProvider dataRespectExternallinktarget
-	 * @covers Skin::addToSidebarPlain
 	 */
 	public function testRespectExternallinktarget( $externalLinkTarget ) {
 		$this->setMwGlobals( 'wgExternalLinkTarget', $externalLinkTarget );

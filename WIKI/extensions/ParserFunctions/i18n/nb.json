@@ -2,8 +2,8 @@
 	"@metadata": {
 		"authors": [
 			"Event",
-			"Jon Harald Søby",
-			"Laaknor"
+			"Laaknor",
+			"Jon Harald Søby"
 		]
 	},
 	"pfunc_desc": "Utvid parser med logiske funksjoner",

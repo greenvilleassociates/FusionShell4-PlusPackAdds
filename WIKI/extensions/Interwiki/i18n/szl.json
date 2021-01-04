@@ -1,10 +1,9 @@
 {
 	"@metadata": {
 		"authors": [
-			"Herr Kriss",
-			"Uostofchuodnego"
+			"Herr Kriss"
 		]
 	},
-	"interwiki_reasonfield": "Powōd:",
+	"interwiki_reasonfield": "Čymu:",
 	"interwiki_addbutton": "Dodej"
 }

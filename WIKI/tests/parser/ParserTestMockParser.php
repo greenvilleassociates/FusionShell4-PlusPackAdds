@@ -17,8 +17,4 @@ class ParserTestMockParser {
 	) {
 		return new ParserOutput;
 	}
-
-	public function getOutput() {
-		return new ParserOutput;
-	}
 }

@@ -1,7 +1,5 @@
 {
-	"@metadata": {
-		"authors": []
-	},
+	"@metadata": [],
 	"pfunc_time_error": "قاتە: جارامسىز ۋاقىت",
 	"pfunc_time_too_long": "قاتە: #time شاقىرۋى تىم كوپ",
 	"pfunc_rel2abs_invalid_depth": "قاتە: مىنا جولدىڭ جارامسىز تەرەندىگى «$1» (تامىر ٴتۇيىننىڭ ۇستىندەگى تۇيىنگە قاتىناۋ تالابى)",

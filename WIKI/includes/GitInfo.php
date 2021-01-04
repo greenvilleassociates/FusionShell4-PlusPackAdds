@@ -23,14 +23,6 @@
  * @file
  */
 
-use MediaWiki\Shell\Shell;
-use Wikimedia\AtEase\AtEase;
-
-/**
- * @newable
- * @note marked as newable in 1.35 for lack of a better alternative,
- *       but should become a stateless service eventually.
- */
 class GitInfo {
 
 	/**
@@ -42,11 +34,6 @@ class GitInfo {
 	 * Location of the .git directory
 	 */
 	protected $basedir;
-
-	/**
-	 * Location of the repository
-	 */
-	protected $repoDir;
 
 	/**
 	 * Path to JSON cache file for pre-computed git information.
@@ -64,16 +51,14 @@ class GitInfo {
 	private static $viewers = false;
 
 	/**
-	 * @stable to call
 	 * @param string $repoDir The root directory of the repo where .git can be found
 	 * @param bool $usePrecomputed Use precomputed information if available
 	 * @see precomputeValues
 	 */
 	public function __construct( $repoDir, $usePrecomputed = true ) {
-		$this->repoDir = $repoDir;
 		$this->cacheFile = self::getCacheFilePath( $repoDir );
 		wfDebugLog( 'gitinfo',
-			"Candidate cacheFile={$this->cacheFile} for {$repoDir}"
+			"Computed cacheFile={$this->cacheFile} for {$repoDir}"
 		);
 		if ( $usePrecomputed &&
 			$this->cacheFile !== null &&
@@ -149,7 +134,7 @@ class GitInfo {
 	 * @return GitInfo
 	 */
 	public static function repo() {
-		if ( self::$repo === null ) {
+		if ( is_null( self::$repo ) ) {
 			global $IP;
 			self::$repo = new self( $IP );
 		}
@@ -163,7 +148,7 @@ class GitInfo {
 	 * @return bool Whether or not the string looks like a SHA1
 	 */
 	public static function isSHA1( $str ) {
-		return (bool)preg_match( '/^[0-9A-F]{40}$/i', $str );
+		return !!preg_match( '/^[0-9A-F]{40}$/i', $str );
 	}
 
 	/**
@@ -206,14 +191,8 @@ class GitInfo {
 			} else {
 				// If not a SHA1 it may be a ref:
 				$refFile = "{$this->basedir}/{$head}";
-				$packedRefs = "{$this->basedir}/packed-refs";
-				$headRegex = preg_quote( $head, '/' );
 				if ( is_readable( $refFile ) ) {
 					$sha1 = rtrim( file_get_contents( $refFile ) );
-				} elseif ( is_readable( $packedRefs ) &&
-					preg_match( "/^([0-9A-Fa-f]{40}) $headRegex$/m", file_get_contents( $packedRefs ), $matches )
-				) {
-					$sha1 = $matches[1];
 				}
 			}
 			$this->cache['headSHA1'] = $sha1;
@@ -232,30 +211,17 @@ class GitInfo {
 
 		if ( !isset( $this->cache['headCommitDate'] ) ) {
 			$date = false;
-
-			// Suppress warnings about any open_basedir restrictions affecting $wgGitBin (T74445).
-			$isFile = AtEase::quietCall( 'is_file', $wgGitBin );
-			if ( $isFile &&
+			if ( is_file( $wgGitBin ) &&
 				is_executable( $wgGitBin ) &&
-				!Shell::isDisabled() &&
 				$this->getHead() !== false
 			) {
-				$cmd = [
-					$wgGitBin,
-					'show',
-					'-s',
-					'--format=format:%ct',
-					'HEAD',
-				];
-				$gitDir = realpath( $this->basedir );
-				$result = Shell::command( $cmd )
-					->environment( [ 'GIT_DIR' => $gitDir ] )
-					->restrict( Shell::RESTRICT_DEFAULT | Shell::NO_NETWORK )
-					->whitelistPaths( [ $gitDir, $this->repoDir ] )
-					->execute();
-
-				if ( $result->getExitCode() === 0 ) {
-					$date = (int)$result->getStdout();
+				$environment = [ "GIT_DIR" => $this->basedir ];
+				$cmd = wfEscapeShellArg( $wgGitBin ) .
+					" show -s --format=format:%ct HEAD";
+				$retc = false;
+				$commitDate = wfShellExec( $cmd, $retc, $environment );
+				if ( $retc === 0 ) {
+					$date = (int)$commitDate;
 				}
 			}
 			$this->cache['headCommitDate'] = $date;
@@ -317,9 +283,9 @@ class GitInfo {
 			$config = "{$this->basedir}/config";
 			$url = false;
 			if ( is_readable( $config ) ) {
-				Wikimedia\suppressWarnings();
+				MediaWiki\suppressWarnings();
 				$configArray = parse_ini_file( $config, true );
-				Wikimedia\restoreWarnings();
+				MediaWiki\restoreWarnings();
 				$remote = false;
 
 				// Use the "origin" remote repo if available or any other repo if not.
@@ -428,7 +394,7 @@ class GitInfo {
 
 		if ( self::$viewers === false ) {
 			self::$viewers = $wgGitRepositoryViewers;
-			Hooks::runner()->onGitViewers( self::$viewers );
+			Hooks::run( 'GitViewers', [ &self::$viewers ] );
 		}
 
 		return self::$viewers;

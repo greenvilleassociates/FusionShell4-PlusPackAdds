@@ -22,7 +22,6 @@
 
 namespace MediaWiki\Shell;
 
-use Hooks;
 use MediaWiki\MediaWikiServices;
 
 /**
@@ -32,101 +31,35 @@ use MediaWiki\MediaWikiServices;
  *
  * Use call chaining with this class for expressiveness:
  *  $result = Shell::command( 'some command' )
- *       ->input( 'foo' )
  *       ->environment( [ 'ENVIRONMENT_VARIABLE' => 'VALUE' ] )
  *       ->limits( [ 'time' => 300 ] )
  *       ->execute();
  *
  *  ... = $result->getExitCode();
  *  ... = $result->getStdout();
- *  ... = $result->getStderr();
  */
 class Shell {
 
 	/**
-	 * Disallow any root access. Any setuid binaries
-	 * will be run without elevated access.
-	 *
-	 * @since 1.31
-	 */
-	public const NO_ROOT = 1;
-
-	/**
-	 * Use seccomp to block dangerous syscalls
-	 * @see <https://en.wikipedia.org/wiki/seccomp>
-	 *
-	 * @since 1.31
-	 */
-	public const SECCOMP = 2;
-
-	/**
-	 * Create a private /dev
-	 *
-	 * @since 1.31
-	 */
-	public const PRIVATE_DEV = 4;
-
-	/**
-	 * Restrict the request to have no
-	 * network access
-	 *
-	 * @since 1.31
-	 */
-	public const NO_NETWORK = 8;
-
-	/**
-	 * Deny execve syscall with seccomp
-	 * @see <https://en.wikipedia.org/wiki/exec_(system_call)>
-	 *
-	 * @since 1.31
-	 */
-	public const NO_EXECVE = 16;
-
-	/**
-	 * Deny access to LocalSettings.php (MW_CONFIG_FILE)
-	 *
-	 * @since 1.31
-	 */
-	public const NO_LOCALSETTINGS = 32;
-
-	/**
-	 * Apply a default set of restrictions for improved
-	 * security out of the box.
-	 *
-	 * @note This value will change over time to provide increased security
-	 *       by default, and is not guaranteed to be backwards-compatible.
-	 * @since 1.31
-	 */
-	public const RESTRICT_DEFAULT = self::NO_ROOT | self::SECCOMP | self::PRIVATE_DEV |
-									self::NO_LOCALSETTINGS;
-
-	/**
-	 * Don't apply any restrictions
-	 *
-	 * @since 1.31
-	 */
-	public const RESTRICT_NONE = 0;
-
-	/**
 	 * Returns a new instance of Command class
 	 *
-	 * @note You should check Shell::isDisabled() before calling this
-	 * @param string|string[] ...$commands String or array of strings representing the command to
+	 * @param string|string[] $command String or array of strings representing the command to
 	 * be executed, each value will be escaped.
 	 *   Example:   [ 'convert', '-font', 'font name' ] would produce "'convert' '-font' 'font name'"
 	 * @return Command
 	 */
-	public static function command( ...$commands ): Command {
-		if ( count( $commands ) === 1 && is_array( reset( $commands ) ) ) {
+	public static function command( $command ) {
+		$args = func_get_args();
+		if ( count( $args ) === 1 && is_array( reset( $args ) ) ) {
 			// If only one argument has been passed, and that argument is an array,
 			// treat it as a list of arguments
-			$commands = reset( $commands );
+			$args = reset( $args );
 		}
 		$command = MediaWikiServices::getInstance()
 			->getShellCommandFactory()
 			->create();
 
-		return $command->params( $commands );
+		return $command->params( $args );
 	}
 
 	/**
@@ -134,12 +67,12 @@ class Shell {
 	 *
 	 * @return bool
 	 */
-	public static function isDisabled(): bool {
+	public static function isDisabled() {
 		static $disabled = null;
 
-		if ( $disabled === null ) {
+		if ( is_null( $disabled ) ) {
 			if ( !function_exists( 'proc_open' ) ) {
-				wfDebug( "proc_open() is disabled" );
+				wfDebug( "proc_open() is disabled\n" );
 				$disabled = true;
 			} else {
 				$disabled = false;
@@ -156,11 +89,12 @@ class Shell {
 	 * (https://bugs.php.net/bug.php?id=26285) and the locale problems on Linux in
 	 * PHP 5.2.6+ (bug backported to earlier distro releases of PHP).
 	 *
-	 * @param string|string[] ...$args strings to escape and glue together, or a single
-	 *     array of strings parameter. Null values are ignored.
+	 * @param string $args,... strings to escape and glue together, or a single array of
+	 *     strings parameter. Null values are ignored.
 	 * @return string
 	 */
-	public static function escape( ...$args ): string {
+	public static function escape( /* ... */ ) {
+		$args = func_get_args();
 		if ( count( $args ) === 1 && is_array( reset( $args ) ) ) {
 			// If only one argument has been passed, and that argument is an array,
 			// treat it as a list of arguments
@@ -181,12 +115,14 @@ class Shell {
 
 			if ( wfIsWindows() ) {
 				// Escaping for an MSVC-style command line parser and CMD.EXE
+				// @codingStandardsIgnoreStart For long URLs
 				// Refs:
 				//  * https://web.archive.org/web/20020708081031/http://mailman.lyra.org/pipermail/scite-interest/2002-March/000436.html
 				//  * https://technet.microsoft.com/en-us/library/cc723564.aspx
 				//  * T15518
 				//  * CR r63214
 				// Double the backslashes before any double quotes. Escape the double quotes.
+				// @codingStandardsIgnoreEnd
 				$tokens = preg_split( '/(\\\\*")/', $arg, -1, PREG_SPLIT_DELIM_CAPTURE );
 				$arg = '';
 				$iteration = 0;
@@ -217,37 +153,5 @@ class Shell {
 			}
 		}
 		return $retVal;
-	}
-
-	/**
-	 * Generate a Command object to run a MediaWiki CLI script.
-	 * Note that $parameters should be a flat array and an option with an argument
-	 * should consist of two consecutive items in the array (do not use "--option value").
-	 *
-	 * @note You should check Shell::isDisabled() before calling this
-	 * @param string $script MediaWiki CLI script with full path
-	 * @param string[] $parameters Arguments and options to the script
-	 * @param array $options Associative array of options:
-	 *     'php': The path to the php executable
-	 *     'wrapper': Path to a PHP wrapper to handle the maintenance script
-	 * @phan-param array{php?:string,wrapper?:string} $options
-	 * @return Command
-	 */
-	public static function makeScriptCommand(
-		string $script, array $parameters, $options = []
-	): Command {
-		global $wgPhpCli;
-		// Give site config file a chance to run the script in a wrapper.
-		// The caller may likely want to call wfBasename() on $script.
-		Hooks::runner()->onWfShellWikiCmd( $script, $parameters, $options );
-		$cmd = [ $options['php'] ?? $wgPhpCli ];
-		if ( isset( $options['wrapper'] ) ) {
-			$cmd[] = $options['wrapper'];
-		}
-		$cmd[] = $script;
-
-		return self::command( $cmd )
-			->params( $parameters )
-			->restrict( self::RESTRICT_DEFAULT & ~self::NO_LOCALSETTINGS );
 	}
 }

@@ -21,8 +21,6 @@
  * @ingroup Maintenance
  */
 
-use MediaWiki\MediaWikiServices;
-
 require_once __DIR__ . '/Maintenance.php';
 
 /**
@@ -57,9 +55,8 @@ class CopyFileBackend extends Maintenance {
 	}
 
 	public function execute() {
-		$backendGroup = MediaWikiServices::getInstance()->getFileBackendGroup();
-		$src = $backendGroup->get( $this->getOption( 'src' ) );
-		$dst = $backendGroup->get( $this->getOption( 'dst' ) );
+		$src = FileBackendGroup::singleton()->get( $this->getOption( 'src' ) );
+		$dst = FileBackendGroup::singleton()->get( $this->getOption( 'dst' ) );
 		$containers = explode( '|', $this->getOption( 'containers' ) );
 		$subDir = rtrim( $this->getOption( 'subdir', '' ), '/' );
 
@@ -84,7 +81,7 @@ class CopyFileBackend extends Maintenance {
 					'adviseStat' => true // avoid HEADs
 				] );
 				if ( $srcPathsRel === null ) {
-					$this->fatalError( "Could not list files in $container." );
+					$this->error( "Could not list files in $container.", 1 ); // die
 				}
 			}
 
@@ -96,7 +93,7 @@ class CopyFileBackend extends Maintenance {
 					'adviseStat' => true // avoid HEADs
 				] );
 				if ( $dstPathsRel === null ) {
-					$this->fatalError( "Could not list files in $container." );
+					$this->error( "Could not list files in $container.", 1 ); // die
 				}
 				$this->statCache = [];
 				foreach ( $dstPathsRel as $dstPathRel ) {
@@ -112,11 +109,11 @@ class CopyFileBackend extends Maintenance {
 			foreach ( $srcPathsRel as $srcPathRel ) {
 				// Check up on the rate file periodically to adjust the concurrency
 				if ( $rateFile && ( !$count || ( $count % 500 ) == 0 ) ) {
-					$this->setBatchSize( max( 1, (int)file_get_contents( $rateFile ) ) );
-					$this->output( "\tBatch size is now {$this->getBatchSize()}.\n" );
+					$this->mBatchSize = max( 1, (int)file_get_contents( $rateFile ) );
+					$this->output( "\tBatch size is now {$this->mBatchSize}.\n" );
 				}
 				$batchPaths[$srcPathRel] = 1; // remove duplicates
-				if ( count( $batchPaths ) >= $this->getBatchSize() ) {
+				if ( count( $batchPaths ) >= $this->mBatchSize ) {
 					$this->copyFileBatch( array_keys( $batchPaths ), $backendRel, $src, $dst );
 					$batchPaths = []; // done
 				}
@@ -124,6 +121,7 @@ class CopyFileBackend extends Maintenance {
 			}
 			if ( count( $batchPaths ) ) { // left-overs
 				$this->copyFileBatch( array_keys( $batchPaths ), $backendRel, $src, $dst );
+				$batchPaths = []; // done
 			}
 			$this->output( "\tCopied $count file(s).\n" );
 
@@ -138,11 +136,11 @@ class CopyFileBackend extends Maintenance {
 				foreach ( $delPathsRel as $delPathRel ) {
 					// Check up on the rate file periodically to adjust the concurrency
 					if ( $rateFile && ( !$count || ( $count % 500 ) == 0 ) ) {
-						$this->setBatchSize( max( 1, (int)file_get_contents( $rateFile ) ) );
-						$this->output( "\tBatch size is now {$this->getBatchSize()}.\n" );
+						$this->mBatchSize = max( 1, (int)file_get_contents( $rateFile ) );
+						$this->output( "\tBatch size is now {$this->mBatchSize}.\n" );
 					}
 					$batchPaths[$delPathRel] = 1; // remove duplicates
-					if ( count( $batchPaths ) >= $this->getBatchSize() ) {
+					if ( count( $batchPaths ) >= $this->mBatchSize ) {
 						$this->delFileBatch( array_keys( $batchPaths ), $backendRel, $dst );
 						$batchPaths = []; // done
 					}
@@ -150,6 +148,7 @@ class CopyFileBackend extends Maintenance {
 				}
 				if ( count( $batchPaths ) ) { // left-overs
 					$this->delFileBatch( array_keys( $batchPaths ), $backendRel, $dst );
+					$batchPaths = []; // done
 				}
 
 				$this->output( "\tDeleted $count file(s).\n" );
@@ -169,18 +168,18 @@ class CopyFileBackend extends Maintenance {
 	 * @param FileBackend $src
 	 * @param FileBackend $dst
 	 * @param string $backendRel
-	 * @return string[] (rel paths in $src minus those in $dst)
+	 * @return array (rel paths in $src minus those in $dst)
 	 */
 	protected function getListingDiffRel( FileBackend $src, FileBackend $dst, $backendRel ) {
 		$srcPathsRel = $src->getFileList( [
 			'dir' => $src->getRootStoragePath() . "/$backendRel" ] );
 		if ( $srcPathsRel === null ) {
-			$this->fatalError( "Could not list files in source container." );
+			$this->error( "Could not list files in source container.", 1 ); // die
 		}
 		$dstPathsRel = $dst->getFileList( [
 			'dir' => $dst->getRootStoragePath() . "/$backendRel" ] );
 		if ( $dstPathsRel === null ) {
-			$this->fatalError( "Could not list files in destination container." );
+			$this->error( "Could not list files in destination container.", 1 ); // die
 		}
 		// Get the list of destination files
 		$relFilesDstSha1 = [];
@@ -201,7 +200,7 @@ class CopyFileBackend extends Maintenance {
 	}
 
 	/**
-	 * @param string[] $srcPathsRel
+	 * @param array $srcPathsRel
 	 * @param string $backendRel
 	 * @param FileBackend $src
 	 * @param FileBackend $dst
@@ -213,7 +212,7 @@ class CopyFileBackend extends Maintenance {
 		$ops = [];
 		$fsFiles = [];
 		$copiedRel = []; // for output message
-		$domainId = $src->getDomainId();
+		$wikiId = $src->getWikiId();
 
 		// Download the batch of source files into backend cache...
 		if ( $this->hasOption( 'missingonly' ) ) {
@@ -233,7 +232,7 @@ class CopyFileBackend extends Maintenance {
 			$srcPath = $src->getRootStoragePath() . "/$backendRel/$srcPathRel";
 			$dstPath = $dst->getRootStoragePath() . "/$backendRel/$srcPathRel";
 			if ( $this->hasOption( 'utf8only' ) && !mb_check_encoding( $srcPath, 'UTF-8' ) ) {
-				$this->error( "$domainId: Detected illegal (non-UTF8) path for $srcPath." );
+				$this->error( "$wikiId: Detected illegal (non-UTF8) path for $srcPath." );
 				continue;
 			} elseif ( !$this->hasOption( 'missingonly' )
 				&& $this->filesAreSame( $src, $dst, $srcPath, $dstPath )
@@ -247,24 +246,24 @@ class CopyFileBackend extends Maintenance {
 			if ( !$fsFile ) {
 				$src->clearCache( [ $srcPath ] );
 				if ( $src->fileExists( [ 'src' => $srcPath, 'latest' => 1 ] ) === false ) {
-					$this->error( "$domainId: File '$srcPath' was listed but does not exist." );
+					$this->error( "$wikiId: File '$srcPath' was listed but does not exist." );
 				} else {
-					$this->error( "$domainId: Could not get local copy of $srcPath." );
+					$this->error( "$wikiId: Could not get local copy of $srcPath." );
 				}
 				continue;
 			} elseif ( !$fsFile->exists() ) {
 				// FSFileBackends just return the path for getLocalReference() and paths with
 				// illegal slashes may get normalized to a different path. This can cause the
 				// local reference to not exist...skip these broken files.
-				$this->error( "$domainId: Detected possible illegal path for $srcPath." );
+				$this->error( "$wikiId: Detected possible illegal path for $srcPath." );
 				continue;
 			}
 			$fsFiles[] = $fsFile; // keep TempFSFile objects alive as needed
 			// Note: prepare() is usually fast for key/value backends
 			$status = $dst->prepare( [ 'dir' => dirname( $dstPath ), 'bypassReadOnly' => 1 ] );
 			if ( !$status->isOK() ) {
-				$this->error( Status::wrap( $status )->getMessage( false, false, 'en' )->text() );
-				$this->fatalError( "$domainId: Could not copy $srcPath to $dstPath." );
+				$this->error( print_r( $status->getErrorsArray(), true ) );
+				$this->error( "$wikiId: Could not copy $srcPath to $dstPath.", 1 ); // die
 			}
 			$ops[] = [ 'op' => 'store',
 				'src' => $fsFile->getPath(), 'dst' => $dstPath, 'overwrite' => 1 ];
@@ -280,8 +279,8 @@ class CopyFileBackend extends Maintenance {
 		}
 		$elapsed_ms = floor( ( microtime( true ) - $t_start ) * 1000 );
 		if ( !$status->isOK() ) {
-			$this->error( Status::wrap( $status )->getMessage( false, false, 'en' )->text() );
-			$this->fatalError( "$domainId: Could not copy file batch." );
+			$this->error( print_r( $status->getErrorsArray(), true ) );
+			$this->error( "$wikiId: Could not copy file batch.", 1 ); // die
 		} elseif ( count( $copiedRel ) ) {
 			$this->output( "\n\tCopied these file(s) [{$elapsed_ms}ms]:\n\t" .
 				implode( "\n\t", $copiedRel ) . "\n\n" );
@@ -289,7 +288,7 @@ class CopyFileBackend extends Maintenance {
 	}
 
 	/**
-	 * @param string[] $dstPathsRel
+	 * @param array $dstPathsRel
 	 * @param string $backendRel
 	 * @param FileBackend $dst
 	 * @return void
@@ -299,7 +298,7 @@ class CopyFileBackend extends Maintenance {
 	) {
 		$ops = [];
 		$deletedRel = []; // for output message
-		$domainId = $dst->getDomainId();
+		$wikiId = $dst->getWikiId();
 
 		// Determine what files need to be copied over...
 		foreach ( $dstPathsRel as $dstPathRel ) {
@@ -317,8 +316,8 @@ class CopyFileBackend extends Maintenance {
 		}
 		$elapsed_ms = floor( ( microtime( true ) - $t_start ) * 1000 );
 		if ( !$status->isOK() ) {
-			$this->error( Status::wrap( $status )->getMessage( false, false, 'en' )->text() );
-			$this->fatalError( "$domainId: Could not delete file batch." );
+			$this->error( print_r( $status->getErrorsArray(), true ) );
+			$this->error( "$wikiId: Could not delete file batch.", 1 ); // die
 		} elseif ( count( $deletedRel ) ) {
 			$this->output( "\n\tDeleted these file(s) [{$elapsed_ms}ms]:\n\t" .
 				implode( "\n\t", $deletedRel ) . "\n\n" );
@@ -338,7 +337,9 @@ class CopyFileBackend extends Maintenance {
 		$dPathSha1 = sha1( $dPath );
 		if ( $this->statCache !== null ) {
 			// All dst files are already in stat cache
-			$dstStat = $this->statCache[$dPathSha1] ?? false;
+			$dstStat = isset( $this->statCache[$dPathSha1] )
+				? $this->statCache[$dPathSha1]
+				: false;
 		} else {
 			$dstStat = $dst->getFileStat( [ 'src' => $dPath ] );
 		}
@@ -361,7 +362,6 @@ class CopyFileBackend extends Maintenance {
 			// backends in FileBackendMultiWrite (since they get writes second, they have
 			// higher timestamps). However, when copying the other way, this hits loads of
 			// false positives (possibly 100%) and wastes a bunch of time on GETs/PUTs.
-			// @phan-suppress-next-line PhanTypeArraySuspiciousNullable
 			$same = ( $srcStat['mtime'] <= $dstStat['mtime'] );
 		} else {
 			// This is the slowest method which does many per-file HEADs (unless an object
@@ -374,5 +374,5 @@ class CopyFileBackend extends Maintenance {
 	}
 }
 
-$maintClass = CopyFileBackend::class;
+$maintClass = 'CopyFileBackend';
 require_once RUN_MAINTENANCE_IF_MAIN;

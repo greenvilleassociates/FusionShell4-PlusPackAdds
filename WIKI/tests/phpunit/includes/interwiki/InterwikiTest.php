@@ -1,5 +1,4 @@
 <?php
-
 use MediaWiki\MediaWikiServices;
 
 /**
@@ -8,7 +7,7 @@ use MediaWiki\MediaWikiServices;
  * @group MediaWiki
  * @group Database
  */
-class InterwikiTest extends MediaWikiIntegrationTestCase {
+class InterwikiTest extends MediaWikiTestCase {
 
 	public function testConstructor() {
 		$interwiki = new Interwiki(
@@ -51,11 +50,14 @@ class InterwikiTest extends MediaWikiIntegrationTestCase {
 	}
 
 	private function setWgInterwikiCache( $interwikiCache ) {
+		$this->overrideMwServices();
 		MediaWikiServices::getInstance()->resetServiceForTesting( 'InterwikiLookup' );
 		$this->setMwGlobals( 'wgInterwikiCache', $interwikiCache );
 	}
 
 	public function testDatabaseStorage() {
+		$this->markTestSkipped( 'Needs I37b8e8018b3 <https://gerrit.wikimedia.org/r/#/c/270555/>' );
+
 		// NOTE: database setup is expensive, so we only do
 		//  it once and run all the tests in one go.
 		$dewiki = [
@@ -104,7 +106,7 @@ class InterwikiTest extends MediaWikiIntegrationTestCase {
 		$this->assertFalse( $interwikiLookup->fetch( 'xyz' ), 'unknown prefix' );
 
 		$interwiki = $interwikiLookup->fetch( 'de' );
-		$this->assertInstanceOf( Interwiki::class, $interwiki );
+		$this->assertInstanceOf( 'Interwiki', $interwiki );
 		$this->assertSame( $interwiki, $interwikiLookup->fetch( 'de' ), 'in-process caching' );
 
 		$this->assertSame( 'http://de.wikipedia.org/wiki/', $interwiki->getURL(), 'getURL' );
@@ -113,7 +115,7 @@ class InterwikiTest extends MediaWikiIntegrationTestCase {
 		$this->assertSame( true, $interwiki->isLocal(), 'isLocal' );
 		$this->assertSame( false, $interwiki->isTranscludable(), 'isTranscludable' );
 
-		$interwikiLookup->invalidateCache( 'de' );
+		Interwiki::invalidateCache( 'de' );
 		$this->assertNotSame( $interwiki, $interwikiLookup->fetch( 'de' ), 'invalidate cache' );
 	}
 

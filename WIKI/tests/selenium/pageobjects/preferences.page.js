@@ -1,13 +1,13 @@
 'use strict';
-
-const Page = require( 'wdio-mediawiki/Page' );
+const Page = require( './page' );
 
 class PreferencesPage extends Page {
-	get realName() { return $( '#mw-input-wprealname' ); }
-	get save() { return $( '#prefcontrol' ); }
+
+	get realName() { return browser.element( '#mw-input-wprealname' ); }
+	get save() { return browser.element( '#prefcontrol' ); }
 
 	open() {
-		super.openTitle( 'Special:Preferences' );
+		super.open( 'Special:Preferences' );
 	}
 
 	changeRealName( realName ) {
@@ -15,6 +15,6 @@ class PreferencesPage extends Page {
 		this.realName.setValue( realName );
 		this.save.click();
 	}
-}
 
+}
 module.exports = new PreferencesPage();

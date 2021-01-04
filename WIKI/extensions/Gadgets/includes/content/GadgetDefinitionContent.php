@@ -84,7 +84,6 @@ class GadgetDefinitionContent extends JsonContent {
 	 * all fields filled out, populating defaults as necessary.
 	 *
 	 * @return array
-	 * @suppress PhanUndeclaredMethod
 	 */
 	public function getAssocArray() {
 		$info = wfObjectToArray( $this->getData()->getValue() );
@@ -97,21 +96,21 @@ class GadgetDefinitionContent extends JsonContent {
 
 	/**
 	 * @param WikiPage $page
-	 * @param ParserOutput|null $parserOutput
-	 * @return DeferrableUpdate[]
+	 * @param ParserOutput $parserOutput
+	 * @return DataUpdate[]
 	 */
 	public function getDeletionUpdates( WikiPage $page, ParserOutput $parserOutput = null ) {
 		return array_merge(
 			parent::getDeletionUpdates( $page, $parserOutput ),
-			[ new GadgetDefinitionDeletionUpdate( $page->getTitle() ) ]
+			[ new GadgetDefinitionDeletionUpdate( $page->getTitle()->getText() ) ]
 		);
 	}
 
 	/**
 	 * @param Title $title
-	 * @param Content|null $old
+	 * @param Content $old
 	 * @param bool $recursive
-	 * @param ParserOutput|null $parserOutput
+	 * @param ParserOutput $parserOutput
 	 * @return DataUpdate[]
 	 */
 	public function getSecondaryDataUpdates( Title $title, Content $old = null,
@@ -119,7 +118,7 @@ class GadgetDefinitionContent extends JsonContent {
 	) {
 		return array_merge(
 			parent::getSecondaryDataUpdates( $title, $old, $recursive, $parserOutput ),
-			[ new GadgetDefinitionSecondaryDataUpdate( $title ) ]
+			[ new GadgetDefinitionSecondaryDataUpdate( $title->getText() ) ]
 		);
 	}
 }

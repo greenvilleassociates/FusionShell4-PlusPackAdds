@@ -21,9 +21,6 @@
 /**
  * MediaWiki exception
  *
- * @newable
- * @stable to extend
- *
  * @ingroup Exception
  */
 class MWException extends Exception {
@@ -36,15 +33,11 @@ class MWException extends Exception {
 		return $this->useMessageCache() &&
 		!empty( $GLOBALS['wgFullyInitialised'] ) &&
 		!empty( $GLOBALS['wgOut'] ) &&
-		!defined( 'MEDIAWIKI_INSTALL' ) &&
-		// Don't send a skinned HTTP 500 page to API clients.
-		!defined( 'MW_API' );
+		!defined( 'MEDIAWIKI_INSTALL' );
 	}
 
 	/**
 	 * Whether to log this exception in the exception debug log.
-	 *
-	 * @stable to override
 	 *
 	 * @since 1.23
 	 * @return bool
@@ -56,17 +49,18 @@ class MWException extends Exception {
 	/**
 	 * Can the extension use the Message class/wfMessage to get i18n-ed messages?
 	 *
-	 * @stable to override
-	 *
 	 * @return bool
 	 */
 	public function useMessageCache() {
+		global $wgLang;
+
 		foreach ( $this->getTrace() as $frame ) {
-			if ( isset( $frame['class'] ) && $frame['class'] === LocalisationCache::class ) {
+			if ( isset( $frame['class'] ) && $frame['class'] === 'LocalisationCache' ) {
 				return false;
 			}
 		}
-		return true;
+
+		return $wgLang instanceof Language;
 	}
 
 	/**
@@ -75,37 +69,25 @@ class MWException extends Exception {
 	 * @param string $key Message name
 	 * @param string $fallback Default message if the message cache can't be
 	 *                  called by the exception
-	 * @param mixed ...$params To pass to wfMessage()
+	 * The function also has other parameters that are arguments for the message
 	 * @return string Message with arguments replaced
 	 */
-	public function msg( $key, $fallback, ...$params ) {
-		global $wgSitename;
+	public function msg( $key, $fallback /*[, params...] */ ) {
+		$args = array_slice( func_get_args(), 2 );
 
-		// FIXME: Keep logic in sync with MWExceptionRenderer::msg.
-		$res = false;
 		if ( $this->useMessageCache() ) {
 			try {
-				$res = wfMessage( $key, ...$params )->text();
+				return wfMessage( $key, $args )->text();
 			} catch ( Exception $e ) {
 			}
 		}
-		if ( $res === false ) {
-			$res = wfMsgReplaceArgs( $fallback, $params );
-			// If an exception happens inside message rendering,
-			// {{SITENAME}} sometimes won't be replaced.
-			$res = strtr( $res, [
-				'{{SITENAME}}' => $wgSitename,
-			] );
-		}
-		return $res;
+		return wfMsgReplaceArgs( $fallback, $args );
 	}
 
 	/**
 	 * If $wgShowExceptionDetails is true, return a HTML message with a
 	 * backtrace to the error, otherwise show a message to ask to set it to true
 	 * to show that information.
-	 *
-	 * @stable to override
 	 *
 	 * @return string Html to output
 	 */
@@ -120,7 +102,7 @@ class MWException extends Exception {
 		} else {
 			$logId = WebRequest::getRequestId();
 			$type = static::class;
-			return Html::errorBox(
+			return "<div class=\"errorbox\">" .
 			htmlspecialchars(
 				'[' . $logId . '] ' .
 				gmdate( 'Y-m-d H:i:s' ) . ": " .
@@ -128,9 +110,9 @@ class MWException extends Exception {
 					"Fatal exception of type $1",
 					$type,
 					$logId,
-					MWExceptionHandler::getURL()
+					MWExceptionHandler::getURL( $this )
 				)
-			) ) .
+			) . "</div>\n" .
 			"<!-- Set \$wgShowExceptionDetails = true; " .
 			"at the bottom of LocalSettings.php to show detailed " .
 			"debugging information. -->";
@@ -141,8 +123,6 @@ class MWException extends Exception {
 	 * Get the text to display when reporting the error on the command line.
 	 * If $wgShowExceptionDetails is true, return a text message with a
 	 * backtrace to the error.
-	 *
-	 * @stable to override
 	 *
 	 * @return string
 	 */
@@ -161,8 +141,6 @@ class MWException extends Exception {
 	/**
 	 * Return the title of the page when reporting this error in a HTTP response.
 	 *
-	 * @stable to override
-	 *
 	 * @return string
 	 */
 	public function getPageTitle() {
@@ -171,22 +149,11 @@ class MWException extends Exception {
 
 	/**
 	 * Output the exception report using HTML.
-	 * @stable to override
 	 */
 	public function reportHTML() {
 		global $wgOut, $wgSitename;
 		if ( $this->useOutputPage() ) {
 			$wgOut->prepareErrorPage( $this->getPageTitle() );
-			// Manually set the html title, since sometimes
-			// {{SITENAME}} does not get replaced for exceptions
-			// happening inside message rendering.
-			$wgOut->setHTMLTitle(
-				$this->msg(
-					'pagetitle',
-					"$1 - $wgSitename",
-					$this->getPageTitle()
-				)
-			);
 
 			$wgOut->addHTML( $this->getHTML() );
 
@@ -211,39 +178,27 @@ class MWException extends Exception {
 	/**
 	 * Output a report about the exception and takes care of formatting.
 	 * It will be either HTML or plain text based on isCommandLine().
-	 *
-	 * @stable to override
 	 */
 	public function report() {
 		global $wgMimeType;
 
 		if ( defined( 'MW_API' ) ) {
+			// Unhandled API exception, we can't be sure that format printer is alive
 			self::header( 'MediaWiki-API-Error: internal_api_error_' . static::class );
-		}
-
-		if ( self::isCommandLine() ) {
+			wfHttpError( 500, 'Internal Server Error', $this->getText() );
+		} elseif ( self::isCommandLine() ) {
 			$message = $this->getText();
-			$this->writeToCommandLine( $message );
+			// T17602: STDERR may not be available
+			if ( defined( 'STDERR' ) ) {
+				fwrite( STDERR, $message );
+			} else {
+				echo $message;
+			}
 		} else {
 			self::statusHeader( 500 );
 			self::header( "Content-Type: $wgMimeType; charset=utf-8" );
 
 			$this->reportHTML();
-		}
-	}
-
-	/**
-	 * Write a message to stderr falling back to stdout if stderr unavailable
-	 *
-	 * @param string $message
-	 * @suppress SecurityCheck-XSS
-	 */
-	private function writeToCommandLine( $message ) {
-		// T17602: STDERR may not be available
-		if ( !defined( 'MW_PHPUNIT_TEST' ) && defined( 'STDERR' ) ) {
-			fwrite( STDERR, $message );
-		} else {
-			echo $message;
 		}
 	}
 
@@ -267,7 +222,6 @@ class MWException extends Exception {
 			header( $header );
 		}
 	}
-
 	private static function statusHeader( $code ) {
 		if ( !headers_sent() ) {
 			HttpStatus::header( $code );

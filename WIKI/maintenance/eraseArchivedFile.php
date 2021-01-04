@@ -21,8 +21,6 @@
  * @ingroup Maintenance
  */
 
-use MediaWiki\MediaWikiServices;
-
 require_once __DIR__ . '/Maintenance.php';
 
 /**
@@ -50,29 +48,26 @@ class EraseArchivedFile extends Maintenance {
 		$filekey = $this->getOption( 'filekey' );
 		$filename = $this->getOption( 'filename' );
 
-		if ( $filekey === '*' ) {
-			// all versions by name
+		if ( $filekey === '*' ) { // all versions by name
 			if ( !strlen( $filename ) ) {
-				$this->fatalError( "Missing --filename parameter." );
+				$this->error( "Missing --filename parameter.", 1 );
 			}
 			$afile = false;
-		} else {
-			// specified version
+		} else { // specified version
 			$dbw = $this->getDB( DB_MASTER );
-			$fileQuery = ArchivedFile::getQueryInfo();
-			$row = $dbw->selectRow( $fileQuery['tables'], $fileQuery['fields'],
+			$row = $dbw->selectRow( 'filearchive', '*',
 				[ 'fa_storage_group' => 'deleted', 'fa_storage_key' => $filekey ],
-				__METHOD__, [], $fileQuery['joins'] );
+				__METHOD__ );
 			if ( !$row ) {
-				$this->fatalError( "No deleted file exists with key '$filekey'." );
+				$this->error( "No deleted file exists with key '$filekey'.", 1 );
 			}
 			$filename = $row->fa_name;
 			$afile = ArchivedFile::newFromRow( $row );
 		}
 
-		$file = MediaWikiServices::getInstance()->getRepoGroup()->getLocalRepo()->newFile( $filename );
+		$file = wfLocalFile( $filename );
 		if ( $file->exists() ) {
-			$this->fatalError( "File '$filename' is still a public file, use the delete form.\n" );
+			$this->error( "File '$filename' is still a public file, use the delete form.\n", 1 );
 		}
 
 		$this->output( "Purging all thumbnails for file '$filename'..." );
@@ -90,10 +85,9 @@ class EraseArchivedFile extends Maintenance {
 
 	protected function scrubAllVersions( $name ) {
 		$dbw = $this->getDB( DB_MASTER );
-		$fileQuery = ArchivedFile::getQueryInfo();
-		$res = $dbw->select( $fileQuery['tables'], $fileQuery['fields'],
+		$res = $dbw->select( 'filearchive', '*',
 			[ 'fa_name' => $name, 'fa_storage_group' => 'deleted' ],
-			__METHOD__, [], $fileQuery['joins'] );
+			__METHOD__ );
 		foreach ( $res as $row ) {
 			$this->scrubVersion( ArchivedFile::newFromRow( $row ) );
 		}
@@ -103,7 +97,7 @@ class EraseArchivedFile extends Maintenance {
 		$key = $archivedFile->getStorageKey();
 		$name = $archivedFile->getName();
 		$ts = $archivedFile->getTimestamp();
-		$repo = MediaWikiServices::getInstance()->getRepoGroup()->getLocalRepo();
+		$repo = RepoGroup::singleton()->getLocalRepo();
 		$path = $repo->getZonePath( 'deleted' ) . '/' . $repo->getDeletedHashPath( $key ) . $key;
 		if ( $this->hasOption( 'delete' ) ) {
 			$status = $repo->getBackend()->delete( [ 'src' => $path ] );
@@ -111,7 +105,7 @@ class EraseArchivedFile extends Maintenance {
 				$this->output( "Deleted version '$key' ($ts) of file '$name'\n" );
 			} else {
 				$this->output( "Failed to delete version '$key' ($ts) of file '$name'\n" );
-				$this->output( print_r( Status::wrap( $status )->getErrorsArray(), true ) );
+				$this->output( print_r( $status->getErrorsArray(), true ) );
 			}
 		} else {
 			$this->output( "Would delete version '{$key}' ({$ts}) of file '$name'\n" );
@@ -119,5 +113,5 @@ class EraseArchivedFile extends Maintenance {
 	}
 }
 
-$maintClass = EraseArchivedFile::class;
+$maintClass = "EraseArchivedFile";
 require_once RUN_MAINTENANCE_IF_MAIN;

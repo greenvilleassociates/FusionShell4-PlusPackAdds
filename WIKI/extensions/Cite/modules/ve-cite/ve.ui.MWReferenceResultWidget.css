@@ -1,14 +1,14 @@
 /*!
  * VisualEditor MediaWiki UserInterface MWReferenceResultWidget styles.
  *
- * @copyright 2011-2018 VisualEditor Team's Cite sub-team and others; see AUTHORS.txt
- * @license MIT
+ * @copyright 2011-2017 Cite VisualEditor Team and others; see AUTHORS.txt
+ * @license The MIT License (MIT); see LICENSE.txt
  */
 
 .ve-ui-mwReferenceResultWidget {
 	position: relative;
 	padding: 1em;
-	border-bottom: 1px solid #eaecf0;
+	border-bottom: solid 1px #eee;
 }
 
 .ve-ui-mwReferenceResultWidget:last-child {

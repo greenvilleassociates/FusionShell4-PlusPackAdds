@@ -3,6 +3,8 @@
 /**
  * API for MediaWiki 1.14+
  *
+ * Created on Jun 18, 2012
+ *
  * Copyright © 2012 Wikimedia Foundation and contributors
  *
  * This program is free software; you can redistribute it and/or modify
@@ -22,7 +24,6 @@
  *
  * @file
  */
-
 use MediaWiki\MediaWikiServices;
 
 /**
@@ -31,7 +32,7 @@ use MediaWiki\MediaWikiServices;
  */
 class ApiSetNotificationTimestamp extends ApiBase {
 
-	private $mPageSet = null;
+	private $mPageSet;
 
 	public function execute() {
 		$user = $this->getUser();
@@ -74,12 +75,10 @@ class ApiSetNotificationTimestamp extends ApiBase {
 			if ( $params['entirewatchlist'] || $pageSet->getGoodTitleCount() > 1 ) {
 				$this->dieWithError( [ 'apierror-multpages', $this->encodeParamName( 'torevid' ) ] );
 			}
-			$titles = $pageSet->getGoodTitles();
-			$title = reset( $titles );
+			$title = reset( $pageSet->getGoodTitles() );
 			if ( $title ) {
-				// XXX $title isn't actually used, can we just get rid of the previous six lines?
-				$timestamp = MediaWikiServices::getInstance()->getRevisionStore()
-					->getTimestampFromId( $params['torevid'], IDBAccessObject::READ_LATEST );
+				$timestamp = Revision::getTimestampFromId(
+					$title, $params['torevid'], Revision::READ_LATEST );
 				if ( $timestamp ) {
 					$timestamp = $dbw->timestamp( $timestamp );
 				} else {
@@ -90,17 +89,14 @@ class ApiSetNotificationTimestamp extends ApiBase {
 			if ( $params['entirewatchlist'] || $pageSet->getGoodTitleCount() > 1 ) {
 				$this->dieWithError( [ 'apierror-multpages', $this->encodeParamName( 'newerthanrevid' ) ] );
 			}
-			$titles = $pageSet->getGoodTitles();
-			$title = reset( $titles );
+			$title = reset( $pageSet->getGoodTitles() );
 			if ( $title ) {
-				$timestamp = null;
-				$rl = MediaWikiServices::getInstance()->getRevisionLookup();
-				$currRev = $rl->getRevisionById( $params['newerthanrevid'], Title::READ_LATEST );
-				if ( $currRev ) {
-					$nextRev = $rl->getNextRevision( $currRev, Title::READ_LATEST );
-					if ( $nextRev ) {
-						$timestamp = $dbw->timestamp( $nextRev->getTimestamp() );
-					}
+				$revid = $title->getNextRevisionID(
+					$params['newerthanrevid'], Title::GAID_FOR_UPDATE );
+				if ( $revid ) {
+					$timestamp = $dbw->timestamp( Revision::getTimestampFromId( $title, $revid ) );
+				} else {
+					$timestamp = null;
 				}
 			}
 		}
@@ -110,9 +106,12 @@ class ApiSetNotificationTimestamp extends ApiBase {
 		$result = [];
 		if ( $params['entirewatchlist'] ) {
 			// Entire watchlist mode: Just update the thing and return a success indicator
-			$watchedItemStore->resetAllNotificationTimestampsForUser( $user, $timestamp );
+			$watchedItemStore->setNotificationTimestampsForUser(
+				$user,
+				$timestamp
+			);
 
-			$result['notificationtimestamp'] = $timestamp === null
+			$result['notificationtimestamp'] = is_null( $timestamp )
 				? ''
 				: wfTimestamp( TS_ISO_8601, $timestamp );
 		} else {
@@ -156,7 +155,7 @@ class ApiSetNotificationTimestamp extends ApiBase {
 					$ns = $title->getNamespace();
 					$dbkey = $title->getDBkey();
 					$r = [
-						'ns' => (int)$ns,
+						'ns' => intval( $ns ),
 						'title' => $title->getPrefixedText(),
 					];
 					if ( !$title->exists() ) {
@@ -190,7 +189,7 @@ class ApiSetNotificationTimestamp extends ApiBase {
 	 * @return ApiPageSet
 	 */
 	private function getPageSet() {
-		if ( $this->mPageSet === null ) {
+		if ( !isset( $this->mPageSet ) ) {
 			$this->mPageSet = new ApiPageSet( $this );
 		}
 

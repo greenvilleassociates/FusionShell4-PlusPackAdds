@@ -1,5 +1,7 @@
 <?php
 /**
+ * Purge all languages from the message cache.
+ *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
  * the Free Software Foundation; either version 2 of the License, or
@@ -19,28 +21,37 @@
  * @ingroup Maintenance
  */
 
-use MediaWiki\MediaWikiServices;
-
 require_once __DIR__ . '/Maintenance.php';
 
 /**
- * Maintenance script that purges cache used by MessageCache.
+ * Maintenance script that purges all languages from the message cache.
  *
  * @ingroup Maintenance
  */
 class RebuildMessages extends Maintenance {
 	public function __construct() {
 		parent::__construct();
-		$this->addDescription( 'Purge the MessageCache for all interface languages.' );
+		$this->addDescription( 'Purge all language messages from the cache' );
 	}
 
 	public function execute() {
-		$this->output( "Purging message cache for all languages on this wiki... " );
-		$messageCache = MediaWikiServices::getInstance()->getMessageCache();
-		$messageCache->clear();
-		$this->output( "Done\n" );
+		global $wgLocalDatabases, $wgDBname, $wgEnableSidebarCache, $messageMemc;
+		if ( $wgLocalDatabases ) {
+			$databases = $wgLocalDatabases;
+		} else {
+			$databases = [ $wgDBname ];
+		}
+
+		foreach ( $databases as $db ) {
+			$this->output( "Deleting message cache for {$db}... " );
+			$messageMemc->delete( "{$db}:messages" );
+			if ( $wgEnableSidebarCache ) {
+				$messageMemc->delete( "{$db}:sidebar" );
+			}
+			$this->output( "Deleted\n" );
+		}
 	}
 }
 
-$maintClass = RebuildMessages::class;
+$maintClass = "RebuildMessages";
 require_once RUN_MAINTENANCE_IF_MAIN;

@@ -1,7 +1,7 @@
 /*
  * Number-related utilities for mediawiki.language.
  */
-( function () {
+( function ( mw, $ ) {
 	/**
 	 * @class mw.language
 	 */
@@ -66,10 +66,9 @@
 	 * @private
 	 * @param {number} value the number to be formatted, ignores sign
 	 * @param {string} pattern the number portion of a pattern (e.g. `#,##0.00`)
-	 * @param {Object} [options] If provided, all option keys must be present:
+	 * @param {Object} [options] If provided, both option keys must be present:
 	 * @param {string} options.decimal The decimal separator. Defaults to: `'.'`.
 	 * @param {string} options.group The group separator. Defaults to: `','`.
-	 * @param {number|null} options.minimumGroupingDigits
 	 * @return {string}
 	 */
 	function commafyNumber( value, pattern, options ) {
@@ -144,22 +143,17 @@
 			}
 		}
 
-		if (
-			options.minimumGroupingDigits === null ||
-			valueParts[ 0 ].length >= groupSize + options.minimumGroupingDigits
-		) {
-			for ( whole = valueParts[ 0 ]; whole; ) {
-				off = groupSize ? whole.length - groupSize : 0;
-				pieces.push( ( off > 0 ) ? whole.slice( off ) : whole );
-				whole = ( off > 0 ) ? whole.slice( 0, off ) : '';
+		for ( whole = valueParts[ 0 ]; whole; ) {
+			off = groupSize ? whole.length - groupSize : 0;
+			pieces.push( ( off > 0 ) ? whole.slice( off ) : whole );
+			whole = ( off > 0 ) ? whole.slice( 0, off ) : '';
 
-				if ( groupSize2 ) {
-					groupSize = groupSize2;
-					groupSize2 = null;
-				}
+			if ( groupSize2 ) {
+				groupSize = groupSize2;
+				groupSize2 = null;
 			}
-			valueParts[ 0 ] = pieces.reverse().join( options.group );
 		}
+		valueParts[ 0 ] = pieces.reverse().join( options.group );
 
 		return valueParts.join( options.decimal );
 	}
@@ -179,8 +173,10 @@
 		for ( i = 0; i < arguments.length; i++ ) {
 			table = arguments[ i ];
 			for ( key in table ) {
-				// The thousand separator should be deleted
-				flipped[ table[ key ] ] = key === ',' ? '' : key;
+				if ( table.hasOwnProperty( key ) ) {
+					// The thousand separator should be deleted
+					flipped[ table[ key ] ] = key === ',' ? '' : key;
+				}
 			}
 		}
 
@@ -198,7 +194,7 @@
 		 */
 		convertNumber: function ( num, integer ) {
 			var transformTable, digitTransformTable, separatorTransformTable,
-				i, numberString, convertedNumber, pattern, minimumGroupingDigits;
+				i, numberString, convertedNumber, pattern;
 
 			// Quick shortcut for plain numbers
 			if ( integer && parseInt( num, 10 ) === num ) {
@@ -224,15 +220,13 @@
 				// When unformatting, we just use separatorTransformTable.
 				pattern = mw.language.getData( mw.config.get( 'wgUserLanguage' ),
 					'digitGroupingPattern' ) || '#,##0.###';
-				minimumGroupingDigits = mw.language.getData( mw.config.get( 'wgUserLanguage' ),
-					'minimumGroupingDigits' ) || null;
-				numberString = mw.language.commafy( num, pattern, minimumGroupingDigits );
+				numberString = mw.language.commafy( num, pattern );
 			}
 
 			if ( transformTable ) {
 				convertedNumber = '';
 				for ( i = 0; i < numberString.length; i++ ) {
-					if ( Object.prototype.hasOwnProperty.call( transformTable, numberString[ i ] ) ) {
+					if ( transformTable.hasOwnProperty( numberString[ i ] ) ) {
 						convertedNumber += transformTable[ numberString[ i ] ];
 					} else {
 						convertedNumber += numberString[ i ];
@@ -273,15 +267,14 @@
 		/**
 		 * Apply pattern to format value as a string.
 		 *
-		 * Using patterns from [Unicode TR35](https://www.unicode.org/reports/tr35/#Number_Format_Patterns).
+		 * Using patterns from [Unicode TR35](http://www.unicode.org/reports/tr35/#Number_Format_Patterns).
 		 *
 		 * @param {number} value
 		 * @param {string} pattern Pattern string as described by Unicode TR35
-		 * @param {number|null} [minimumGroupingDigits=null]
 		 * @throws {Error} If unable to find a number expression in `pattern`.
 		 * @return {string}
 		 */
-		commafy: function ( value, pattern, minimumGroupingDigits ) {
+		commafy: function ( value, pattern ) {
 			var numberPattern,
 				transformTable = mw.language.getSeparatorTransformTable(),
 				group = transformTable[ ',' ] || ',',
@@ -292,14 +285,12 @@
 
 			pattern = patternList[ ( value < 0 ) ? 1 : 0 ] || ( '-' + positivePattern );
 			numberPattern = positivePattern.match( numberPatternRE );
-			minimumGroupingDigits = minimumGroupingDigits !== undefined ? minimumGroupingDigits : null;
 
 			if ( !numberPattern ) {
 				throw new Error( 'unable to find a number expression in pattern: ' + pattern );
 			}
 
 			return pattern.replace( numberPatternRE, commafyNumber( value, numberPattern[ 0 ], {
-				minimumGroupingDigits: minimumGroupingDigits,
 				decimal: decimal,
 				group: group
 			} ) );
@@ -307,4 +298,4 @@
 
 	} );
 
-}() );
+}( mediaWiki, jQuery ) );

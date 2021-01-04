@@ -35,14 +35,8 @@ use WebRequest;
  */
 class CookieSessionProvider extends SessionProvider {
 
-	/** @var mixed[] */
 	protected $params = [];
-
-	/** @var mixed[] */
 	protected $cookieOptions = [];
-
-	/** @var bool */
-	protected $useCrossSiteCookies;
 
 	/**
 	 * @param array $params Keys include:
@@ -56,7 +50,6 @@ class CookieSessionProvider extends SessionProvider {
 	 *    - domain: Cookie domain, defaults to $wgCookieDomain
 	 *    - secure: Cookie secure flag, defaults to $wgCookieSecure
 	 *    - httpOnly: Cookie httpOnly flag, defaults to $wgCookieHttpOnly
-	 *    - sameSite: Cookie SameSite attribute, defaults to $wgCookieSameSite
 	 */
 	public function __construct( $params = [] ) {
 		parent::__construct();
@@ -98,17 +91,14 @@ class CookieSessionProvider extends SessionProvider {
 				$config->get( 'SessionName' ) ?: $config->get( 'CookiePrefix' ) . '_session',
 		];
 
-		$this->useCrossSiteCookies = strcasecmp( $config->get( 'CookieSameSite' ), 'none' ) === 0;
-
 		// @codeCoverageIgnoreStart
 		$this->cookieOptions += [
 			// @codeCoverageIgnoreEnd
 			'prefix' => $config->get( 'CookiePrefix' ),
 			'path' => $config->get( 'CookiePath' ),
 			'domain' => $config->get( 'CookieDomain' ),
-			'secure' => $config->get( 'CookieSecure' ) || $this->config->get( 'ForceHTTPS' ),
+			'secure' => $config->get( 'CookieSecure' ),
 			'httpOnly' => $config->get( 'CookieHttpOnly' ),
-			'sameSite' => $config->get( 'CookieSameSite' ),
 		];
 	}
 
@@ -210,15 +200,17 @@ class CookieSessionProvider extends SessionProvider {
 
 		// Legacy hook
 		if ( $this->params['callUserSetCookiesHook'] && !$user->isAnon() ) {
-			$this->getHookRunner()->onUserSetCookies( $user, $sessionData, $cookies );
+			\Hooks::run( 'UserSetCookies', [ $user, &$sessionData, &$cookies ] );
 		}
 
 		$options = $this->cookieOptions;
 
 		$forceHTTPS = $session->shouldForceHTTPS() || $user->requiresHTTPS();
 		if ( $forceHTTPS ) {
-			$options['secure'] = $this->config->get( 'CookieSecure' )
-				|| $this->config->get( 'ForceHTTPS' );
+			// Don't set the secure flag if the request came in
+			// over "http", for backwards compat.
+			// @todo Break that backwards compat properly.
+			$options['secure'] = $this->config->get( 'CookieSecure' );
 		}
 
 		$response->setCookie( $this->params['sessionName'], $session->getId(), null,
@@ -268,17 +260,14 @@ class CookieSessionProvider extends SessionProvider {
 	}
 
 	/**
-	 * Set the "forceHTTPS" cookie, unless $wgForceHTTPS prevents it.
-	 *
+	 * Set the "forceHTTPS" cookie
 	 * @param bool $set Whether the cookie should be set or not
 	 * @param SessionBackend|null $backend
 	 * @param WebRequest $request
 	 */
-	protected function setForceHTTPSCookie( $set, ?SessionBackend $backend, WebRequest $request ) {
-		if ( $this->config->get( 'ForceHTTPS' ) ) {
-			// No need to send a cookie if the wiki is always HTTPS (T256095)
-			return;
-		}
+	protected function setForceHTTPSCookie(
+		$set, SessionBackend $backend = null, WebRequest $request
+	) {
 		$response = $request->response();
 		if ( $set ) {
 			if ( $backend->shouldRememberUser() ) {
@@ -350,15 +339,11 @@ class CookieSessionProvider extends SessionProvider {
 	 * @param \WebRequest $request
 	 * @param string $key
 	 * @param string $prefix
-	 * @param mixed|null $default
+	 * @param mixed $default
 	 * @return mixed
 	 */
 	protected function getCookie( $request, $key, $prefix, $default = null ) {
-		if ( $this->useCrossSiteCookies ) {
-			$value = $request->getCrossSiteCookie( $key, $prefix, $default );
-		} else {
-			$value = $request->getCookie( $key, $prefix, $default );
-		}
+		$value = $request->getCookie( $key, $prefix, $default );
 		if ( $value === 'deleted' ) {
 			// PHP uses this value when deleting cookies. A legitimate cookie will never have
 			// this value (usernames start with uppercase, token is longer, other auth cookies

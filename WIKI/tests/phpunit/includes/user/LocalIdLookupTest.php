@@ -1,19 +1,19 @@
 <?php
 
-use MediaWiki\Block\DatabaseBlock;
-use MediaWiki\MediaWikiServices;
-
 /**
  * @covers LocalIdLookup
  * @group Database
  */
-class LocalIdLookupTest extends MediaWikiIntegrationTestCase {
+class LocalIdLookupTest extends MediaWikiTestCase {
 	private $localUsers = [];
 
-	protected function setUp() : void {
+	protected function setUp() {
+		global $wgGroupPermissions;
+
 		parent::setUp();
 
-		$this->setGroupPermissions( 'local-id-lookup-test', 'hideuser', true );
+		$this->stashMwGlobals( [ 'wgGroupPermissions' ] );
+		$wgGroupPermissions['local-id-lookup-test']['hideuser'] = true;
 	}
 
 	public function addDBData() {
@@ -23,7 +23,7 @@ class LocalIdLookupTest extends MediaWikiIntegrationTestCase {
 
 		$sysop = static::getTestSysop()->getUser();
 
-		$block = new DatabaseBlock( [
+		$block = new Block( [
 			'address' => $this->localUsers[2]->getName(),
 			'by' => $sysop->getId(),
 			'reason' => __METHOD__,
@@ -32,7 +32,7 @@ class LocalIdLookupTest extends MediaWikiIntegrationTestCase {
 		] );
 		$block->insert();
 
-		$block = new DatabaseBlock( [
+		$block = new Block( [
 			'address' => $this->localUsers[3]->getName(),
 			'by' => $sysop->getId(),
 			'reason' => __METHOD__,
@@ -48,12 +48,12 @@ class LocalIdLookupTest extends MediaWikiIntegrationTestCase {
 
 	public function testLookupCentralIds() {
 		$lookup = new LocalIdLookup();
-		$permissionManager = MediaWikiServices::getInstance()->getPermissionManager();
+
 		$user1 = $this->getLookupUser();
 		$user2 = User::newFromName( 'UTLocalIdLookup2' );
 
-		$this->assertTrue( $permissionManager->userHasRight( $user1, 'hideuser' ), 'sanity check' );
-		$this->assertFalse( $permissionManager->userHasRight( $user2, 'hideuser' ), 'sanity check' );
+		$this->assertTrue( $user1->isAllowed( 'hideuser' ), 'sanity check' );
+		$this->assertFalse( $user2->isAllowed( 'hideuser' ), 'sanity check' );
 
 		$this->assertSame( [], $lookup->lookupCentralIds( [] ) );
 
@@ -77,12 +77,11 @@ class LocalIdLookupTest extends MediaWikiIntegrationTestCase {
 
 	public function testLookupUserNames() {
 		$lookup = new LocalIdLookup();
-		$permissionManager = MediaWikiServices::getInstance()->getPermissionManager();
 		$user1 = $this->getLookupUser();
 		$user2 = User::newFromName( 'UTLocalIdLookup2' );
 
-		$this->assertTrue( $permissionManager->userHasRight( $user1, 'hideuser' ), 'sanity check' );
-		$this->assertFalse( $permissionManager->userHasRight( $user2, 'hideuser' ), 'sanity check' );
+		$this->assertTrue( $user1->isAllowed( 'hideuser' ), 'sanity check' );
+		$this->assertFalse( $user2->isAllowed( 'hideuser' ), 'sanity check' );
 
 		$this->assertSame( [], $lookup->lookupUserNames( [] ) );
 
@@ -128,8 +127,9 @@ class LocalIdLookupTest extends MediaWikiIntegrationTestCase {
 	 * @param bool $localDBSet $wgLocalDatabases contains the shared DB
 	 */
 	public function testIsAttachedShared( $sharedDB, $sharedTable, $localDBSet ) {
+		global $wgDBName;
 		$this->setMwGlobals( [
-			'wgSharedDB' => $sharedDB ? "dummy" : null,
+			'wgSharedDB' => $sharedDB ? $wgDBName : null,
 			'wgSharedTables' => $sharedTable ? [ 'user' ] : [],
 			'wgLocalDatabases' => $localDBSet ? [ 'shared' ] : [],
 		] );

@@ -21,7 +21,6 @@
 /**
  * MediaWiki exception thrown by some methods when the transform parameter array is invalid
  *
- * @newable
  * @ingroup Exception
  */
 class MediaTransformInvalidParametersException extends MWException {

@@ -32,10 +32,10 @@ require_once __DIR__ . '/Maintenance.php';
 class ResetUserEmail extends Maintenance {
 	public function __construct() {
 		$this->addDescription( "Resets a user's email" );
-		$this->addArg( 'user', 'Username or user ID, if starts with #' );
+		$this->addArg( 'user', 'Username or user ID, if starts with #', true );
 		$this->addArg( 'email', 'Email to assign' );
 
-		$this->addOption( 'no-reset-password', 'Don\'t reset the user\'s password' );
+		$this->addOption( 'no-reset-password', 'Don\'t reset the user\'s password', false, false );
 
 		parent::__construct();
 	}
@@ -48,12 +48,12 @@ class ResetUserEmail extends Maintenance {
 			$user = User::newFromName( $userName );
 		}
 		if ( !$user || !$user->getId() || !$user->loadFromId() ) {
-			$this->fatalError( "Error: user '$userName' does not exist\n" );
+			$this->error( "Error: user '$userName' does not exist\n", 1 );
 		}
 
 		$email = $this->getArg( 1 );
 		if ( !Sanitizer::validateEmail( $email ) ) {
-			$this->fatalError( "Error: email '$email' is not valid\n" );
+			$this->error( "Error: email '$email' is not valid\n", 1 );
 		}
 
 		// Code from https://wikitech.wikimedia.org/wiki/Password_reset
@@ -62,21 +62,11 @@ class ResetUserEmail extends Maintenance {
 		$user->saveSettings();
 
 		if ( !$this->hasOption( 'no-reset-password' ) ) {
-			// Kick whomever is currently controlling the account off if possible
-			$password = PasswordFactory::generateRandomPasswordString( 128 );
-			$status = $user->changeAuthenticationData( [
-				'username' => $user->getName(),
-				'password' => $password,
-				'retype' => $password,
-			] );
-			if ( !$status->isGood() ) {
-				$this->error( "Password couldn't be reset because:\n"
-					. $status->getMessage( null, null, 'en' )->text() );
-			}
+			// Kick whomever is currently controlling the account off
+			$user->setPassword( PasswordFactory::generateRandomPasswordString( 128 ) );
 		}
-		$this->output( "Done!\n" );
 	}
 }
 
-$maintClass = ResetUserEmail::class;
+$maintClass = 'ResetUserEmail';
 require_once RUN_MAINTENANCE_IF_MAIN;

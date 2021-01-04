@@ -18,12 +18,10 @@
  * @file
  */
 
-use MediaWiki\MediaWikiServices;
-
 require_once __DIR__ . '/Maintenance.php';
 
 class FindMissingFiles extends Maintenance {
-	public function __construct() {
+	function __construct() {
 		parent::__construct();
 
 		$this->addDescription( 'Find registered files with no corresponding file.' );
@@ -33,13 +31,12 @@ class FindMissingFiles extends Maintenance {
 		$this->setBatchSize( 300 );
 	}
 
-	public function execute() {
+	function execute() {
 		$lastName = $this->getOption( 'start', '' );
 
-		$repo = MediaWikiServices::getInstance()->getRepoGroup()->getLocalRepo();
+		$repo = RepoGroup::singleton()->getLocalRepo();
 		$dbr = $repo->getReplicaDB();
 		$be = $repo->getBackend();
-		$batchSize = $this->getBatchSize();
 
 		$mtime1 = $dbr->timestampOrNull( $this->getOption( 'mtimeafter', null ) );
 		$mtime2 = $dbr->timestampOrNull( $this->getOption( 'mtimebefore', null ) );
@@ -48,7 +45,7 @@ class FindMissingFiles extends Maintenance {
 		$joinConds = [];
 		if ( $mtime1 || $mtime2 ) {
 			$joinTables[] = 'page';
-			$joinConds['page'] = [ 'JOIN',
+			$joinConds['page'] = [ 'INNER JOIN',
 				[ 'page_title = img_name', 'page_namespace' => NS_FILE ] ];
 			$joinTables[] = 'logging';
 			$on = [ 'log_page = page_id', 'log_type' => [ 'upload', 'move', 'delete' ] ];
@@ -58,7 +55,7 @@ class FindMissingFiles extends Maintenance {
 			if ( $mtime2 ) {
 				$on[] = "log_timestamp < {$dbr->addQuotes($mtime2)}";
 			}
-			$joinConds['logging'] = [ 'JOIN', $on ];
+			$joinConds['logging'] = [ 'INNER JOIN', $on ];
 		}
 
 		do {
@@ -69,7 +66,7 @@ class FindMissingFiles extends Maintenance {
 				__METHOD__,
 				// DISTINCT causes a pointless filesort
 				[ 'ORDER BY' => 'name', 'GROUP BY' => 'name',
-					'LIMIT' => $batchSize ],
+					'LIMIT' => $this->mBatchSize ],
 				$joinConds
 			);
 
@@ -91,21 +88,20 @@ class FindMissingFiles extends Maintenance {
 			if ( count( $pathsByName ) ) {
 				$ores = $dbr->select( 'oldimage',
 					[ 'oi_name', 'oi_archive_name' ],
-					[ 'oi_name' => array_map( 'strval', array_keys( $pathsByName ) ) ],
+					[ 'oi_name' => array_keys( $pathsByName ) ],
 					__METHOD__
 				);
 
 				$checkPaths = [];
 				foreach ( $ores as $row ) {
 					if ( !strlen( $row->oi_archive_name ) ) {
-						// broken row
-						continue;
+						continue; // broken row
 					}
 					$file = $repo->newFromArchiveName( $row->oi_name, $row->oi_archive_name );
 					$checkPaths[] = $file->getPath();
 				}
 
-				foreach ( array_chunk( $checkPaths, $batchSize ) as $paths ) {
+				foreach ( array_chunk( $checkPaths, $this->mBatchSize ) as $paths ) {
 					$be->preloadFileStat( [ 'srcs' => $paths ] );
 					foreach ( $paths as $path ) {
 						if ( $be->fileExists( [ 'src' => $path ] ) === false ) {
@@ -114,9 +110,9 @@ class FindMissingFiles extends Maintenance {
 					}
 				}
 			}
-		} while ( $res->numRows() >= $batchSize );
+		} while ( $res->numRows() >= $this->mBatchSize );
 	}
 }
 
-$maintClass = FindMissingFiles::class;
+$maintClass = 'FindMissingFiles';
 require_once RUN_MAINTENANCE_IF_MAIN;

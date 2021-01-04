@@ -21,8 +21,6 @@
  * @ingroup SpecialPage
  */
 
-use MediaWiki\MediaWikiServices;
-
 /**
  * A form to make the database readonly (eg for maintenance purposes).
  *
@@ -76,15 +74,17 @@ class SpecialLockdb extends FormSpecialPage {
 	}
 
 	public function onSubmit( array $data ) {
+		global $wgContLang;
+
 		if ( !$data['Confirm'] ) {
 			return Status::newFatal( 'locknoconfirm' );
 		}
 
-		Wikimedia\suppressWarnings();
+		MediaWiki\suppressWarnings();
 		$fp = fopen( $this->getConfig()->get( 'ReadOnlyFile' ), 'w' );
-		Wikimedia\restoreWarnings();
+		MediaWiki\restoreWarnings();
 
-		if ( $fp === false ) {
+		if ( false === $fp ) {
 			# This used to show a file not found error, but the likeliest reason for fopen()
 			# to fail at this point is insufficient permission to write to the file...good old
 			# is_writable() is plain wrong in some cases, it seems...
@@ -92,11 +92,10 @@ class SpecialLockdb extends FormSpecialPage {
 		}
 		fwrite( $fp, $data['Reason'] );
 		$timestamp = wfTimestampNow();
-		$contLang = MediaWikiServices::getInstance()->getContentLanguage();
 		fwrite( $fp, "\n<p>" . $this->msg( 'lockedbyandtime',
 			$this->getUser()->getName(),
-			$contLang->date( $timestamp, false, false ),
-			$contLang->time( $timestamp, false, false )
+			$wgContLang->date( $timestamp, false, false ),
+			$wgContLang->time( $timestamp, false, false )
 		)->inContentLanguage()->text() . "</p>\n" );
 		fclose( $fp );
 

@@ -1,5 +1,9 @@
 <?php
 /**
+ *
+ *
+ * Created on Apr 15, 2012
+ *
  * Copyright © 2012 Szymon Świerkosz beau@adres.pl
  *
  * This program is free software; you can redistribute it and/or modify
@@ -20,8 +24,6 @@
  * @file
  */
 
-use MediaWiki\MediaWikiServices;
-
 /**
  * API module that facilitates the changing of user's preferences.
  * Requires API write mode to be enabled.
@@ -29,15 +31,11 @@ use MediaWiki\MediaWikiServices;
  * @ingroup API
  */
 class ApiOptions extends ApiBase {
-	/** @var User User account to modify */
-	private $userForUpdates;
-
 	/**
 	 * Changes preferences of the current user.
 	 */
 	public function execute() {
-		$user = $this->getUserForUpdates();
-		if ( !$user || $user->isAnon() ) {
+		if ( $this->getUser()->isAnon() ) {
 			$this->dieWithError(
 				[ 'apierror-mustbeloggedin', $this->msg( 'action-editmyoptions' ) ], 'notloggedin'
 			);
@@ -52,35 +50,35 @@ class ApiOptions extends ApiBase {
 			$this->dieWithError( [ 'apierror-missingparam', 'optionname' ] );
 		}
 
-		$resetKinds = $params['resetkinds'];
-		if ( !$params['reset'] ) {
-			$resetKinds = [];
+		// Load the user from the master to reduce CAS errors on double post (T95839)
+		$user = $this->getUser()->getInstanceForUpdate();
+		if ( !$user ) {
+			$this->dieWithError(
+				[ 'apierror-mustbeloggedin', $this->msg( 'action-editmyoptions' ) ], 'notloggedin'
+			);
 		}
 
-		$changes = [];
-		if ( $params['change'] ) {
-			foreach ( $params['change'] as $entry ) {
-				$array = explode( '=', $entry, 2 );
-				$changes[$array[0]] = $array[1] ?? null;
-			}
-		}
-		if ( isset( $params['optionname'] ) ) {
-			$newValue = $params['optionvalue'] ?? null;
-			$changes[$params['optionname']] = $newValue;
-		}
-
-		$this->getHookRunner()->onApiOptions( $this, $user, $changes, $resetKinds );
-
-		if ( $resetKinds ) {
-			$this->resetPreferences( $resetKinds );
+		if ( $params['reset'] ) {
+			$user->resetOptions( $params['resetkinds'], $this->getContext() );
 			$changed = true;
 		}
 
+		$changes = [];
+		if ( count( $params['change'] ) ) {
+			foreach ( $params['change'] as $entry ) {
+				$array = explode( '=', $entry, 2 );
+				$changes[$array[0]] = isset( $array[1] ) ? $array[1] : null;
+			}
+		}
+		if ( isset( $params['optionname'] ) ) {
+			$newValue = isset( $params['optionvalue'] ) ? $params['optionvalue'] : null;
+			$changes[$params['optionname']] = $newValue;
+		}
 		if ( !$changed && !count( $changes ) ) {
 			$this->dieWithError( 'apierror-nochanges' );
 		}
 
-		$prefs = $this->getPreferences();
+		$prefs = Preferences::getPreferences( $user, $this->getContext() );
 		$prefsKinds = $user->getOptionKinds( $this->getContext(), $changes );
 
 		$htmlForm = null;
@@ -88,18 +86,12 @@ class ApiOptions extends ApiBase {
 			switch ( $prefsKinds[$key] ) {
 				case 'registered':
 					// Regular option.
-					if ( $value === null ) {
-						// Reset it
-						$validation = true;
-					} else {
-						// Validate
-						if ( $htmlForm === null ) {
-							// We need a dummy HTMLForm for the validate callback...
-							$htmlForm = new HTMLForm( [], $this );
-						}
-						$field = HTMLForm::loadInputFromParameters( $key, $prefs[$key], $htmlForm );
-						$validation = $field->validate( $value, $user->getOptions() );
+					if ( $htmlForm === null ) {
+						// We need a dummy HTMLForm for the validate callback...
+						$htmlForm = new HTMLForm( [], $this );
 					}
+					$field = HTMLForm::loadInputFromParameters( $key, $prefs[$key], $htmlForm );
+					$validation = $field->validate( $value, $user->getOptions() );
 					break;
 				case 'registered-multiselect':
 				case 'registered-checkmatrix':
@@ -126,65 +118,19 @@ class ApiOptions extends ApiBase {
 					break;
 			}
 			if ( $validation === true ) {
-				$this->setPreference( $key, $value );
+				$user->setOption( $key, $value );
 				$changed = true;
 			} else {
-				$this->addWarning( [ 'apiwarn-validationfailed', wfEscapeWikiText( $key ), $validation ] );
+				$this->addWarning( [ 'apiwarn-validationfailed', wfEscapeWikitext( $key ), $validation ] );
 			}
 		}
 
 		if ( $changed ) {
-			$this->commitChanges();
+			// Commit changes
+			$user->saveSettings();
 		}
 
 		$this->getResult()->addValue( null, $this->getModuleName(), 'success' );
-	}
-
-	/**
-	 * Load the user from the master to reduce CAS errors on double post (T95839)
-	 *
-	 * @return null|User
-	 */
-	protected function getUserForUpdates() {
-		if ( !$this->userForUpdates ) {
-			$this->userForUpdates = $this->getUser()->getInstanceForUpdate();
-		}
-
-		return $this->userForUpdates;
-	}
-
-	/**
-	 * Returns preferences form descriptor
-	 * @return mixed[][]
-	 */
-	protected function getPreferences() {
-		$preferencesFactory = MediaWikiServices::getInstance()->getPreferencesFactory();
-		return $preferencesFactory->getFormDescriptor( $this->getUserForUpdates(),
-			$this->getContext() );
-	}
-
-	/**
-	 * @param string[] $kinds One or more types returned by User::listOptionKinds() or 'all'
-	 */
-	protected function resetPreferences( array $kinds ) {
-		$this->getUserForUpdates()->resetOptions( $kinds, $this->getContext() );
-	}
-
-	/**
-	 * Sets one user preference to be applied by commitChanges()
-	 *
-	 * @param string $preference
-	 * @param mixed $value
-	 */
-	protected function setPreference( $preference, $value ) {
-		$this->getUserForUpdates()->setOption( $preference, $value );
-	}
-
-	/**
-	 * Applies changes to user preferences
-	 */
-	protected function commitChanges() {
-		$this->getUserForUpdates()->saveSettings();
 	}
 
 	public function mustBePosted() {

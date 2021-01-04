@@ -30,7 +30,7 @@ class DumpStringOutput extends DumpOutput {
 	/**
 	 * @param string $string
 	 */
-	public function write( $string ) {
+	function write( $string ) {
 		$this->output .= $string;
 	}
 

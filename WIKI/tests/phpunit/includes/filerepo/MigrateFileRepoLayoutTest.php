@@ -1,15 +1,12 @@
 <?php
 
-/**
- * @covers MigrateFileRepoLayout
- */
-class MigrateFileRepoLayoutTest extends MediaWikiIntegrationTestCase {
+class MigrateFileRepoLayoutTest extends MediaWikiTestCase {
 	protected $tmpPrefix;
 	protected $migratorMock;
 	protected $tmpFilepath;
 	protected $text = 'testing';
 
-	protected function setUp() : void {
+	protected function setUp() {
 		parent::setUp();
 
 		$filename = 'Foo.png';
@@ -28,14 +25,13 @@ class MigrateFileRepoLayoutTest extends MediaWikiIntegrationTestCase {
 			]
 		] );
 
-		$dbMock = $this->getMockBuilder( Wikimedia\Rdbms\IDatabase::class )
+		$dbMock = $this->getMockBuilder( 'DatabaseMysqli' )
 			->disableOriginalConstructor()
 			->getMock();
 
-		$imageRow = (object)[
-			'img_name' => $filename,
-			'img_sha1' => sha1( $this->text ),
-		];
+		$imageRow = new stdClass;
+		$imageRow->img_name = $filename;
+		$imageRow->img_sha1 = sha1( $this->text );
 
 		$dbMock->expects( $this->any() )
 			->method( 'select' )
@@ -45,7 +41,7 @@ class MigrateFileRepoLayoutTest extends MediaWikiIntegrationTestCase {
 				new FakeResultWrapper( [] ) // filearchive
 			) );
 
-		$repoMock = $this->getMockBuilder( LocalRepo::class )
+		$repoMock = $this->getMockBuilder( 'LocalRepo' )
 			->setMethods( [ 'getMasterDB' ] )
 			->setConstructorArgs( [ [
 					'name' => 'migratefilerepolayouttest',
@@ -58,7 +54,7 @@ class MigrateFileRepoLayoutTest extends MediaWikiIntegrationTestCase {
 			->method( 'getMasterDB' )
 			->will( $this->returnValue( $dbMock ) );
 
-		$this->migratorMock = $this->getMockBuilder( MigrateFileRepoLayout::class )
+		$this->migratorMock = $this->getMockBuilder( 'MigrateFileRepoLayout' )
 			->setMethods( [ 'getRepo' ] )->getMock();
 		$this->migratorMock
 			->expects( $this->any() )
@@ -92,7 +88,7 @@ class MigrateFileRepoLayoutTest extends MediaWikiIntegrationTestCase {
 		rmdir( $directory );
 	}
 
-	protected function tearDown() : void {
+	protected function tearDown() {
 		foreach ( glob( $this->tmpPrefix . '*' ) as $directory ) {
 			$this->deleteFilesRecursively( $directory );
 		}

@@ -21,7 +21,6 @@
  */
 
 use MediaWiki\Logger\LoggerFactory;
-use Psr\Log\LoggerInterface;
 
 /**
  * Api module to receive and log CSP violation reports
@@ -30,13 +29,12 @@ use Psr\Log\LoggerInterface;
  */
 class ApiCSPReport extends ApiBase {
 
-	/** @var LoggerInterface */
 	private $log;
 
 	/**
 	 * These reports should be small. Ignore super big reports out of paranoia
 	 */
-	private const MAX_POST_SIZE = 8192;
+	const MAX_POST_SIZE = 8192;
 
 	/**
 	 * Logs a content-security-policy violation report from web browser.
@@ -49,14 +47,14 @@ class ApiCSPReport extends ApiBase {
 
 		$this->verifyPostBodyOk();
 		$report = $this->getReport();
-		$flags = $this->getFlags( $report, $userAgent );
+		$flags = $this->getFlags( $report );
 
 		$warningText = $this->generateLogLine( $flags, $report );
 		$this->logReport( $flags, $warningText, [
 			// XXX Is it ok to put untrusted data into log??
 			'csp-report' => $report,
 			'method' => __METHOD__,
-			'user_id' => $this->getUser()->getId() ?: 'logged-out',
+			'user' => $this->getUser()->getName(),
 			'user-agent' => $userAgent,
 			'source' => $this->getParameter( 'source' ),
 		] );
@@ -83,10 +81,9 @@ class ApiCSPReport extends ApiBase {
 	 * Get extra notes about the report.
 	 *
 	 * @param array $report The CSP report
-	 * @param string $userAgent
 	 * @return array
 	 */
-	private function getFlags( $report, $userAgent ) {
+	private function getFlags( $report ) {
 		$reportOnly = $this->getParameter( 'reportonly' );
 		$source = $this->getParameter( 'source' );
 		$falsePositives = $this->getConfig()->get( 'CSPFalsePositiveUrls' );
@@ -100,58 +97,15 @@ class ApiCSPReport extends ApiBase {
 		}
 
 		if (
-			(
-				ContentSecurityPolicy::falsePositiveBrowser( $userAgent ) &&
-				$report['blocked-uri'] === "self"
-			) ||
-			(
-				isset( $report['blocked-uri'] ) &&
-				$this->matchUrlPattern( $report['blocked-uri'], $falsePositives )
-			) ||
-			(
-				isset( $report['source-file'] ) &&
-				$this->matchUrlPattern( $report['source-file'], $falsePositives )
-			)
+			( isset( $report['blocked-uri'] ) &&
+			isset( $falsePositives[$report['blocked-uri']] ) )
+			|| ( isset( $report['source-file'] ) &&
+			isset( $falsePositives[$report['source-file']] ) )
 		) {
-			// False positive due to:
-			// https://bugzilla.mozilla.org/show_bug.cgi?id=1026520
-
+			// Report caused by Ad-Ware
 			$flags[] = 'false-positive';
 		}
 		return $flags;
-	}
-
-	/**
-	 * @param string $url
-	 * @param string[] $patterns
-	 * @return bool
-	 */
-	private function matchUrlPattern( $url, array $patterns ) {
-		if ( isset( $patterns[ $url ] ) ) {
-			return true;
-		}
-
-		$bits = wfParseUrl( $url );
-		unset( $bits['user'], $bits['pass'], $bits['query'], $bits['fragment'] );
-		$bits['path'] = '';
-		$serverUrl = wfAssembleUrl( $bits );
-		if ( isset( $patterns[$serverUrl] ) ) {
-			// The origin of the url matches a pattern,
-			// e.g. "https://example.org" matches "https://example.org/foo/b?a#r"
-			return true;
-		}
-		foreach ( $patterns as $pattern => $val ) {
-			// We only use this pattern if it ends in a slash, this prevents
-			// "/foos" from matching "/foo", and "https://good.combo.bad" matching
-			// "https://good.com".
-			if ( substr( $pattern, -1 ) === '/' && strpos( $url, $pattern ) === 0 ) {
-				// The pattern starts with the same as the url
-				// e.g. "https://example.org/foo/" matches "https://example.org/foo/b?a#r"
-				return true;
-			}
-		}
-
-		return false;
 	}
 
 	/**
@@ -173,7 +127,7 @@ class ApiCSPReport extends ApiBase {
 	/**
 	 * Get the report from post body and turn into associative array.
 	 *
-	 * @return array
+	 * @return Array
 	 */
 	private function getReport() {
 		$postBody = $this->getRequest()->getRawInput();
@@ -208,33 +162,16 @@ class ApiCSPReport extends ApiBase {
 	private function generateLogLine( $flags, $report ) {
 		$flagText = '';
 		if ( $flags ) {
-			$flagText = '[' . implode( ', ', $flags ) . ']';
+			$flagText = '[' . implode( $flags, ', ' ) . ']';
 		}
 
-		$blockedOrigin = isset( $report['blocked-uri'] )
-			? $this->originFromUrl( $report['blocked-uri'] )
-			: 'n/a';
-		$page = $report['document-uri'] ?? 'n/a';
-		$line = isset( $report['line-number'] )
-			? ':' . $report['line-number']
-			: '';
+		$blockedFile = isset( $report['blocked-uri'] ) ? $report['blocked-uri'] : 'n/a';
+		$page = isset( $report['document-uri'] ) ? $report['document-uri'] : 'n/a';
+		$line = isset( $report['line-number'] ) ? ':' . $report['line-number'] : '';
 		$warningText = $flagText .
-			' Received CSP report: <' . $blockedOrigin . '>' .
-			' blocked from being loaded on <' . $page . '>' . $line;
+			' Received CSP report: <' . $blockedFile .
+			'> blocked from being loaded on <' . $page . '>' . $line;
 		return $warningText;
-	}
-
-	/**
-	 * @param string $url
-	 * @return string
-	 */
-	private function originFromUrl( $url ) {
-		$bits = wfParseUrl( $url );
-		unset( $bits['user'], $bits['pass'], $bits['query'], $bits['fragment'] );
-		$bits['path'] = '';
-		$serverUrl = wfAssembleUrl( $bits );
-		// e.g. "https://example.org" from "https://example.org/foo/b?a#r"
-		return $serverUrl;
 	}
 
 	/**

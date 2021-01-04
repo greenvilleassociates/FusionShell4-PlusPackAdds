@@ -1,14 +1,20 @@
 <?php
 
-use MediaWiki\MediaWikiServices;
-
 /**
  * @group Database
  * @group Parser
  *
  * @covers Parser
- * @covers BlockLevelPass
  * @covers StripState
+ *
+ * @covers Preprocessor_DOM
+ * @covers PPDStack
+ * @covers PPDStackElement
+ * @covers PPDPart
+ * @covers PPFrame_DOM
+ * @covers PPTemplateFrame_DOM
+ * @covers PPCustomFrame_DOM
+ * @covers PPNode_DOM
  *
  * @covers Preprocessor_Hash
  * @covers PPDStack_Hash
@@ -22,7 +28,7 @@ use MediaWiki\MediaWikiServices;
  * @covers PPNode_Hash_Array
  * @covers PPNode_Hash_Attr
  */
-class TagHooksTest extends MediaWikiIntegrationTestCase {
+class TagHookTest extends MediaWikiTestCase {
 	public static function provideValidNames() {
 		return [
 			[ 'foo' ],
@@ -38,8 +44,9 @@ class TagHooksTest extends MediaWikiIntegrationTestCase {
 	}
 
 	private function getParserOptions() {
-		$popt = ParserOptions::newFromUserAndLang( new User,
-			MediaWikiServices::getInstance()->getContentLanguage() );
+		global $wgContLang;
+		$popt = ParserOptions::newFromUserAndLang( new User, $wgContLang );
+		$popt->setWrapOutputClass( false );
 		return $popt;
 	}
 
@@ -47,7 +54,8 @@ class TagHooksTest extends MediaWikiIntegrationTestCase {
 	 * @dataProvider provideValidNames
 	 */
 	public function testTagHooks( $tag ) {
-		$parser = MediaWikiServices::getInstance()->getParserFactory()->create();
+		global $wgParserConf;
+		$parser = new Parser( $wgParserConf );
 
 		$parser->setHook( $tag, [ $this, 'tagCallback' ] );
 		$parserOutput = $parser->parse(
@@ -55,59 +63,72 @@ class TagHooksTest extends MediaWikiIntegrationTestCase {
 			Title::newFromText( 'Test' ),
 			$this->getParserOptions()
 		);
-		$this->assertEquals( "<p>FooOneBaz\n</p>", $parserOutput->getText( [ 'unwrap' => true ] ) );
+		$this->assertEquals( "<p>FooOneBaz\n</p>", $parserOutput->getText() );
 
 		$parser->mPreprocessor = null; # Break the Parser <-> Preprocessor cycle
 	}
 
 	/**
 	 * @dataProvider provideBadNames
+	 * @expectedException MWException
 	 */
 	public function testBadTagHooks( $tag ) {
-		$parser = MediaWikiServices::getInstance()->getParserFactory()->create();
+		global $wgParserConf;
+		$parser = new Parser( $wgParserConf );
 
-		$this->expectException( MWException::class );
 		$parser->setHook( $tag, [ $this, 'tagCallback' ] );
+		$parser->parse(
+			"Foo<$tag>Bar</$tag>Baz",
+			Title::newFromText( 'Test' ),
+			$this->getParserOptions()
+		);
+		$this->fail( 'Exception not thrown.' );
 	}
 
 	/**
 	 * @dataProvider provideValidNames
 	 */
 	public function testFunctionTagHooks( $tag ) {
-		$parser = MediaWikiServices::getInstance()->getParserFactory()->create();
+		global $wgParserConf;
+		$parser = new Parser( $wgParserConf );
 
-		$this->hideDeprecated( 'Parser::setFunctionTagHook' );
 		$parser->setFunctionTagHook( $tag, [ $this, 'functionTagCallback' ], 0 );
 		$parserOutput = $parser->parse(
 			"Foo<$tag>Bar</$tag>Baz",
 			Title::newFromText( 'Test' ),
 			$this->getParserOptions()
 		);
-		$this->assertEquals( "<p>FooOneBaz\n</p>", $parserOutput->getText( [ 'unwrap' => true ] ) );
+		$this->assertEquals( "<p>FooOneBaz\n</p>", $parserOutput->getText() );
 
 		$parser->mPreprocessor = null; # Break the Parser <-> Preprocessor cycle
 	}
 
 	/**
 	 * @dataProvider provideBadNames
+	 * @expectedException MWException
 	 */
 	public function testBadFunctionTagHooks( $tag ) {
-		$parser = MediaWikiServices::getInstance()->getParserFactory()->create();
+		global $wgParserConf;
+		$parser = new Parser( $wgParserConf );
 
-		$this->expectException( MWException::class );
-		$this->hideDeprecated( 'Parser::setFunctionTagHook' );
 		$parser->setFunctionTagHook(
 			$tag,
 			[ $this, 'functionTagCallback' ],
 			Parser::SFH_OBJECT_ARGS
 		);
+		$parser->parse(
+			"Foo<$tag>Bar</$tag>Baz",
+			Title::newFromText( 'Test' ),
+			$this->getParserOptions()
+		);
+		$this->fail( 'Exception not thrown.' );
 	}
 
-	public function tagCallback( $text, $params, $parser ) {
+	function tagCallback( $text, $params, $parser ) {
 		return str_rot13( $text );
 	}
 
-	public function functionTagCallback( $parser, $frame, $code, $attribs ) {
+	function functionTagCallback( &$parser, $frame, $code, $attribs ) {
 		return str_rot13( $code );
 	}
 }

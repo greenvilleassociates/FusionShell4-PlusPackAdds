@@ -20,30 +20,29 @@
  * @file
  * @ingroup Maintenance
  */
-
-use MediaWiki\MediaWikiServices;
 use Wikimedia\Rdbms\IDatabase;
+use \MediaWiki\MediaWikiServices;
 
 class BatchRowWriter {
 	/**
-	 * @var IDatabase The database to write to
+	 * @var IDatabase $db The database to write to
 	 */
 	protected $db;
 
 	/**
-	 * @var string The name of the table to update
+	 * @var string $table The name of the table to update
 	 */
 	protected $table;
 
 	/**
-	 * @var string|false A cluster name valid for use with LBFactory
+	 * @var string $clusterName A cluster name valid for use with LBFactory
 	 */
 	protected $clusterName;
 
 	/**
 	 * @param IDatabase $db The database to write to
 	 * @param string $table The name of the table to update
-	 * @param string|false $clusterName A cluster name valid for use with LBFactory
+	 * @param string|bool $clusterName A cluster name valid for use with LBFactory
 	 */
 	public function __construct( IDatabase $db, $table, $clusterName = false ) {
 		$this->db = $db;
@@ -52,11 +51,10 @@ class BatchRowWriter {
 	}
 
 	/**
-	 * @param array[][] $updates Array of arrays each containing two keys, 'primaryKey'
+	 * @param array $updates Array of arrays each containing two keys, 'primaryKey'
 	 *  and 'changes'. primaryKey must contain a map of column names to values
-	 *  sufficient to uniquely identify the row. changes must contain a map of column
+	 *  sufficient to uniquely identify the row changes must contain a map of column
 	 *  names to update values to apply to the row.
-	 * @phan-param array<int,array{primaryKey:array,changes:array}> $updates
 	 */
 	public function write( array $updates ) {
 		$lbFactory = MediaWikiServices::getInstance()->getDBLoadBalancerFactory();

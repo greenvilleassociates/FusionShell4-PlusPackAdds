@@ -11,14 +11,17 @@
  * Ian Baker <ian@wikimedia.org>
  */
 
+ini_set( 'include_path', ini_get( 'include_path' ) . ':' .
+	__DIR__ . '/../../../tests/phpunit/includes/api' );
+
 /**
  * @group medium
- * @covers ApiQueryTitleBlacklist
- */
+ **/
 class ApiQueryTitleBlacklistTest extends ApiTestCase {
 
-	public function setUp() : void {
+	function setUp() {
 		parent::setUp();
+		$this->doLogin();
 
 		TitleBlacklist::destroySingleton();
 		$this->setMwGlobals( 'wgTitleBlacklistSources', [
@@ -29,7 +32,7 @@ class ApiQueryTitleBlacklistTest extends ApiTestCase {
 		] );
 	}
 
-	public function tearDown() : void {
+	function tearDown() {
 		TitleBlacklist::destroySingleton();
 		parent::tearDown();
 	}
@@ -37,7 +40,7 @@ class ApiQueryTitleBlacklistTest extends ApiTestCase {
 	/**
 	 * Verify we allow a title which is not blacklisted
 	 */
-	public function testCheckingUnlistedTitle() {
+	function testCheckingUnlistedTitle() {
 		$unlisted = $this->doApiRequest( [
 			'action' => 'titleblacklist',
 			// evil_acc is blacklisted as <newaccountonly>
@@ -56,9 +59,12 @@ class ApiQueryTitleBlacklistTest extends ApiTestCase {
 	/**
 	 * Verify tboverride works
 	 */
-	public function testTboverride() {
+	function testTboverride() {
+		global $wgGroupPermissions;
+
 		// Allow all users to override the titleblacklist
-		$this->setGroupPermissions( '*', 'tboverride', true );
+		$this->stashMwGlobals( 'wgGroupPermissions' );
+		$wgGroupPermissions['*']['tboverride'] = true;
 
 		$unlisted = $this->doApiRequest( [
 			'action' => 'titleblacklist',
@@ -76,7 +82,7 @@ class ApiQueryTitleBlacklistTest extends ApiTestCase {
 	/**
 	 * Verify a blacklisted title gives out an error.
 	 */
-	public function testCheckingBlackListedTitle() {
+	function testCheckingBlackListedTitle() {
 		$listed = $this->doApiRequest( [
 			'action' => 'titleblacklist',
 			'tbtitle' => 'bar',
@@ -112,8 +118,8 @@ class ApiQueryTitleBlacklistTest extends ApiTestCase {
 	/**
 	 * Tests integration with the AntiSpoof extension
 	 */
-	public function testAntiSpoofIntegration() {
-		if ( !ExtensionRegistry::getInstance()->isLoaded( 'AntiSpoof' ) ) {
+	function testAntiSpoofIntegration() {
+		if ( !class_exists( 'AntiSpoof' ) ) {
 			$this->markTestSkipped( "This test requires the AntiSpoof extension" );
 		}
 

@@ -53,16 +53,18 @@ abstract class Theme {
 	 * For elements with theme logic hooks, this should be called any time there's a state change.
 	 *
 	 * @param Element $element Element for which to update classes
+	 * @return array Categorized class names with `on` and `off` lists
 	 */
 	public function updateElementClasses( Element $element ) {
 		$classes = $this->getElementClasses( $element );
+		$traits = class_uses( $element );
 
-		if ( method_exists( $element, 'getIconElement' ) ) {
+		if ( in_array( IconElement::class, $traits ) ) {
 			$element->getIconElement()
 				->removeClasses( $classes['off'] )
 				->addClasses( $classes['on'] );
 		}
-		if ( method_exists( $element, 'getIndicatorElement' ) ) {
+		if ( in_array( IndicatorElement::class, $traits ) ) {
 			$element->getIndicatorElement()
 				->removeClasses( $classes['off'] )
 				->addClasses( $classes['on'] );

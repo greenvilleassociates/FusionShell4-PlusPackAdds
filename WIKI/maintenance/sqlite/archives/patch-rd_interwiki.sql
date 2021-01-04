@@ -2,3 +2,4 @@
 
 ALTER TABLE /*$wgDBprefix*/redirect ADD COLUMN rd_interwiki TEXT default NULL;
 ALTER TABLE /*$wgDBprefix*/redirect ADD COLUMN rd_fragment TEXT default NULL;
+

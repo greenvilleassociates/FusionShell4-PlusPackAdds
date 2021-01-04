@@ -82,19 +82,18 @@ class JsonContentTest extends MediaWikiLangTestCase {
 	}
 
 	private function getMockTitle() {
-		return $this->getMockBuilder( Title::class )
+		return $this->getMockBuilder( 'Title' )
 			->disableOriginalConstructor()
 			->getMock();
 	}
 
 	private function getMockUser() {
-		return $this->getMockBuilder( User::class )
+		return $this->getMockBuilder( 'User' )
 			->disableOriginalConstructor()
 			->getMock();
 	}
-
 	private function getMockParserOptions() {
-		return $this->getMockBuilder( ParserOptions::class )
+		return $this->getMockBuilder( 'ParserOptions' )
 			->disableOriginalConstructor()
 			->getMock();
 	}
@@ -114,30 +113,27 @@ class JsonContentTest extends MediaWikiLangTestCase {
 			],
 			[
 				(object)[ 'foo' ],
-				'<table class="mw-json"><tbody><tr><th><span>0</span></th>' .
-				'<td class="mw-json-value">"foo"</td></tr></tbody></table>'
+				'<table class="mw-json"><tbody><tr><th>0</th><td class="value">"foo"</td></tr>' .
+				'</tbody></table>'
 			],
 			[
 				(object)[ 'foo', 'bar' ],
-				'<table class="mw-json"><tbody><tr><th><span>0</span></th>' .
-				'<td class="mw-json-value">"foo"</td></tr><tr><th><span>1</span></th>' .
-				'<td class="mw-json-value">"bar"</td></tr></tbody></table>'
+				'<table class="mw-json"><tbody><tr><th>0</th><td class="value">"foo"</td></tr>' .
+				'<tr><th>1</th><td class="value">"bar"</td></tr></tbody></table>'
 			],
 			[
 				(object)[ 'baz' => 'foo', 'bar' ],
-				'<table class="mw-json"><tbody><tr><th><span>baz</span></th>' .
-				'<td class="mw-json-value">"foo"</td></tr><tr><th><span>0</span></th>' .
-				'<td class="mw-json-value">"bar"</td></tr></tbody></table>'
+				'<table class="mw-json"><tbody><tr><th>baz</th><td class="value">"foo"</td></tr>' .
+				'<tr><th>0</th><td class="value">"bar"</td></tr></tbody></table>'
 			],
 			[
 				(object)[ 'baz' => 1000, 'bar' ],
-				'<table class="mw-json"><tbody><tr><th><span>baz</span></th>' .
-				'<td class="mw-json-value">1000</td></tr><tr><th><span>0</span></th>' .
-				'<td class="mw-json-value">"bar"</td></tr></tbody></table>'
+				'<table class="mw-json"><tbody><tr><th>baz</th><td class="value">1000</td></tr>' .
+				'<tr><th>0</th><td class="value">"bar"</td></tr></tbody></table>'
 			],
 			[
 				(object)[ '<script>alert("evil!")</script>' ],
-				'<table class="mw-json"><tbody><tr><th><span>0</span></th><td class="mw-json-value">"' .
+				'<table class="mw-json"><tbody><tr><th>0</th><td class="value">"' .
 				'&lt;script>alert("evil!")&lt;/script>"' .
 				'</td></tr></tbody></table>',
 			],
@@ -150,7 +146,7 @@ class JsonContentTest extends MediaWikiLangTestCase {
 	public function testFillParserOutput( $data, $expected ) {
 		$obj = new JsonContent( FormatJson::encode( $data ) );
 		$parserOutput = $obj->getParserOutput( $this->getMockTitle(), null, null, true );
-		$this->assertInstanceOf( ParserOutput::class, $parserOutput );
+		$this->assertInstanceOf( 'ParserOutput', $parserOutput );
 		$this->assertEquals( $expected, $parserOutput->getText() );
 	}
 }

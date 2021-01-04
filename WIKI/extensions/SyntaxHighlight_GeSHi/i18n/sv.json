@@ -1,10 +1,10 @@
 {
 	"@metadata": {
 		"authors": [
-			"Ainali",
 			"Lejonel",
 			"Lokal Profil",
-			"WikiPhoenix"
+			"WikiPhoenix",
+			"Ainali"
 		]
 	},
 	"syntaxhighlight-desc": "Ger syntaxmarkering med [http://pygments.org/ Pygments] inuti <code>&lt;syntaxhighlight&gt;</code>-taggar",

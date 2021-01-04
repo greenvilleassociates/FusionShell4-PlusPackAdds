@@ -2,8 +2,6 @@
 
 /**
  * @group ContentHandler
- *
- * @covers FileContentHandler
  */
 class FileContentHandlerTest extends MediaWikiLangTestCase {
 	/**
@@ -11,20 +9,20 @@ class FileContentHandlerTest extends MediaWikiLangTestCase {
 	 */
 	private $handler;
 
-	protected function setUp() : void {
+	protected function setUp() {
 		parent::setUp();
 
 		$this->handler = new FileContentHandler();
 	}
 
 	public function testIndexMapping() {
-		$mockEngine = $this->createMock( SearchEngine::class );
+		$mockEngine = $this->createMock( 'SearchEngine' );
 
 		$mockEngine->expects( $this->atLeastOnce() )
 			->method( 'makeSearchFieldMapping' )
 			->willReturnCallback( function ( $name, $type ) {
 				$mockField =
-					$this->getMockBuilder( SearchIndexFieldDefinition::class )
+					$this->getMockBuilder( 'SearchIndexFieldDefinition' )
 						->setMethods( [ 'getMapping' ] )
 						->setConstructorArgs( [ $name, $type ] )
 						->getMock();
@@ -43,10 +41,10 @@ class FileContentHandlerTest extends MediaWikiLangTestCase {
 			'file_text' => 1,
 		];
 		foreach ( $map as $name => $field ) {
-			$this->assertInstanceOf( SearchIndexField::class, $field );
+			$this->assertInstanceOf( 'SearchIndexField', $field );
 			$this->assertEquals( $name, $field->getName() );
 			unset( $expect[$name] );
 		}
-		$this->assertSame( [], $expect );
+		$this->assertEmpty( $expect );
 	}
 }

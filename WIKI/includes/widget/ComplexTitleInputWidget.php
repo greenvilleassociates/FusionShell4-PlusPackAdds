@@ -1,16 +1,17 @@
 <?php
-
+/**
+ * MediaWiki Widgets – ComplexTitleInputWidget class.
+ *
+ * @copyright 2011-2015 MediaWiki Widgets Team and others; see AUTHORS.txt
+ * @license The MIT License (MIT); see LICENSE.txt
+ */
 namespace MediaWiki\Widget;
 
 /**
  * Complex title input widget.
- *
- * @copyright 2011-2015 MediaWiki Widgets Team and others; see AUTHORS.txt
- * @license MIT
  */
 class ComplexTitleInputWidget extends \OOUI\Widget {
-	/** @var array */
-	protected $config;
+
 	protected $namespace = null;
 	protected $title = null;
 
@@ -18,10 +19,9 @@ class ComplexTitleInputWidget extends \OOUI\Widget {
 	 * Like TitleInputWidget, but the namespace has to be input through a separate dropdown field.
 	 *
 	 * @param array $config Configuration options
-	 *   - array $config['namespace'] Configuration for the NamespaceInputWidget dropdown
-	 *     with list of namespaces
-	 *   - array $config['title'] Configuration for the TitleInputWidget text field
-	 * @phan-param array{namespace?:array,title?:array} $config
+	 * @param array $config['namespace'] Configuration for the NamespaceInputWidget dropdown
+	 *  with list of namespaces
+	 * @param array $config['title'] Configuration for the TitleInputWidget text field
 	 */
 	public function __construct( array $config = [] ) {
 		// Configuration initialization
@@ -33,6 +33,7 @@ class ComplexTitleInputWidget extends \OOUI\Widget {
 			$config
 		);
 
+		// Parent constructor
 		parent::__construct( $config );
 
 		// Properties
@@ -42,7 +43,9 @@ class ComplexTitleInputWidget extends \OOUI\Widget {
 			$config['title'],
 			[
 				'relative' => true,
-				'namespace' => $config['namespace']['value'] ?? null,
+				'namespace' => isset( $config['namespace']['value'] ) ?
+					$config['namespace']['value'] :
+					null,
 			]
 		) );
 
@@ -58,9 +61,7 @@ class ComplexTitleInputWidget extends \OOUI\Widget {
 
 	public function getConfig( &$config ) {
 		$config['namespace'] = $this->config['namespace'];
-		$config['namespace']['dropdown']['$overlay'] = true;
 		$config['title'] = $this->config['title'];
-		$config['title']['$overlay'] = true;
 		return parent::getConfig( $config );
 	}
 }

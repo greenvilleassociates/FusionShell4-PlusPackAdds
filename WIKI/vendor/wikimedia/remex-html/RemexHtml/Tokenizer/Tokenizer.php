@@ -1,7 +1,6 @@
 <?php
 
 namespace RemexHtml\Tokenizer;
-
 use RemexHtml\HTMLData;
 use RemexHtml\PropGuard;
 
@@ -12,84 +11,64 @@ use RemexHtml\PropGuard;
  * https://www.w3.org/TR/2016/REC-html51-20161101/
  */
 class Tokenizer {
-	use PropGuard;
-
 	// States
-	public const STATE_START = 1;
-	public const STATE_DATA = 2;
-	public const STATE_RCDATA = 3;
-	public const STATE_RAWTEXT = 4;
-	public const STATE_SCRIPT_DATA = 5;
-	public const STATE_PLAINTEXT = 6;
-	public const STATE_EOF = 7;
-	public const STATE_CURRENT = 8;
+	const STATE_START = 1;
+	const STATE_DATA = 2;
+	const STATE_RCDATA = 3;
+	const STATE_RAWTEXT = 4;
+	const STATE_SCRIPT_DATA = 5;
+	const STATE_PLAINTEXT = 6;
+	const STATE_EOF = 7;
+	const STATE_CURRENT = 8;
 
 	// Match indices for the data state regex
-	private const MD_END_TAG_OPEN = 1;
-	private const MD_TAG_NAME = 2;
-	private const MD_TAG_AFTER_LOWERCASE = 3;
-	private const MD_COMMENT = 4;
-	private const MD_COMMENT_INNER = 5;
-	private const MD_COMMENT_END = 6;
-	private const MD_DOCTYPE = 7;
-	private const MD_DT_NAME_WS = 8;
-	private const MD_DT_NAME = 9;
-	private const MD_DT_PUBLIC_WS = 10;
-	private const MD_DT_PUBLIC_DQ = 11;
-	private const MD_DT_PUBLIC_SQ = 12;
-	private const MD_DT_PUBSYS_WS = 13;
-	private const MD_DT_PUBSYS_DQ = 14;
-	private const MD_DT_PUBSYS_SQ = 15;
-	private const MD_DT_SYSTEM_WS = 16;
-	private const MD_DT_SYSTEM_DQ = 17;
-	private const MD_DT_SYSTEM_SQ = 18;
-	private const MD_DT_BOGUS = 19;
-	private const MD_DT_END = 20;
-	private const MD_CDATA = 21;
-	private const MD_BOGUS_COMMENT = 22;
+	const MD_END_TAG_OPEN = 1;
+	const MD_TAG_NAME = 2;
+	const MD_COMMENT = 3;
+	const MD_COMMENT_INNER = 4;
+	const MD_COMMENT_END = 5;
+	const MD_DOCTYPE = 6;
+	const MD_DT_NAME_WS = 7;
+	const MD_DT_NAME = 8;
+	const MD_DT_PUBLIC_WS = 9;
+	const MD_DT_PUBLIC_DQ = 10;
+	const MD_DT_PUBLIC_SQ = 11;
+	const MD_DT_PUBSYS_WS = 12;
+	const MD_DT_PUBSYS_DQ = 13;
+	const MD_DT_PUBSYS_SQ = 14;
+	const MD_DT_SYSTEM_WS = 15;
+	const MD_DT_SYSTEM_DQ = 16;
+	const MD_DT_SYSTEM_SQ = 17;
+	const MD_DT_BOGUS = 18;
+	const MD_DT_END = 19;
+	const MD_CDATA = 20;
+	const MD_BOGUS_COMMENT = 21;
 
 	// Match indices for the character reference regex
-	private const MC_PREFIX = 1;
-	private const MC_DECIMAL = 2;
-	private const MC_HEXDEC = 3;
-	private const MC_SEMICOLON = 4;
-	private const MC_HASH = 5;
-	private const MC_NAMED = 6;
-	private const MC_SUFFIX = 7;
-	private const MC_INVALID = 8;
+	const MC_PREFIX = 1;
+	const MC_DECIMAL = 2;
+	const MC_HEXDEC = 3;
+	const MC_SEMICOLON = 4;
+	const MC_HASH = 5;
+	const MC_NAMED = 6;
+	const MC_SUFFIX = 7;
+	const MC_INVALID = 8;
 
 	// Match indices for the attribute regex
-	private const MA_SLASH = 1;
-	private const MA_NAME = 2;
-	private const MA_SIMPLE_NAME = 3;
-	private const MA_DQUOTED = 4;
-	private const MA_DQUOTED_CHARREF = 5;
-	private const MA_DQUOTED_UNSIMPLE = 6;
-	private const MA_SQUOTED = 7;
-	private const MA_SQUOTED_CHARREF = 8;
-	private const MA_SQUOTED_UNSIMPLE = 9;
-	private const MA_UNQUOTED = 10;
-	private const MA_UNQUOTED_UNSIMPLE = 11;
+	const MA_SLASH = 1;
+	const MA_NAME = 2;
+	const MA_DQUOTED = 3;
+	const MA_SQUOTED = 4;
+	const MA_UNQUOTED = 5;
 
 	// Characters
-	protected const REPLACEMENT_CHAR = "\xef\xbf\xbd";
-	protected const BYTE_ORDER_MARK = "\xef\xbb\xbf";
-
-	// A list of "common well-behaved entities", used to optimize fast paths
-	private static $commonEntities = [
-		'&amp;' => '&',
-		'&apos;' => "'",
-		'&lt;' => '<',
-		'&gt;' => '>',
-		'&quot;' => '"',
-		'&nbsp;' => "\u{00A0}",
-	];
+	const REPLACEMENT_CHAR = "\xef\xbf\xbd";
+	const BYTE_ORDER_MARK = "\xef\xbb\xbf";
 
 	protected $ignoreErrors;
 	protected $ignoreCharRefs;
 	protected $ignoreNulls;
 	protected $skipPreprocess;
-	protected $scriptingFlag;
 	protected $appropriateEndTag;
 	protected $listener;
 	protected $state;
@@ -121,12 +100,8 @@ class Tokenizer {
 	 *     stage, which normalizes line endings and raises errors on certain
 	 *     control characters. Advisable if the input stream is already
 	 *     appropriately normalized.
-	 *   - scriptingFlag: True if the scripting flag is enabled. Default true.
-	 *     Setting this to false cause the contents of <noscript> elements to be
-	 *     processed as normal content. The scriptingFlag option in the
-	 *     TreeBuilder should be set to the same value.
 	 */
-	public function __construct( TokenHandler $listener, $text, $options = [] ) {
+	public function __construct( TokenHandler $listener, $text, $options ) {
 		$this->listener = $listener;
 		$this->text = $text;
 		$this->pos = 0;
@@ -136,7 +111,10 @@ class Tokenizer {
 		$this->ignoreCharRefs = !empty( $options['ignoreCharRefs'] );
 		$this->ignoreNulls = !empty( $options['ignoreNulls'] );
 		$this->skipPreprocess = !empty( $options['skipPreprocess'] );
-		$this->scriptingFlag = $options['scriptingFlag'] ?? true;
+	}
+
+	public function __set( $name, $value ) {
+		PropGuard::set( $this, $name, $value );
 	}
 
 	public function setEnableCdataCallback( $cb ) {
@@ -166,8 +144,8 @@ class Tokenizer {
 			$this->fragmentNamespace = null;
 			$this->fragmentName = null;
 		}
-		$this->appropriateEndTag =
-			$options['appropriateEndTag'] ?? null;
+		$this->appropriateEndTag = isset( $options['appropriateEndTag'] ) ?
+			$options['appropriateEndTag'] : null;
 		$this->preprocess();
 		$this->listener->startDocument( $this, $this->fragmentNamespace, $this->fragmentName );
 
@@ -178,7 +156,6 @@ class Tokenizer {
 	 * Get the preprocessed input text. Source offsets in event parameters are
 	 * relative to this string. If skipPreprocess was specified, this will be
 	 * the same as the input string.
-	 * @return string
 	 */
 	public function getPreprocessedText() {
 		$this->preprocess();
@@ -189,7 +166,7 @@ class Tokenizer {
 	 * Change the state of the tokenizer during parsing. This for use by the
 	 * tree builder to switch the tokenizer into one of the raw text states.
 	 *
-	 * @param int $state One of the STATE_* constants
+	 * @param integer $state One of the STATE_* constants
 	 * @param string $appropriateEndTag The appropriate end tag
 	 */
 	public function switchState( $state, $appropriateEndTag ) {
@@ -214,7 +191,7 @@ class Tokenizer {
 		switch ( $tagName ) {
 		case 'title':
 		case 'textarea':
-			$this->state = self::STATE_RCDATA;
+			$this->state = Tokenizer::STATE_RCDATA;
 			break;
 
 		case 'style':
@@ -222,21 +199,21 @@ class Tokenizer {
 		case 'iframe':
 		case 'noembed':
 		case 'noframes':
-			$this->state = self::STATE_RAWTEXT;
+			$this->state = Tokenizer::STATE_RAWTEXT;
 			break;
 
 		case 'script':
-			$this->state = self::STATE_SCRIPT_DATA;
+			$this->state = Tokenizer::STATE_SCRIPT_DATA;
 			break;
 
 		case 'noscript':
 			if ( $this->scriptingFlag ) {
-				$this->state = self::STATE_RAWTEXT;
+				$this->state = Tokenizer::STATE_RAWTEXT;
 			}
 			break;
 
 		case 'plaintext':
-			$this->state = self::STATE_PLAINTEXT;
+			$this->state = Tokenizer::STATE_PLAINTEXT;
 			break;
 		}
 	}
@@ -274,73 +251,41 @@ class Tokenizer {
 		}
 
 		// Normalize line endings
-		if ( strcspn( $this->text, "\r" ) !== strlen( $this->text ) ) {
-			$this->text = preg_replace( '/\r\n?/', "\n", $this->text );
-			$this->length = strlen( $this->text );
-		}
+		$this->text = strtr( $this->text, [
+			"\r\n" => "\n",
+			"\r" => "\n" ] );
+		$this->length = strlen( $this->text );
 
 		// Raise parse errors for any control characters
-		static $re;
-		if ( $re === null ) {
-			// Note that we deliberately do not use the 'u' flag on the
-			// regexp below, as that bypasses the PCRE JIT.  Instead we
-			// rewrite character classes containing codepoints which
-			// require more than one UTF-8 byte as alternations.
-			$re = '/[' .
-				// "C0 controls" (u0000 - u001F) but not
-				// "ASCII whitespace" (u0009, u000A, u000C, u000D, u0020) or
-				// NULL (u0000)
-				// https://infra.spec.whatwg.org/#c0-control
-				// https://infra.spec.whatwg.org/#ascii-whitespace
-				'\x{0001}-\x{0008}' .
-				'\x{000B}' .
-				'\x{000E}-\x{001F}' .
-				// "Controls" other than C0 controls (u007F - u009F)
-				// https://infra.spec.whatwg.org/#control
-				'\x{007F}]|' .
-				// (We can't use character classes above u007F)
-				"\u{0080}|\u{0081}|\u{0082}|\u{0083}|" .
-				"\u{0084}|\u{0085}|\u{0086}|\u{0087}|" .
-				"\u{0088}|\u{0089}|\u{008A}|\u{008B}|" .
-				"\u{008C}|\u{008D}|\u{008E}|\u{008F}|" .
-				"\u{0090}|\u{0091}|\u{0092}|\u{0093}|" .
-				"\u{0094}|\u{0095}|\u{0096}|\u{0097}|" .
-				"\u{0098}|\u{0099}|\u{009A}|\u{009B}|" .
-				"\u{009C}|\u{009D}|\u{009E}|\u{009F}|" .
-				// HTML spec calls these "noncharacters"
-				// https://infra.spec.whatwg.org/#noncharacter
-				"\u{FDD0}|\u{FDD1}|\u{FDD2}|\u{FDD3}|" .
-				"\u{FDD4}|\u{FDD5}|\u{FDD6}|\u{FDD7}|" .
-				"\u{FDD8}|\u{FDD9}|\u{FDDA}|\u{FDDB}|" .
-				"\u{FDDC}|\u{FDDD}|\u{FDDE}|\u{FDDF}|" .
-				"\u{FDE0}|\u{FDE1}|\u{FDE2}|\u{FDE3}|" .
-				"\u{FDE4}|\u{FDE5}|\u{FDE6}|\u{FDE7}|" .
-				"\u{FDE8}|\u{FDE9}|\u{FDEA}|\u{FDEB}|" .
-				"\u{FDEC}|\u{FDED}|\u{FDEE}|\u{FDEF}|" .
-				"\u{FFFE}|\u{FFFF}|" .
-				"\u{1FFFE}|\u{1FFFF}|" .
-				"\u{2FFFE}|\u{2FFFF}|" .
-				"\u{3FFFE}|\u{3FFFF}|" .
-				"\u{4FFFE}|\u{4FFFF}|" .
-				"\u{5FFFE}|\u{5FFFF}|" .
-				"\u{6FFFE}|\u{6FFFF}|" .
-				"\u{7FFFE}|\u{7FFFF}|" .
-				"\u{8FFFE}|\u{8FFFF}|" .
-				"\u{9FFFE}|\u{9FFFF}|" .
-				"\u{AFFFE}|\u{AFFFF}|" .
-				"\u{BFFFE}|\u{BFFFF}|" .
-				"\u{CFFFE}|\u{CFFFF}|" .
-				"\u{DFFFE}|\u{DFFFF}|" .
-				"\u{EFFFE}|\u{EFFFF}|" .
-				"\u{FFFFE}|\u{FFFFF}|" .
-				"\u{10FFFE}|\u{10FFFF}/S";
-		}
 		if ( !$this->ignoreErrors ) {
 			$pos = 0;
+			$re = '/[' .
+				'\x{0001}-\x{0008}' .
+				'\x{000E}-\x{001F}' .
+				'\x{007F}-\x{009F}' .
+				'\x{FDD0}-\x{FDEF}' .
+				'\x{000B}' .
+				'\x{FFFE}\x{FFFF}' .
+				'\x{1FFFE}\x{1FFFF}' .
+				'\x{2FFFE}\x{2FFFF}' .
+				'\x{3FFFE}\x{3FFFF}' .
+				'\x{4FFFE}\x{4FFFF}' .
+				'\x{5FFFE}\x{5FFFF}' .
+				'\x{6FFFE}\x{6FFFF}' .
+				'\x{7FFFE}\x{7FFFF}' .
+				'\x{8FFFE}\x{8FFFF}' .
+				'\x{9FFFE}\x{9FFFF}' .
+				'\x{AFFFE}\x{AFFFF}' .
+				'\x{BFFFE}\x{BFFFF}' .
+				'\x{CFFFE}\x{CFFFF}' .
+				'\x{DFFFE}\x{DFFFF}' .
+				'\x{EFFFE}\x{EFFFF}' .
+				'\x{FFFFE}\x{FFFFF}' .
+				'\x{10FFFE}\x{10FFFF}]/u';
 			while ( $pos < $this->length ) {
 				$count = preg_match( $re, $this->text, $m, PREG_OFFSET_CAPTURE, $pos );
 				if ( $count === false ) {
-					$this->throwPregError();
+					$this->fatal( "Invalid UTF-8 sequence given to Tokenizer" );
 				} elseif ( !$count ) {
 					break;
 				}
@@ -403,7 +348,7 @@ class Tokenizer {
 	 *
 	 * @param bool $loop True to loop while still in the data state, false to
 	 *   process a single less-than sign.
-	 * @return int The next state index
+	 * @return integer The next state index
 	 */
 	protected function dataState( $loop ) {
 		$re = "~ <
@@ -414,27 +359,17 @@ class Tokenizer {
 					# Try to match the ASCII letter required for the start of a start
 					# or end tag. If this fails, a slash matched above can be
 					# backtracked and then fed into the bogus comment alternative below.
-					# As an optimization, notice if the tag is all-lowercase;
-					# we can skip strtolower and null handling in that case.
-					(?:
-						[a-z]++
-						# Portion after initial all-lowercase prefix
-						( [^\t\n\f />]*+ ) |
+					[a-zA-Z]
 
-						# Capture initial uppercase letter
-						[A-Z]
-						# Then capture the rest of the tag name
-						[^\t\n\f />]*+
-					)
-				)
-
-				|
+					# Then capture the rest of the tag name
+					[^\t\n\f />]*
+				) |
 
 				# Comment
 				!--
-				(                             # 4. Comment match detector
+				(                             # 3. Comment match detector
 					> | -> | # Invalid short close
-					(                         # 5. Comment contents
+					(                         # 4. Comment contents
 						(?:
 							(?! --> )
 							(?! --!> )
@@ -444,7 +379,7 @@ class Tokenizer {
 							.
 						)*+
 					)
-					(                         # 6. Comment close
+					(                         # 5. Comment close
 						--> |   # Normal close
 						--!> |  # Comment end bang
 						--! |   # EOF in comment end bang state
@@ -453,7 +388,7 @@ class Tokenizer {
 						        # EOF in comment state
 					)
 				) |
-				( (?i)                        # 7. Doctype
+				( (?i)                        # 6. Doctype
 					! DOCTYPE
 
 					# There must be at least one whitespace character to suppress
@@ -462,45 +397,45 @@ class Tokenizer {
 					# as a character node, the DOCTYPE subexpression must always
 					# wholly match if we matched up to this point.
 
-					( [\t\n\f ]*+ )           # 8. Required whitespace
-					( [^\t\n\f >]*+ )         # 9. DOCTYPE name
+					( [\t\n\f ]*+ )           # 7. Required whitespace
+					( [^\t\n\f >]*+ )         # 8. DOCTYPE name
 					[\t\n\f ]*+
 					(?:
 						# After DOCTYPE name state
 						PUBLIC
-						( [\t\n\f ]* )            # 10. Required whitespace
+						( [\t\n\f ]* )            # 9. Required whitespace
 						(?:
-							\" ( [^\">]* ) \"? |  # 11. Double-quoted identifier
-							' ( [^'>]* ) '? |     # 12. Single-quoted identifier
+							\" ( [^\">]* ) \"? |  # 10. Double-quoted identifier
+							' ( [^'>]* ) '? |     # 11. Single-quoted identifier
 							# Non-match: bogus
 						)
 						(?:
 							# After DOCTYPE public identifier state
 							# Assert quoted identifier before here
 							(?<= \" | ' )
-							( [\t\n\f ]* )            # 13. Required whitespace
+							( [\t\n\f ]* )            # 12. Required whitespace
 							(?:
-								\" ( [^\">]* ) \"? |  # 14. Double-quoted identifier
-								' ( [^'>]* ) '? |     # 15. Single-quoted identifier
+								\" ( [^\">]* ) \"? |  # 13. Double-quoted identifier
+								' ( [^'>]* ) '? |     # 14. Single-quoted identifier
 								# Non-match: no system ID
 							)
 						)?
 						|
 						SYSTEM
-						( [\t\n\f ]* )            # 16. Required whitespace
+						( [\t\n\f ]* )            # 15. Required whitespace
 						(?:
-							\" ( [^\">]* ) \"? |  # 17. Double-quoted identifier
-							' ( [^'>]* ) '? |     # 18. Single-quoted identifier
+							\" ( [^\">]* ) \"? |  # 16. Double-quoted identifier
+							' ( [^'>]* ) '? |     # 17. Single-quoted identifier
 							# Non-match: bogus
 						)
 						|  # No keyword is OK
 					)
 					[\t\n\f ]*
-					( [^>]*+ )                # 19. Bogus DOCTYPE
-					( >? )                    # 20. End of DOCTYPE
+					( [^>]*+ )                # 18. Bogus DOCTYPE
+					( >? )                    # 19. End of DOCTYPE
 				) |
-				( ! \[CDATA\[ ) |             # 21. CDATA section
-				( [!?/] [^>]*+ ) >?           # 22. Bogus comment
+				( ! \[CDATA\[ ) |             # 20. CDATA section
+				( [!?/] [^>]*+ ) >?           # 21. Bogus comment
 
 				# Anything else: parse error and emit literal less-than sign.
 				# We will let the match fail at this position and later check
@@ -510,38 +445,21 @@ class Tokenizer {
 
 		$nextState = self::STATE_DATA;
 		do {
-			# As an optimization, quick scan ahead to the first "difficult"
-			# character
-			$npos = strcspn( $this->text, "<&\0", $this->pos ) + $this->pos;
-			# While the "difficult" section is in fact a simple entity, keep
-			# skipping ahead.
-			$mpos = $npos;
-			while ( preg_match( '/&(?:amp|apos|lt|gt|quot|nbsp);/A', $this->text, $m, 0, $mpos ) === 1 ) {
-				$mpos += strlen( $m[0] );
-				$mpos += strcspn( $this->text, "<&\0", $mpos );
-			}
-			$count = preg_match( $re, $this->text, $m, PREG_OFFSET_CAPTURE, $mpos );
+			$count = preg_match( $re, $this->text, $m, PREG_OFFSET_CAPTURE, $this->pos );
 			if ( $count === false ) {
 				$this->throwPregError();
 			} elseif ( !$count ) {
 				// Text runs to end
-				$dataIsSimple = ( $npos === $this->length );
-				$dataHasSimpleRefs = ( $mpos === $this->length );
-				$this->emitDataRange(
-					$this->pos, $this->length - $this->pos,
-					$dataIsSimple, $dataHasSimpleRefs
-				);
+				$this->emitDataRange( $this->pos, $this->length - $this->pos );
 				$this->pos = $this->length;
 				$nextState = self::STATE_EOF;
 				break;
 			}
 
 			$startPos = $m[0][1];
-			$dataIsSimple = ( $npos === $startPos );
-			$dataHasSimpleRefs = ( $mpos === $startPos );
 			$tagName = isset( $m[self::MD_TAG_NAME] ) ? $m[self::MD_TAG_NAME][0] : '';
 
-			$this->emitDataRange( $this->pos, $startPos - $this->pos, $dataIsSimple, $dataHasSimpleRefs );
+			$this->emitDataRange( $this->pos, $startPos - $this->pos );
 			$this->pos = $startPos;
 			$nextPos = $m[0][1] + strlen( $m[0][0] );
 
@@ -554,40 +472,18 @@ class Tokenizer {
 				if ( !$isCdata ) {
 					$m[self::MD_BOGUS_COMMENT] = $m[self::MD_CDATA];
 				}
+			} else {
+				$isCdata = false;
 			}
 
 			if ( strlen( $tagName ) ) {
 				// Tag
 				$isEndTag = (bool)strlen( $m[self::MD_END_TAG_OPEN][0] );
-				$isAllLower = isset( $m[self::MD_TAG_AFTER_LOWERCASE] ) &&
-					$m[self::MD_TAG_AFTER_LOWERCASE][0] === '';
-				if ( !$isAllLower ) {
-					// As an optimization, we skip these steps for the common
-					// case of an all-lowercase tag name
-					if ( !$this->ignoreNulls ) {
-						$tagName = $this->handleNulls( $tagName, $m[self::MD_TAG_NAME][1] );
-					}
-					$tagName = strtolower( $tagName );
+				if ( !$this->ignoreNulls ) {
+					$tagName = $this->handleNulls( $tagName, $m[self::MD_TAG_NAME][1] );
 				}
+				$tagName = strtolower( $tagName );
 				$this->pos = $nextPos;
-				if ( $nextPos < $this->length && $this->text[ $nextPos ] === '>' ) {
-					// "Simple tag" optimization; skip attribute parsing and
-					// stay in this state
-					$this->pos = ++$nextPos;
-					if ( $isEndTag ) {
-						$this->listener->endTag(
-							$tagName, $startPos, $nextPos - $startPos
-						);
-					} else {
-						$this->listener->startTag(
-							$tagName, new PlainAttributes(), false,
-							$startPos, $nextPos - $startPos
-						);
-					}
-					// Respect any state switch imposed by the parser
-					$nextState = $this->state;
-					continue;
-				}
 				$nextState = $this->handleAttribsAndClose( self::STATE_DATA,
 					$tagName, $isEndTag, $startPos );
 				$nextPos = $this->pos;
@@ -638,7 +534,7 @@ class Tokenizer {
 					$contents = $this->handleNulls( $contents, $bogusPos );
 					$this->listener->comment( $contents, $this->pos, $endPos - $this->pos );
 				}
-			} elseif ( isset( $m[self::MD_BOGUS_COMMENT] ) && $m[self::MD_BOGUS_COMMENT][1] >= 0 ) {
+			} elseif ( isset ( $m[self::MD_BOGUS_COMMENT] ) && $m[self::MD_BOGUS_COMMENT][1] >= 0 ) {
 				// Bogus comment
 				$contents = $m[self::MD_BOGUS_COMMENT][0];
 				$bogusPos = $m[self::MD_BOGUS_COMMENT][1];
@@ -647,9 +543,7 @@ class Tokenizer {
 					// No token emitted
 				} elseif ( $m[0][0] === '</' ) {
 					$this->error( 'EOF in end tag' );
-					$sourceStart = $m[0][1];
-					'@phan-var int $sourceStart'; /** @var int $sourceStart */
-					$this->listener->characters( '</', 0, 2, $sourceStart, 2 );
+					$this->listener->characters( '</', 0, 2, $m[0][1], 2 );
 				} else {
 					$this->error( "unexpected <{$contents[0]} interpreted as bogus comment" );
 					if ( $contents[0] !== '?' ) {
@@ -819,10 +713,6 @@ class Tokenizer {
 
 	/**
 	 * DOCTYPE helper which interprets a quoted string (or lack thereof)
-	 * @param array $m
-	 * @param int $dq
-	 * @param int $sq
-	 * @param bool &$quirks
 	 * @return string|null The quoted value, with nulls replaced.
 	 */
 	protected function interpretDoctypeQuoted( $m, $dq, $sq, &$quirks ) {
@@ -852,7 +742,7 @@ class Tokenizer {
 	 * replaced with U+FFFD with a parse error issued.
 	 *
 	 * @param string $text The text to be converted
-	 * @param int $sourcePos The input byte offset from which $text was
+	 * @param integer $sourcePos The input byte offset from which $text was
 	 *   extracted, for error position reporting.
 	 * @return string The converted text
 	 */
@@ -885,9 +775,9 @@ class Tokenizer {
 	 *
 	 * @param string $mask Mask for strcspn
 	 * @param string $text The input text
-	 * @param int $offset The start of the range within $text to search
-	 * @param int $length The length of the range within $text to search
-	 * @param int $sourcePos The offset within the input text corresponding
+	 * @param integer $offset The start of the range within $text to search
+	 * @param integer $length The length of the range within $text to search
+	 * @param integer $sourcePos The offset within the input text corresponding
 	 *   to $text, for error position reporting.
 	 */
 	protected function handleAsciiErrors( $mask, $text, $offset, $length, $sourcePos ) {
@@ -910,40 +800,10 @@ class Tokenizer {
 		}
 	}
 
-	// This string isn't used directly: it's input to GenerateDataFiles.php
-	// which will substitute in the named entities and create a
-	// compile-time constant string in HtmlData::$charRefRegex
-	// Only compile-time constants are handled efficiently in the
-	// regexp cache; otherwise we pay for a 26k strcmp each time we
-	// fetch the regexp from the cache.
-	public const CHARREF_REGEX = '~
-				( .*? )                      # 1. prefix
-				&
-				(?:
-					\# (?:
-						0*(\d+)           |  # 2. decimal
-						[xX]0*([0-9A-Fa-f]+) # 3. hexadecimal
-					)
-					( ; ) ?                  # 4. semicolon
-					|
-					( \# )                   # 5. bare hash
-					|
-					({{NAMED_ENTITY_REGEX}}) # 6. known named
-					(?:
-						(?<! ; )             # Assert no semicolon prior
-						( [=a-zA-Z0-9] )     # 7. attribute suffix
-					)?
-					|
-					( [a-zA-Z0-9]+ ; )       # 8. invalid named
-				)
-				# S = study, for efficient knownNamed
-				# A = anchor, to avoid unnecessary movement of the whole pattern on failure
-				~xAsS';
-
 	/**
 	 * Expand character references in some text, and emit errors as appropriate.
 	 * @param string $text The text to expand
-	 * @param int $sourcePos The input position of $text
+	 * @param integer $sourcePos The input position of $text
 	 * @param bool $inAttr True if the text is within an attribute value
 	 * @param string $additionalAllowedChar An unused string which the spec
 	 *   inexplicably spends a lot of space telling you how to derive. It
@@ -956,12 +816,48 @@ class Tokenizer {
 		if ( $this->ignoreCharRefs ) {
 			return $text;
 		}
+		// Efficiently translate a few common cases.
+		// Although this doesn't translate any error cases, running this
+		// function in !$ignoreError mode would cause the string offsets to
+		// be wrong when we come to the preg_match_all.
+		//
+		// In HHVM this is way too broken to be usable. (@todo bug/PR)
+		if ( !defined( 'HHVM_VERSION' ) && $this->ignoreErrors ) {
+			$text = html_entity_decode( $text, ENT_HTML5 | ENT_QUOTES );
+		}
 
+		static $re;
+		if ( $re === null ) {
+			$knownNamed = HTMLData::$namedEntityRegex;
+			$re = "~
+				( .*? )                      # 1. prefix
+				&
+				(?:
+					\# (?:
+						0*(\d+)           |  # 2. decimal
+						[xX]0*([0-9A-Fa-f]+) # 3. hexadecimal
+					)
+					( ; ) ?                  # 4. semicolon
+					|
+					( \# )                   # 5. bare hash
+					|
+					($knownNamed)            # 6. known named
+					(?:
+						(?<! ; )             # Assert no semicolon prior
+						( [=a-zA-Z0-9] )     # 7. attribute suffix
+					)?
+					|
+					( [a-zA-Z0-9]+ ; )       # 8. invalid named
+				)
+				# S = study, for efficient knownNamed
+				# A = anchor, to avoid unnecessary movement of the whole pattern on failure
+				~xAsS";
+		}
 		$out = '';
 		$pos = 0;
 		$length = strlen( $text );
 		$matches = [];
-		$count = preg_match_all( HTMLData::$charRefRegex, $text, $matches, PREG_SET_ORDER );
+		$count = preg_match_all( $re, $text, $matches, PREG_SET_ORDER );
 		if ( $count === false ) {
 			$this->throwPregError();
 		}
@@ -969,6 +865,7 @@ class Tokenizer {
 		foreach ( $matches as $m ) {
 			$out .= $m[self::MC_PREFIX];
 			$errorPos = $sourcePos + $pos + strlen( $m[self::MC_PREFIX] );
+			$lastPos = $pos;
 			$pos += strlen( $m[0] );
 
 			if ( isset( $m[self::MC_HASH] ) && strlen( $m[self::MC_HASH] ) ) {
@@ -978,8 +875,8 @@ class Tokenizer {
 				continue;
 			}
 
-			$knownNamed = $m[self::MC_NAMED] ?? '';
-			$attributeSuffix = $m[self::MC_SUFFIX] ?? '';
+			$knownNamed = isset( $m[self::MC_NAMED] ) ? $m[self::MC_NAMED] : '';
+			$attributeSuffix = isset( $m[self::MC_SUFFIX] ) ? $m[self::MC_SUFFIX] : '';
 
 			$haveSemicolon =
 				( isset( $m[self::MC_SEMICOLON] ) && strlen( $m[self::MC_SEMICOLON] ) )
@@ -1027,7 +924,6 @@ class Tokenizer {
 				continue;
 			} else {
 				$this->fatal( 'unable to identify char ref submatch' );
-				$codepoint = 0; // re-assure phan $codepoint will be defined
 			}
 
 			// Interpret $codepoint
@@ -1090,23 +986,14 @@ class Tokenizer {
 	 * Emit a range of the input text as a character token, and emit related
 	 * errors, with validity rules as per the data state.
 	 *
-	 * @param int $pos Offset within the input text
-	 * @param int $length The length of the range
-	 * @param bool $isSimple True if you know that the data range does not
-	 *  contain < \0 or &; false is safe if you're not sure
-	 * @param bool $hasSimpleRefs True if you know that any character
-	 *  references are semicolon terminated and in the list of $commonEntities;
-	 *  false is safe if you're not sure
+	 * @param integer $pos Offset within the input text
+	 * @param integer $length The length of the range
 	 */
-	protected function emitDataRange( $pos, $length, $isSimple = false, $hasSimpleRefs = false ) {
+	protected function emitDataRange( $pos, $length ) {
 		if ( $length === 0 ) {
 			return;
 		}
 		if ( $this->ignoreCharRefs && $this->ignoreNulls && $this->ignoreErrors ) {
-			// Pretend this data range doesn't contain < \0 or &
-			$isSimple = true;
-		}
-		if ( $isSimple ) {
 			$this->listener->characters( $this->text, $pos, $length, $pos, $length );
 		} else {
 			if ( !$this->ignoreErrors ) {
@@ -1117,11 +1004,7 @@ class Tokenizer {
 			}
 
 			$text = substr( $this->text, $pos, $length );
-			if ( $hasSimpleRefs ) {
-				$text = strtr( $text, self::$commonEntities );
-			} else {
-				$text = $this->handleCharRefs( $text, $pos );
-			}
+			$text = $this->handleCharRefs( $text, $pos );
 			$this->listener->characters( $text, 0, strlen( $text ), $pos, $length );
 		}
 	}
@@ -1130,10 +1013,10 @@ class Tokenizer {
 	 * Emit a range of characters from the input text, with validity rules as
 	 * per the CDATA section state.
 	 *
-	 * @param int $innerPos The position after the <![CDATA[
-	 * @param int $innerLength The length of the string not including the terminating ]]>
-	 * @param int $outerPos The position of the start of the <!CDATA[
-	 * @param int $outerLength The length of the whole input region being emitted
+	 * @param $innerPos The position after the <![CDATA[
+	 * @param $innerLength The length of the string not including the terminating ]]>
+	 * @param $outerPos The position of the start of the <!CDATA[
+	 * @param $outerLength The length of the whole input region being emitted
 	 */
 	protected function emitCdataRange( $innerPos, $innerLength, $outerPos, $outerLength ) {
 		$this->listener->characters( $this->text, $innerPos, $innerLength,
@@ -1147,8 +1030,8 @@ class Tokenizer {
 	 * that as a parameter.
 	 *
 	 * @param bool $ignoreCharRefs
-	 * @param int $pos The input position
-	 * @param int $length The length of the range to be emitted
+	 * @param integer $pos The input position
+	 * @param integer $length The length of the range to be emitted
 	 */
 	protected function emitRawTextRange( $ignoreCharRefs, $pos, $length ) {
 		if ( $length === 0 ) {
@@ -1171,7 +1054,7 @@ class Tokenizer {
 	 * The entry point for the RCDATA and RAWTEXT states.
 	 * @param bool $ignoreCharRefs True to ignore character references regardless
 	 *   of configuration, false to respect the configuration.
-	 * @return int The next state index
+	 * @return integer The next state index
 	 */
 	protected function textElementState( $ignoreCharRefs ) {
 		if ( $this->appropriateEndTag === null ) {
@@ -1224,12 +1107,10 @@ class Tokenizer {
 	 * - @todo: Measure performance improvement, assess whether the LazyAttributes
 	 *   feature is warranted.
 	 *
-	 * @return Attributes
+	 * @return array Attributes
 	 */
 	protected function consumeAttribs() {
-		static $re;
-		if ( $re === null ) {
-			$re = '~
+		$re = '~
 			[\t\n\f ]*+  # Ignored whitespace before attribute name
 			(?! /> )     # Do not consume self-closing end of tag
 			(?! > )      # Do not consume normal closing bracket
@@ -1246,16 +1127,10 @@ class Tokenizer {
 				# but still generates an attribute called "=". Thus the only way the match
 				# could fail here is due to EOF.
 
-				(                       # 2. Attribute name
-					(?:
-						( [-a-z]++ ) |  # 3. Optional "simple" prefix
-                        [^\t\n\f />]
-					)
-                    [^\t\n\f =/>]*+
-                )
+				( [^\t\n\f />] [^\t\n\f =/>]*+ )  # 2. Attribute name
 
 				# After attribute name state
-				[\t\n\f ]*+
+				[\t\n\f ]*
 
 				(?:
 					=
@@ -1266,24 +1141,9 @@ class Tokenizer {
 						# If an end-quote is omitted, the attribute will run to the end of the
 						# string, leaving no closing bracket. So the caller will detect the
 						# unexpected EOF and will not emit the tag, which is correct.
-						" (                     # 4. Double-quoted attribute values
-							[^"&\r\0]*+         #    Simple prefix
-							(                   # 5. Perhaps some simple entities
-								(?: &(?:amp|apos|lt|gt|quot|nbsp); | [^"&\r\0] )*+
-							)
-							( [^"]*+ )          # 6. Unsimple suffix
-						) "? |
-						\' (                    # 7. Single-quoted attribute value
-							[^\'&\r\0]*+        #    Simple prefix
-							(                   # 8. Perhaps some simple entities
-								(?: &(?:amp|apos|lt|gt|quot|nbsp); | [^\'&\r\0] )*+
-							)
-							( [^\']*+ )         # 9. Unsimple suffix
-						)  \'? |
-						(                       # 10. Unquoted attribute value
-							[^\t\n\f >\r"&\'\0=<`]*+ #  Simple prefix
-							( [^\t\n\f >]*+ )   # 11. Unsimple suffix
-						)
+						" ( [^"]*+ ) "? |       # 3. Double-quoted attribute value
+						\' ( [^\']*+ ) \'? |    # 4. Single-quoted attribute value
+						( [^\t\n\f >]*+ )       # 5. Unquoted attribute value
 					)
 					# Or nothing: an attribute with an empty value. The attribute name was
 					# terminated by a slash, closing bracket or EOF
@@ -1291,13 +1151,11 @@ class Tokenizer {
 				)
 			)
 			# The /A modifier causes preg_match_all to give contiguous chunks
-			~xAS';
-		}
+			~xA';
 		$count = preg_match_all( $re, $this->text, $m,
 			PREG_SET_ORDER | PREG_OFFSET_CAPTURE, $this->pos );
 		if ( $count === false ) {
 			$this->throwPregError();
-			$attribs = new PlainAttributes(); // reassure phan
 		} elseif ( $count ) {
 			$this->pos = $m[$count - 1][0][1] + strlen( $m[$count - 1][0][0] );
 			$attribs = new LazyAttributes( $m, function ( $m ) {
@@ -1329,58 +1187,38 @@ class Tokenizer {
 				continue;
 			}
 			$name = $m[self::MA_NAME][0];
-			$isSimple = isset( $m[self::MA_SIMPLE_NAME] ) &&
-				( strlen( $name ) === strlen( $m[self::MA_SIMPLE_NAME][0] ) );
-			if ( !$isSimple ) {
-				// We can skip these steps if we already know the name is simple
-				if ( !$this->ignoreErrors ) {
-					$this->handleAsciiErrors( "\"'<=", $name, 0, strlen( $name ), $m[self::MA_NAME][1] );
-				}
-				if ( !$this->ignoreNulls ) {
-					$name = $this->handleNulls( $m[self::MA_NAME][0], $m[self::MA_NAME][1] );
-				}
-				$name = strtolower( $name );
+			if ( !$this->ignoreErrors ) {
+				$this->handleAsciiErrors( "\"'<=", $name, 0, strlen( $name ), $m[self::MA_NAME][1] );
 			}
+			if ( !$this->ignoreNulls ) {
+				$name = $this->handleNulls( $m[self::MA_NAME][0], $m[self::MA_NAME][1] );
+			}
+			$name = strtolower( $name );
 			$additionalAllowedChar = '';
-			$isSimple = true;
 			if ( isset( $m[self::MA_DQUOTED] ) && $m[self::MA_DQUOTED][1] >= 0 ) {
 				// Double-quoted attribute value
 				$additionalAllowedChar = '"';
 				$value = $m[self::MA_DQUOTED][0];
 				$pos = $m[self::MA_DQUOTED][1];
-				$isSimple = !strlen( $m[self::MA_DQUOTED_UNSIMPLE][0] );
-				if ( $isSimple && strlen( $m[self::MA_DQUOTED_CHARREF][0] ) && !$this->ignoreCharRefs ) {
-					// Efficiently handle well-behaved character references
-					$value = strtr( $value, self::$commonEntities );
-				}
 			} elseif ( isset( $m[self::MA_SQUOTED] ) && $m[self::MA_SQUOTED][1] >= 0 ) {
 				// Single-quoted attribute value
 				$additionalAllowedChar = "'";
 				$value = $m[self::MA_SQUOTED][0];
 				$pos = $m[self::MA_SQUOTED][1];
-				$isSimple = !strlen( $m[self::MA_SQUOTED_UNSIMPLE][0] );
-				if ( $isSimple && strlen( $m[self::MA_SQUOTED_CHARREF][0] ) && !$this->ignoreCharRefs ) {
-					// Efficiently handle well-behaved character references
-					$value = strtr( $value, self::$commonEntities );
-				}
 			} elseif ( isset( $m[self::MA_UNQUOTED] ) && $m[self::MA_UNQUOTED][1] >= 0 ) {
 				// Unquoted attribute value
 				$value = $m[self::MA_UNQUOTED][0];
 				$pos = $m[self::MA_UNQUOTED][1];
-				$isSimple = !strlen( $m[self::MA_UNQUOTED_UNSIMPLE][0] );
 				// Search for parse errors
 				if ( !$this->ignoreErrors ) {
 					if ( $value === '' ) {
 						// ">" in the before attribute value state is a parse error
 						$this->error( 'empty unquoted attribute', $pos );
 					}
-					if ( !$isSimple ) {
-						$this->handleAsciiErrors( "\"'<=`", $value, 0, strlen( $value ), $pos );
-					}
+					$this->handleAsciiErrors( "\"'<=`", $value, 0, strlen( $value ), $pos );
 				}
 			} else {
 				$value = '';
-				$pos = -1; // reassure phan
 			}
 			if ( $additionalAllowedChar && !$this->ignoreErrors ) {
 				// After attribute value (quoted) state
@@ -1393,7 +1231,7 @@ class Tokenizer {
 					}
 				}
 			}
-			if ( !$isSimple && $value !== '' ) {
+			if ( $value !== '' ) {
 				if ( !$this->ignoreNulls ) {
 					$value = $this->handleNulls( $value, $pos );
 				}
@@ -1415,11 +1253,11 @@ class Tokenizer {
 	 * Emit the appropriate tag event, or in the case of broken attributes in
 	 * text states, emit characters.
 	 *
-	 * @param int $state The current state
+	 * @param integer $state The current state
 	 * @param string $tagName The normalized tag name
 	 * @param bool $isEndTag True if this is an end tag, false if it is a start tag
-	 * @param int $startPos The input position of the start of the current tag.
-	 * @return int The next state
+	 * @param integer $startPos The input position of the start of the current tag.
+	 * @return integer The next state
 	 */
 	protected function handleAttribsAndClose( $state, $tagName, $isEndTag, $startPos ) {
 		$attribStartPos = $this->pos;
@@ -1458,7 +1296,6 @@ class Tokenizer {
 			return $state;
 		} else {
 			$this->fatal( 'failed to find an already-matched ">"' );
-			$selfClose = false; // reassure phan
 		}
 		$this->pos = $pos;
 		if ( $isEndTag ) {
@@ -1475,7 +1312,7 @@ class Tokenizer {
 
 	/**
 	 * Process input text in the PLAINTEXT state
-	 * @return int The next state index
+	 * @return integer The next state index
 	 */
 	protected function plaintextState() {
 		$this->emitRawTextRange( true, $this->pos, $this->length - $this->pos );
@@ -1484,7 +1321,7 @@ class Tokenizer {
 
 	/**
 	 * Process input text in the script data state
-	 * @return int The next state index
+	 * @return integer The next state index
 	 */
 	protected function scriptDataState() {
 		if ( $this->appropriateEndTag === null ) {
@@ -1576,7 +1413,7 @@ REGEX;
 	/**
 	 * Emit a parse error event.
 	 * @param string $text The error message
-	 * @param int|null $pos The error position, or null to use the current position
+	 * @param integer|null $pos The error position, or null to use the current position
 	 */
 	protected function error( $text, $pos = null ) {
 		if ( !$this->ignoreErrors ) {
@@ -1591,7 +1428,6 @@ REGEX;
 	 * Throw an exception for a specified reason. This is used for API errors
 	 * and assertion-like sanity checks.
 	 * @param string $text The error message
-	 * @throws TokenizerError
 	 */
 	protected function fatal( $text ) {
 		throw new TokenizerError( __CLASS__ . ": " . $text );
@@ -1643,6 +1479,7 @@ REGEX;
 			$msg = "PCRE unexpected error";
 		}
 
-		throw new TokenizerError( __CLASS__ . ": $msg" );
+		throw new TokenizerError( __CLASS__.": $msg" );
 	}
 }
+

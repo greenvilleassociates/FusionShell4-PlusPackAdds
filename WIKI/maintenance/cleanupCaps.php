@@ -29,8 +29,6 @@
  * @ingroup Maintenance
  */
 
-use MediaWiki\MediaWikiServices;
-
 require_once __DIR__ . '/cleanupTable.inc';
 
 /**
@@ -39,7 +37,7 @@ require_once __DIR__ . '/cleanupTable.inc';
  *
  * @ingroup Maintenance
  */
-class CleanupCaps extends TableCleanup {
+class CapsCleanup extends TableCleanup {
 
 	private $user;
 	private $namespace;
@@ -55,10 +53,7 @@ class CleanupCaps extends TableCleanup {
 
 		$this->namespace = intval( $this->getOption( 'namespace', 0 ) );
 
-		if (
-			MediaWikiServices::getInstance()->getNamespaceInfo()->
-				isCapitalized( $this->namespace )
-		) {
+		if ( MWNamespace::isCapitalized( $this->namespace ) ) {
 			$this->output( "Will be moving pages to first letter capitalized titles" );
 			$callback = 'processRowToUppercase';
 		} else {
@@ -76,10 +71,12 @@ class CleanupCaps extends TableCleanup {
 	}
 
 	protected function processRowToUppercase( $row ) {
+		global $wgContLang;
+
 		$current = Title::makeTitle( $row->page_namespace, $row->page_title );
 		$display = $current->getPrefixedText();
 		$lower = $row->page_title;
-		$upper = MediaWikiServices::getInstance()->getContentLanguage()->ucfirst( $row->page_title );
+		$upper = $wgContLang->ucfirst( $row->page_title );
 		if ( $upper == $lower ) {
 			$this->output( "\"$display\" already uppercase.\n" );
 
@@ -89,7 +86,7 @@ class CleanupCaps extends TableCleanup {
 		$target = Title::makeTitle( $row->page_namespace, $upper );
 		if ( $target->exists() ) {
 			// Prefix "CapsCleanup" to bypass the conflict
-			$target = Title::newFromText( 'CapsCleanup/' . $display );
+			$target = Title::newFromText( __CLASS__ . '/' . $display );
 		}
 		$ok = $this->movePage(
 			$current,
@@ -112,10 +109,12 @@ class CleanupCaps extends TableCleanup {
 	}
 
 	protected function processRowToLowercase( $row ) {
+		global $wgContLang;
+
 		$current = Title::makeTitle( $row->page_namespace, $row->page_title );
 		$display = $current->getPrefixedText();
 		$upper = $row->page_title;
-		$lower = MediaWikiServices::getInstance()->getContentLanguage()->lcfirst( $row->page_title );
+		$lower = $wgContLang->lcfirst( $row->page_title );
 		if ( $upper == $lower ) {
 			$this->output( "\"$display\" already lowercase.\n" );
 
@@ -160,10 +159,9 @@ class CleanupCaps extends TableCleanup {
 			$this->output( "\"$display\" -> \"$targetDisplay\": DRY RUN, NOT MOVED\n" );
 			$ok = 'OK';
 		} else {
-			$mp = MediaWikiServices::getInstance()->getMovePageFactory()
-				->newMovePage( $current, $target );
+			$mp = new MovePage( $current, $target );
 			$status = $mp->move( $this->user, $reason, $createRedirect );
-			$ok = $status->isOK() ? 'OK' : $status->getMessage( false, false, 'en' )->text();
+			$ok = $status->isOK() ? 'OK' : $status->getWikiText( false, false, 'en' );
 			$this->output( "\"$display\" -> \"$targetDisplay\": $ok\n" );
 		}
 
@@ -171,5 +169,5 @@ class CleanupCaps extends TableCleanup {
 	}
 }
 
-$maintClass = CleanupCaps::class;
+$maintClass = "CapsCleanup";
 require_once RUN_MAINTENANCE_IF_MAIN;

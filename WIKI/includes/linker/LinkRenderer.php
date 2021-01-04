@@ -16,21 +16,20 @@
  * http://www.gnu.org/copyleft/gpl.html
  *
  * @file
+ * @license GPL-2.0+
  * @author Kunal Mehta <legoktm@member.fsf.org>
  */
 namespace MediaWiki\Linker;
 
 use DummyLinker;
+use Hooks;
 use Html;
 use HtmlArmor;
 use LinkCache;
-use MediaWiki\HookContainer\HookContainer;
-use MediaWiki\HookContainer\HookRunner;
+use Linker;
 use MediaWiki\MediaWikiServices;
-use MediaWiki\SpecialPage\SpecialPageFactory;
-use NamespaceInfo;
+use MWNamespace;
 use Sanitizer;
-use SpecialPage;
 use Title;
 use TitleFormatter;
 
@@ -72,49 +71,19 @@ class LinkRenderer {
 	private $linkCache;
 
 	/**
-	 * @var NamespaceInfo
-	 */
-	private $nsInfo;
-
-	/**
 	 * Whether to run the legacy Linker hooks
 	 *
 	 * @var bool
 	 */
 	private $runLegacyBeginHook = true;
 
-	/** @var HookContainer */
-	private $hookContainer;
-
-	/** @var HookRunner */
-	private $hookRunner;
-
 	/**
-	 * @var SpecialPageFactory
-	 */
-	private $specialPageFactory;
-
-	/**
-	 * @internal For use by LinkRendererFactory
 	 * @param TitleFormatter $titleFormatter
 	 * @param LinkCache $linkCache
-	 * @param NamespaceInfo $nsInfo
-	 * @param SpecialPageFactory $specialPageFactory
-	 * @param HookContainer $hookContainer
 	 */
-	public function __construct(
-		TitleFormatter $titleFormatter,
-		LinkCache $linkCache,
-		NamespaceInfo $nsInfo,
-		SpecialPageFactory $specialPageFactory,
-		HookContainer $hookContainer
-	) {
+	public function __construct( TitleFormatter $titleFormatter, LinkCache $linkCache ) {
 		$this->titleFormatter = $titleFormatter;
 		$this->linkCache = $linkCache;
-		$this->nsInfo = $nsInfo;
-		$this->specialPageFactory = $specialPageFactory;
-		$this->hookContainer = $hookContainer;
-		$this->hookRunner = new HookRunner( $hookContainer );
 	}
 
 	/**
@@ -171,7 +140,7 @@ class LinkRenderer {
 	 * @param string|HtmlArmor|null $text
 	 * @param array $extraAttribs
 	 * @param array $query
-	 * @return string HTML
+	 * @return string
 	 */
 	public function makeLink(
 		LinkTarget $target, $text = null, array $extraAttribs = [], array $query = []
@@ -208,8 +177,8 @@ class LinkRenderer {
 
 	private function runBeginHook( LinkTarget $target, &$text, &$extraAttribs, &$query, $isKnown ) {
 		$ret = null;
-		if ( !$this->hookRunner->onHtmlPageLinkRendererBegin(
-			$this, $target, $text, $extraAttribs, $query, $ret )
+		if ( !Hooks::run( 'HtmlPageLinkRendererBegin',
+			[ $this, $target, &$text, &$extraAttribs, &$query, &$ret ] )
 		) {
 			return $ret;
 		}
@@ -221,7 +190,7 @@ class LinkRenderer {
 	private function runLegacyBeginHook( LinkTarget $target, &$text, &$extraAttribs, &$query,
 		$isKnown
 	) {
-		if ( !$this->runLegacyBeginHook || !$this->hookContainer->isRegistered( 'LinkBegin' ) ) {
+		if ( !$this->runLegacyBeginHook || !Hooks::isRegistered( 'LinkBegin' ) ) {
 			// Disabled, or nothing registered
 			return null;
 		}
@@ -235,8 +204,8 @@ class LinkRenderer {
 		} else {
 			$realHtml = $html = null;
 		}
-		if ( !$this->hookRunner->onLinkBegin(
-			$dummy, $title, $html, $extraAttribs, $query, $options, $ret )
+		if ( !Hooks::run( 'LinkBegin',
+			[ $dummy, $title, &$html, &$extraAttribs, &$query, &$options, &$ret ] )
 		) {
 			return $ret;
 		}
@@ -277,7 +246,7 @@ class LinkRenderer {
 	 * @return string
 	 */
 	public function makePreloadedLink(
-		LinkTarget $target, $text = null, $classes = '', array $extraAttribs = [], array $query = []
+		LinkTarget $target, $text = null, $classes, array $extraAttribs = [], array $query = []
 	) {
 		// Run begin hook
 		$ret = $this->runBeginHook( $target, $text, $extraAttribs, $query, true );
@@ -308,7 +277,7 @@ class LinkRenderer {
 	 * @param string|HtmlArmor|null $text
 	 * @param array $extraAttribs
 	 * @param array $query
-	 * @return string HTML
+	 * @return string
 	 */
 	public function makeKnownLink(
 		LinkTarget $target, $text = null, array $extraAttribs = [], array $query = []
@@ -325,7 +294,7 @@ class LinkRenderer {
 		return $this->makePreloadedLink(
 			$target,
 			$text,
-			implode( ' ', $classes ),
+			$classes ? implode( ' ', $classes ) : '',
 			$extraAttribs,
 			$query
 		);
@@ -333,7 +302,6 @@ class LinkRenderer {
 
 	/**
 	 * @param LinkTarget $target
-	 * @param-taint $target none
 	 * @param string|HtmlArmor|null $text
 	 * @param array $extraAttribs
 	 * @param array $query
@@ -392,8 +360,8 @@ class LinkRenderer {
 	 */
 	private function buildAElement( LinkTarget $target, $text, array $attribs, $isKnown ) {
 		$ret = null;
-		if ( !$this->hookRunner->onHtmlPageLinkRendererEnd(
-			$this, $target, $isKnown, $text, $attribs, $ret )
+		if ( !Hooks::run( 'HtmlPageLinkRendererEnd',
+			[ $this, $target, $isKnown, &$text, &$attribs, &$ret ] )
 		) {
 			return $ret;
 		}
@@ -401,12 +369,12 @@ class LinkRenderer {
 		$html = HtmlArmor::getHtml( $text );
 
 		// Run legacy hook
-		if ( $this->hookContainer->isRegistered( 'LinkEnd' ) ) {
+		if ( Hooks::isRegistered( 'LinkEnd' ) ) {
 			$dummy = new DummyLinker();
 			$title = Title::newFromLinkTarget( $target );
 			$options = $this->getLegacyOptions( $isKnown );
-			if ( !$this->hookRunner->onLinkEnd(
-				$dummy, $title, $options, $html, $attribs, $ret )
+			if ( !Hooks::run( 'LinkEnd',
+				[ $dummy, $title, $options, &$html, &$attribs, &$ret ] )
 			) {
 				return $ret;
 			}
@@ -451,22 +419,12 @@ class LinkRenderer {
 	/**
 	 * Normalizes the provided target
 	 *
-	 * @internal For use by deprecated Linker & DummyLinker
-	 *     ::normaliseSpecialPage() methods
+	 * @todo move the code from Linker actually here
 	 * @param LinkTarget $target
 	 * @return LinkTarget
 	 */
-	public function normalizeTarget( LinkTarget $target ) {
-		if ( $target->getNamespace() == NS_SPECIAL && !$target->isExternal() ) {
-			list( $name, $subpage ) = $this->specialPageFactory->resolveAlias(
-				$target->getDBkey()
-			);
-			if ( $name ) {
-				return SpecialPage::getTitleValueFor( $name, $subpage, $target->getFragment() );
-			}
-		}
-
-		return $target;
+	private function normalizeTarget( LinkTarget $target ) {
+		return Linker::normaliseSpecialPage( $target );
 	}
 
 	/**
@@ -511,9 +469,8 @@ class LinkRenderer {
 		if ( $this->linkCache->getGoodLinkFieldObj( $target, 'redirect' ) ) {
 			# Page is a redirect
 			return 'mw-redirect';
-		} elseif (
-			$this->stubThreshold > 0 && $this->nsInfo->isContent( $target->getNamespace() ) &&
-			$this->linkCache->getGoodLinkFieldObj( $target, 'length' ) < $this->stubThreshold
+		} elseif ( $this->stubThreshold > 0 && MWNamespace::isContent( $target->getNamespace() )
+			&& $this->linkCache->getGoodLinkFieldObj( $target, 'length' ) < $this->stubThreshold
 		) {
 			# Page is a stub
 			return 'stub';

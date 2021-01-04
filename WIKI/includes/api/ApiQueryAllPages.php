@@ -1,5 +1,9 @@
 <?php
 /**
+ *
+ *
+ * Created on Sep 25, 2006
+ *
  * Copyright © 2006 Yuri Astrakhan "<Firstname><Lastname>@gmail.com"
  *
  * This program is free software; you can redistribute it and/or modify
@@ -53,7 +57,7 @@ class ApiQueryAllPages extends ApiQueryGeneratorBase {
 	}
 
 	/**
-	 * @param ApiPageSet|null $resultPageSet
+	 * @param ApiPageSet $resultPageSet
 	 * @return void
 	 */
 	private function run( $resultPageSet = null ) {
@@ -64,7 +68,7 @@ class ApiQueryAllPages extends ApiQueryGeneratorBase {
 		// Page filters
 		$this->addTables( 'page' );
 
-		if ( $params['continue'] !== null ) {
+		if ( !is_null( $params['continue'] ) ) {
 			$cont = explode( '|', $params['continue'] );
 			$this->dieContinueUsageIf( count( $cont ) != 1 );
 			$op = $params['dir'] == 'descending' ? '<' : '>';
@@ -97,7 +101,7 @@ class ApiQueryAllPages extends ApiQueryGeneratorBase {
 				$db->anyString() ) );
 		}
 
-		if ( $resultPageSet === null ) {
+		if ( is_null( $resultPageSet ) ) {
 			$selectFields = [
 				'page_namespace',
 				'page_title',
@@ -122,22 +126,22 @@ class ApiQueryAllPages extends ApiQueryGeneratorBase {
 		$this->addFields( $selectFields );
 		$forceNameTitleIndex = true;
 		if ( isset( $params['minsize'] ) ) {
-			$this->addWhere( 'page_len>=' . (int)$params['minsize'] );
+			$this->addWhere( 'page_len>=' . intval( $params['minsize'] ) );
 			$forceNameTitleIndex = false;
 		}
 
 		if ( isset( $params['maxsize'] ) ) {
-			$this->addWhere( 'page_len<=' . (int)$params['maxsize'] );
+			$this->addWhere( 'page_len<=' . intval( $params['maxsize'] ) );
 			$forceNameTitleIndex = false;
 		}
 
 		// Page protection filtering
-		if ( $params['prtype'] || $params['prexpiry'] != 'all' ) {
+		if ( count( $params['prtype'] ) || $params['prexpiry'] != 'all' ) {
 			$this->addTables( 'page_restrictions' );
 			$this->addWhere( 'page_id=pr_page' );
 			$this->addWhere( "pr_expiry > {$db->addQuotes( $db->timestamp() )} OR pr_expiry IS NULL" );
 
-			if ( $params['prtype'] ) {
+			if ( count( $params['prtype'] ) ) {
 				$this->addWhereFld( 'pr_type', $params['prtype'] );
 
 				if ( isset( $params['prlevel'] ) ) {
@@ -211,13 +215,12 @@ class ApiQueryAllPages extends ApiQueryGeneratorBase {
 		$res = $this->select( __METHOD__ );
 
 		// Get gender information
-		$services = MediaWikiServices::getInstance();
-		if ( $services->getNamespaceInfo()->hasGenderDistinction( $params['namespace'] ) ) {
+		if ( MWNamespace::hasGenderDistinction( $params['namespace'] ) ) {
 			$users = [];
 			foreach ( $res as $row ) {
 				$users[] = $row->page_title;
 			}
-			$services->getGenderCache()->doQuery( $users, __METHOD__ );
+			MediaWikiServices::getInstance()->getGenderCache()->doQuery( $users, __METHOD__ );
 			$res->rewind(); // reset
 		}
 
@@ -236,11 +239,11 @@ class ApiQueryAllPages extends ApiQueryGeneratorBase {
 				continue;
 			}
 
-			if ( $resultPageSet === null ) {
+			if ( is_null( $resultPageSet ) ) {
 				$title = Title::makeTitle( $row->page_namespace, $row->page_title );
 				$vals = [
-					'pageid' => (int)$row->page_id,
-					'ns' => (int)$title->getNamespace(),
+					'pageid' => intval( $row->page_id ),
+					'ns' => intval( $title->getNamespace() ),
 					'title' => $title->getPrefixedText()
 				];
 				$fit = $result->addValue( [ 'query', $this->getModuleName() ], null, $vals );
@@ -253,7 +256,7 @@ class ApiQueryAllPages extends ApiQueryGeneratorBase {
 			}
 		}
 
-		if ( $resultPageSet === null ) {
+		if ( is_null( $resultPageSet ) ) {
 			$result->addIndexedTagName( [ 'query', $this->getModuleName() ], 'p' );
 		}
 	}
@@ -342,7 +345,7 @@ class ApiQueryAllPages extends ApiQueryGeneratorBase {
 	protected function getExamplesMessages() {
 		return [
 			'action=query&list=allpages&apfrom=B'
-				=> 'apihelp-query+allpages-example-b',
+				=> 'apihelp-query+allpages-example-B',
 			'action=query&generator=allpages&gaplimit=4&gapfrom=T&prop=info'
 				=> 'apihelp-query+allpages-example-generator',
 			'action=query&generator=allpages&gaplimit=2&' .

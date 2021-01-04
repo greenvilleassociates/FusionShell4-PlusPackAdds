@@ -41,25 +41,25 @@
  */
 class BatchRowUpdate {
 	/**
-	 * @var BatchRowIterator Iterator that returns an array of
+	 * @var BatchRowIterator $reader Iterator that returns an array of
 	 *  database rows
 	 */
 	protected $reader;
 
 	/**
-	 * @var BatchRowWriter Writer capable of pushing row updates
+	 * @var BatchRowWriter $writer Writer capable of pushing row updates
 	 *  to the database
 	 */
 	protected $writer;
 
 	/**
-	 * @var RowUpdateGenerator Generates single row updates
+	 * @var RowUpdateGenerator $generator Generates single row updates
 	 *  based on the rows content
 	 */
 	protected $generator;
 
 	/**
-	 * @var callable Output callback
+	 * @var callable $output Output callback
 	 */
 	protected $output;
 
@@ -77,7 +77,7 @@ class BatchRowUpdate {
 		$this->reader = $reader;
 		$this->writer = $writer;
 		$this->generator = $generator;
-		$this->output = function ( $text ) {
+		$this->output = function () {
 		}; // nop
 	}
 

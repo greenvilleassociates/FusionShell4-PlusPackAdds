@@ -1,7 +1,5 @@
 <?php
 
-use Wikimedia\IPUtils;
-
 /**
  * Class for updating an MWRestrictions value (which is, currently, basically just an IP address
  * list).
@@ -11,15 +9,10 @@ use Wikimedia\IPUtils;
  *
  * The value returned will be an MWRestrictions or the input string if it was not a list of
  * valid IP ranges.
- *
- * @stable to extend
  */
 class HTMLRestrictionsField extends HTMLTextAreaField {
-	protected const DEFAULT_ROWS = 5;
+	const DEFAULT_ROWS = 5;
 
-	/*
-	 * @stable to call
-	 */
 	public function __construct( array $params ) {
 		parent::__construct( $params );
 		if ( !$this->mLabel ) {
@@ -45,7 +38,7 @@ class HTMLRestrictionsField extends HTMLTextAreaField {
 		}
 
 		$value = rtrim( $request->getText( $this->mName ), "\r\n" );
-		$ips = $value === '' ? [] : explode( "\n", $value );
+		$ips = $value === '' ? [] : explode( PHP_EOL, $value );
 		try {
 			return MWRestrictions::newFromArray( [ 'IPAddresses' => $ips ] );
 		} catch ( InvalidArgumentException $e ) {
@@ -86,8 +79,8 @@ class HTMLRestrictionsField extends HTMLTextAreaField {
 		if ( is_string( $value ) ) {
 			// MWRestrictions::newFromArray failed; one of the IP ranges must be invalid
 			$status = Status::newGood();
-			foreach ( explode( "\n", $value ) as $range ) {
-				if ( !IPUtils::isIPAddress( $range ) ) {
+			foreach ( explode( PHP_EOL,  $value ) as $range ) {
+				if ( !\IP::isIPAddress( $range ) ) {
 					$status->fatal( 'restrictionsfield-badip', $range );
 				}
 			}
@@ -110,7 +103,7 @@ class HTMLRestrictionsField extends HTMLTextAreaField {
 	 */
 	public function getInputHTML( $value ) {
 		if ( $value instanceof MWRestrictions ) {
-			$value = implode( "\n", $value->toArray()['IPAddresses'] );
+			$value = implode( PHP_EOL, $value->toArray()['IPAddresses'] );
 		}
 		return parent::getInputHTML( $value );
 	}
@@ -121,7 +114,7 @@ class HTMLRestrictionsField extends HTMLTextAreaField {
 	 */
 	public function getInputOOUI( $value ) {
 		if ( $value instanceof MWRestrictions ) {
-			$value = implode( "\n", $value->toArray()['IPAddresses'] );
+			$value = implode( PHP_EOL, $value->toArray()['IPAddresses'] );
 		}
 		return parent::getInputOOUI( $value );
 	}

@@ -1,19 +1,17 @@
 <?php
 
 namespace RemexHtml\Serializer;
+use RemexHtml\Tokenizer\Attributes;
 
 /**
  * A formatter suitable for pre-sanitized input with ignoreEntities enabled
  * in the Tokenizer.
  */
 class FastFormatter implements Formatter {
-	public function __construct( $options = [] ) {
+	function __construct( $options = [] ) {
 	}
 
-	/**
-	 * @inheritDoc
-	 */
-	public function startDocument( $fragmentNamespace, $fragmentName ) {
+	function startDocument( $fragmentNamespace, $fragmentName ) {
 		if ( $fragmentNamespace === null ) {
 			return "<!DOCTYPE html>\n";
 		} else {
@@ -21,24 +19,14 @@ class FastFormatter implements Formatter {
 		}
 	}
 
-	/**
-	 * @inheritDoc
-	 */
-	public function doctype( $name, $public, $system ) {
-		return '';
+	function doctype( $name, $public, $system ) {
 	}
 
-	/**
-	 * @inheritDoc
-	 */
-	public function characters( SerializerNode $parent, $text, $start, $length ) {
+	function characters( SerializerNode $parent, $text, $start, $length ) {
 		return substr( $text, $start, $length );
 	}
 
-	/**
-	 * @inheritDoc
-	 */
-	public function element( SerializerNode $parent, SerializerNode $node, $contents ) {
+	function element( SerializerNode $parent, SerializerNode $node, $contents ) {
 		$name = $node->name;
 		$ret = "<$name";
 		foreach ( $node->attrs->getValues() as $attrName => $value ) {
@@ -56,10 +44,7 @@ class FastFormatter implements Formatter {
 		return $ret;
 	}
 
-	/**
-	 * @inheritDoc
-	 */
-	public function comment( SerializerNode $parent, $text ) {
+	function comment( SerializerNode $parent, $text ) {
 		return "<!--$text-->";
 	}
 }

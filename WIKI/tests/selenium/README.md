@@ -1,63 +1,52 @@
 # Selenium tests
 
-## Getting started
-
-See <https://www.mediawiki.org/wiki/Selenium/Node.js> for how to best
-run these locally. Below the internal prerequisites are documented,
-but you might not need to install these yourself.
-
 ## Prerequisites
 
-- [Chromium](https://www.chromium.org/) or [Chrome](https://www.google.com/chrome/)
-- [ChromeDriver](https://chromedriver.chromium.org/downloads)
+- [Chrome](https://www.google.com/chrome/)
+- [ChromeDriver](https://sites.google.com/a/chromium.org/chromedriver/)
 - [Node.js](https://nodejs.org/en/)
+- [MediaWiki-Vagrant](https://www.mediawiki.org/wiki/MediaWiki-Vagrant)
+
+Set up MediaWiki-Vagrant:
+
+    cd mediawiki/vagrant
+    vagrant up
+
+## Installation
+
+    cd mediawiki
+    npm install
 
 ## Usage
 
-There are three supported modes of running the tests.
-
-#### Headless
-
-The Selenium tests default to headless mode, unless a `DISPLAY` environment variable is set.
-This variable may be set on Linux desktop and XQuartz environments. To run headless there,
-unset the `DISPLAY` environment variable first.
-
     npm run selenium
 
-Or:
+To run only one file (for example page.js), you first need to spawn the chromedriver:
 
-    DISPLAY= npm run selenium
+    chromedriver --url-base=/wd/hub --port=4444
 
-#### Visible browser
+Then in another terminal:
 
-To see the browser window, ensure the `DISPLAY` variable is set. On Linux desktop and in XQuartz
-environments this is probably set already. On macOS, set it to a dummy value like `1`.
+    cd tests/selenium
+    ../../node_modules/.bin/wdio --spec specs/page.js
 
-    DISPLAY=1 npm run selenium
+The runner reads the config file `wdio.conf.js` and runs the spec listed in
+`page.js`.
 
-#### Video recording
+The defaults in the configuration files aim are targetting  a MediaWiki-Vagrant
+installation on installation on http://127.0.0.1:8080 with a user Admin and
+password 'vagrant'.  Those settings can be overriden using environment
+variables:
 
-[wdio-video-reporter](https://www.npmjs.com/package/wdio-video-reporter) is used to record videos. All videos will be stored by default in the `tests/selenium/log` directory. This can be overridden by setting the `LOG_DIR` environment variable. To record videos only for failed tests, set the `saveAllVideos = false` in `tests/selenium/wdio.conf.js` file.
+`MW_SERVER`: to be set to the value of your $wgServer
+`MW_SCRIPT_PATH`: ditto with  $wgScriptPath
+`MEDIAWIKI_USER`: username of an account that can create users on the wiki.
+`MEDIAWIKI_PASSWORD`: password for above user
 
-#### Filter
+Example:
 
-Run a specific spec:
+    MW_SERVER=http://example.org MW_SCRIPT_PATH=/dev/w npm run selenium
 
-    npm run selenium -- --spec tests/selenium/specs/page.js
+## Links
 
-To filter by test case, e.g. with the name containing "preferences":
-
-    npm run selenium -- --mochaOpts.grep preferences
-
-#### Configuration
-
-The following environment variables decide where to find MediaWiki and how to login:
-
-- `MW_SERVER`: The value of `$wgServer`.
-- `MW_SCRIPT_PATH`: The value of `$wgScriptPath`.
-- `MEDIAWIKI_USER`: Username of a wiki account with sysop rights.
-- `MEDIAWIKI_PASSWORD`: Password for this user.
-
-## Further reading
-
-- [Selenium/Node.js](https://www.mediawiki.org/wiki/Selenium/Node.js) on mediawiki.org
+- [Selenium/Node.js](https://www.mediawiki.org/wiki/Selenium/Node.js)

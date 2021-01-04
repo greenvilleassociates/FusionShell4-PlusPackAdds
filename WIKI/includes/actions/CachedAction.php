@@ -168,7 +168,7 @@ abstract class CachedAction extends FormlessAction implements ICacheHelper {
 	 */
 	protected function getCacheKey() {
 		return [
-			get_class( $this->getArticle() ),
+			get_class( $this->page ),
 			$this->getName(),
 			$this->getLanguage()->getCode()
 		];

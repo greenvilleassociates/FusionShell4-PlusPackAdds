@@ -3,7 +3,7 @@
 use MediaWiki\Widget\UsersMultiselectWidget;
 
 /**
- * Implements a tag multiselect input field for user names.
+ * Implements a capsule multiselect input field for user names.
  *
  * Besides the parameters recognized by HTMLUserTextField, additional recognized
  * parameters are:
@@ -12,7 +12,6 @@ use MediaWiki\Widget\UsersMultiselectWidget;
  *
  * The result is the array of usernames
  *
- * @stable to extend
  * @note This widget is not likely to remain functional in non-OOUI forms.
  */
 class HTMLUsersMultiselectField extends HTMLUserTextField {
@@ -33,17 +32,12 @@ class HTMLUsersMultiselectField extends HTMLUserTextField {
 			return true;
 		}
 
-		if ( $value === null ) {
+		if ( is_null( $value ) ) {
 			return false;
 		}
 
 		// $value is a string, because HTMLForm fields store their values as strings
 		$usersArray = explode( "\n", $value );
-
-		if ( isset( $this->mParams['max'] ) && ( count( $usersArray ) > $this->mParams['max'] ) ) {
-			return $this->msg( 'htmlform-multiselect-toomany', $this->mParams['max'] );
-		}
-
 		foreach ( $usersArray as $username ) {
 			$result = parent::validate( $username, $alldata );
 			if ( $result !== true ) {
@@ -62,14 +56,6 @@ class HTMLUsersMultiselectField extends HTMLUserTextField {
 	public function getInputOOUI( $value ) {
 		$params = [ 'name' => $this->mName ];
 
-		if ( isset( $this->mParams['id'] ) ) {
-			$params['id'] = $this->mParams['id'];
-		}
-
-		if ( isset( $this->mParams['disabled'] ) ) {
-			$params['disabled'] = $this->mParams['disabled'];
-		}
-
 		if ( isset( $this->mParams['default'] ) ) {
 			$params['default'] = $this->mParams['default'];
 		}
@@ -80,27 +66,7 @@ class HTMLUsersMultiselectField extends HTMLUserTextField {
 			$params['placeholder'] = $this->msg( 'mw-widgets-usersmultiselect-placeholder' )->plain();
 		}
 
-		if ( isset( $this->mParams['max'] ) ) {
-			$params['tagLimit'] = $this->mParams['max'];
-		}
-
-		if ( isset( $this->mParams['ipallowed'] ) ) {
-			$params['ipAllowed'] = $this->mParams['ipallowed'];
-		}
-
-		if ( isset( $this->mParams['iprange'] ) ) {
-			$params['ipRangeAllowed'] = $this->mParams['iprange'];
-		}
-
-		if ( isset( $this->mParams['iprangelimits'] ) ) {
-			$params['ipRangeLimits'] = $this->mParams['iprangelimits'];
-		}
-
-		if ( isset( $this->mParams['input'] ) ) {
-			$params['input'] = $this->mParams['input'];
-		}
-
-		if ( $value !== null ) {
+		if ( !is_null( $value ) ) {
 			// $value is a string, but the widget expects an array
 			$params['default'] = $value === '' ? [] : explode( "\n", $value );
 		}

@@ -21,10 +21,6 @@
  * @ingroup Maintenance
  */
 
-use MediaWiki\MediaWikiServices;
-use MediaWiki\Revision\RevisionRecord;
-use MediaWiki\Revision\SlotRecord;
-
 require_once __DIR__ . '/Maintenance.php';
 
 /**
@@ -46,6 +42,11 @@ class FixDefaultJsonContentPages extends LoggedUpdateMaintenance {
 	}
 
 	protected function doDBUpdates() {
+		if ( !$this->getConfig()->get( 'ContentHandlerUseDB' ) ) {
+			$this->output( "\$wgContentHandlerUseDB is not enabled, nothing to do.\n" );
+			return true;
+		}
+
 		$dbr = $this->getDB( DB_REPLICA );
 		$namespaces = [
 			NS_MEDIAWIKI => $dbr->buildLike( $dbr->anyString(), '.json' ),
@@ -55,20 +56,20 @@ class FixDefaultJsonContentPages extends LoggedUpdateMaintenance {
 			$lastPage = 0;
 			do {
 				$rows = $dbr->select(
-					'page',
-					[ 'page_id', 'page_title', 'page_namespace', 'page_content_model' ],
-					[
-						'page_namespace' => $ns,
-						'page_title ' . $like,
-						'page_id > ' . $dbr->addQuotes( $lastPage )
-					],
-					__METHOD__,
-					[ 'ORDER BY' => 'page_id', 'LIMIT' => $this->getBatchSize() ]
+						'page',
+						[ 'page_id', 'page_title', 'page_namespace', 'page_content_model' ],
+						[
+								'page_namespace' => $ns,
+								'page_title ' . $like,
+								'page_id > ' . $dbr->addQuotes( $lastPage )
+						],
+						__METHOD__,
+						[ 'ORDER BY' => 'page_id', 'LIMIT' => $this->mBatchSize ]
 				);
 				foreach ( $rows as $row ) {
 					$this->handleRow( $row );
 				}
-			} while ( $rows->numRows() >= $this->getBatchSize() );
+			} while ( $rows->numRows() >= $this->mBatchSize );
 		}
 
 		return true;
@@ -77,13 +78,10 @@ class FixDefaultJsonContentPages extends LoggedUpdateMaintenance {
 	protected function handleRow( stdClass $row ) {
 		$title = Title::makeTitle( $row->page_namespace, $row->page_title );
 		$this->output( "Processing {$title} ({$row->page_id})...\n" );
-		$rev = MediaWikiServices::getInstance()
-			->getRevisionLookup()
-			->getRevisionByTitle( $title );
-		$content = $rev->getContent( SlotRecord::MAIN, RevisionRecord::RAW );
+		$rev = Revision::newFromTitle( $title );
+		$content = $rev->getContent( Revision::RAW );
 		$dbw = $this->getDB( DB_MASTER );
 		if ( $content instanceof JsonContent ) {
-			$lbFactory = MediaWikiServices::getInstance()->getDBLoadBalancerFactory();
 			if ( $content->isValid() ) {
 				// Yay, actually JSON. We need to just change the
 				// page_content_model because revision will automatically
@@ -96,7 +94,7 @@ class FixDefaultJsonContentPages extends LoggedUpdateMaintenance {
 					__METHOD__
 				);
 				$this->output( "done.\n" );
-				$lbFactory->waitForReplication();
+				wfWaitForSlaves();
 			} else {
 				// Not JSON...force it to wikitext. We need to update the
 				// revision table so that these revisions are always processed
@@ -114,10 +112,9 @@ class FixDefaultJsonContentPages extends LoggedUpdateMaintenance {
 					$dbw->update(
 						'revision',
 						[ 'rev_content_model' => CONTENT_MODEL_WIKITEXT ],
-						[ 'rev_page' => $row->page_id, 'rev_id' => $chunk ],
-						__METHOD__
+						[ 'rev_page' => $row->page_id, 'rev_id' => $chunk ]
 					);
-					$lbFactory->waitForReplication();
+					wfWaitForSlaves();
 				}
 				$this->output( "done.\n" );
 			}
@@ -127,5 +124,5 @@ class FixDefaultJsonContentPages extends LoggedUpdateMaintenance {
 	}
 }
 
-$maintClass = FixDefaultJsonContentPages::class;
+$maintClass = 'FixDefaultJsonContentPages';
 require_once RUN_MAINTENANCE_IF_MAIN;

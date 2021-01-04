@@ -23,10 +23,6 @@
  * @ingroup SpecialPage
  */
 
-use MediaWiki\MediaWikiServices;
-use MediaWiki\Revision\RevisionRecord;
-use MediaWiki\Revision\SlotRecord;
-
 /**
  * Implements Special:ComparePages
  *
@@ -47,13 +43,13 @@ class SpecialComparePages extends SpecialPage {
 	/**
 	 * Show a form for filtering namespace and username
 	 *
-	 * @param string|null $par
+	 * @param string $par
+	 * @return string
 	 */
 	public function execute( $par ) {
 		$this->setHeaders();
 		$this->outputHeader();
-		$this->getOutput()->addModuleStyles( 'mediawiki.special' );
-		$this->addHelpLink( 'Help:Diff' );
+		$this->getOutput()->addModuleStyles( 'mediawiki.special.comparepages.styles' );
 
 		$form = HTMLForm::factory( 'ooui', [
 			'Page1' => [
@@ -63,7 +59,6 @@ class SpecialComparePages extends SpecialPage {
 				'size' => '40',
 				'section' => 'page1',
 				'validation-callback' => [ $this, 'checkExistingTitle' ],
-				'required' => false,
 			],
 			'Revision1' => [
 				'type' => 'int',
@@ -80,7 +75,6 @@ class SpecialComparePages extends SpecialPage {
 				'size' => '40',
 				'section' => 'page2',
 				'validation-callback' => [ $this, 'checkExistingTitle' ],
-				'required' => false,
 			],
 			'Revision2' => [
 				'type' => 'int',
@@ -118,18 +112,10 @@ class SpecialComparePages extends SpecialPage {
 		$rev2 = self::revOrTitle( $data['Revision2'], $data['Page2'] );
 
 		if ( $rev1 && $rev2 ) {
-			$revisionRecord = MediaWikiServices::getInstance()
-				->getRevisionLookup()
-				->getRevisionById( $rev1 );
+			$revision = Revision::newFromId( $rev1 );
 
-			if ( $revisionRecord ) { // NOTE: $rev1 was already checked, should exist.
-				$contentModel = $revisionRecord->getSlot(
-					SlotRecord::MAIN,
-					RevisionRecord::RAW
-				)->getModel();
-				$contentHandler = MediaWikiServices::getInstance()
-					->getContentHandlerFactory()
-					->getContentHandler( $contentModel );
+			if ( $revision ) { // NOTE: $rev1 was already checked, should exist.
+				$contentHandler = $revision->getContentHandler();
 				$de = $contentHandler->createDifferenceEngine( $form->getContext(),
 					$rev1,
 					$rev2,
@@ -174,10 +160,8 @@ class SpecialComparePages extends SpecialPage {
 		if ( $value === '' || $value === null ) {
 			return true;
 		}
-		$revisionRecord = MediaWikiServices::getInstance()
-			->getRevisionLookup()
-			->getRevisionById( $value );
-		if ( $revisionRecord === null ) {
+		$revision = Revision::newFromId( $value );
+		if ( $revision === null ) {
 			return $this->msg( 'compare-revision-not-exists' )->parseAsBlock();
 		}
 

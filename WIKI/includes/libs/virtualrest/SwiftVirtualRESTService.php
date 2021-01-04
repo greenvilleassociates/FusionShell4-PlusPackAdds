@@ -22,7 +22,7 @@
 
 /**
  * Example virtual rest service for OpenStack Swift
- * @todo caching support (APC/memcached)
+ * @TODO: caching support (APC/memcached)
  * @since 1.23
  */
 class SwiftVirtualRESTService extends VirtualRESTService {
@@ -93,10 +93,6 @@ class SwiftVirtualRESTService extends VirtualRESTService {
 		}
 	}
 
-	/**
-	 * @inheritDoc
-	 * @phan-param array[] $reqs
-	 */
 	public function onRequests( array $reqs, Closure $idGeneratorFunc ) {
 		$result = [];
 		$firstReq = reset( $reqs );

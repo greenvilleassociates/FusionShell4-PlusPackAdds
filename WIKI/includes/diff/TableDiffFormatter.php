@@ -27,25 +27,26 @@
 /**
  * MediaWiki default table style diff formatter
  * @todo document
- * @newable
+ * @private
  * @ingroup DifferenceEngine
  */
 class TableDiffFormatter extends DiffFormatter {
 
-	public function __construct() {
+	function __construct() {
 		$this->leadingContextLines = 2;
 		$this->trailingContextLines = 2;
 	}
 
 	/**
+	 * @static
 	 * @param string $msg
 	 *
 	 * @return mixed
 	 */
 	public static function escapeWhiteSpace( $msg ) {
-		$msg = preg_replace( '/^ /m', "\u{00A0} ", $msg );
-		$msg = preg_replace( '/ $/m', " \u{00A0}", $msg );
-		$msg = preg_replace( '/  /', "\u{00A0} ", $msg );
+		$msg = preg_replace( '/^ /m', '&#160; ', $msg );
+		$msg = preg_replace( '/ $/m', ' &#160;', $msg );
+		$msg = preg_replace( '/  /', '&#160; ', $msg );
 
 		return $msg;
 	}
@@ -123,7 +124,7 @@ class TableDiffFormatter extends DiffFormatter {
 	 * @return string
 	 */
 	protected function contextLine( $line ) {
-		return $this->wrapLine( "\u{00A0}", 'diff-context', $line );
+		return $this->wrapLine( '&#160;', 'diff-context', $line );
 	}
 
 	/**
@@ -146,7 +147,7 @@ class TableDiffFormatter extends DiffFormatter {
 	 * @return string
 	 */
 	protected function emptyLine() {
-		return "<td colspan=\"2\">\u{00A0}</td>";
+		return '<td colspan="2">&#160;</td>';
 	}
 
 	/**

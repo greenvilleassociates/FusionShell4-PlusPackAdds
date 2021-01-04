@@ -1,4 +1,4 @@
-( function () {
+( function ( mw ) {
 	/**
 	 * Base language object with methods related to language support, attempting to mirror some of the
 	 * functionality of the Language class in MediaWiki:
@@ -13,8 +13,8 @@
 	mw.language = {
 		/**
 		 * Language-related data (keyed by language, contains instances of mw.Map).
-		 *
-		 * Exported dynamically by the ResourceLoaderLanguageDataModule class in PHP.
+		 * Loaded dynamically (see ResourceLoaderLanguageDataModule class in PHP, registered
+		 * as mediawiki.language.data on the client).
 		 *
 		 * To set data:
 		 *
@@ -32,15 +32,12 @@
 		 *
 		 *  - `digitTransformTable`
 		 *  - `separatorTransformTable`
-		 *  - `minimumGroupingDigits`
 		 *  - `grammarForms`
 		 *  - `pluralRules`
 		 *  - `digitGroupingPattern`
 		 *  - `fallbackLanguages`
-		 *  - `bcp47Map`
-		 *  - `languageNames`
 		 *
-		 * @property {Object}
+		 * @property
 		 */
 		data: {},
 
@@ -79,12 +76,8 @@
 			if ( !( langData[ langCode ] instanceof mw.Map ) ) {
 				langData[ langCode ] = new mw.Map();
 			}
-			if ( arguments.length > 2 ) {
-				langData[ langCode ].set( dataKey, value );
-			} else {
-				langData[ langCode ].set( dataKey );
-			}
+			langData[ langCode ].set( dataKey, value );
 		}
 	};
 
-}() );
+}( mediaWiki ) );

@@ -4,3 +4,4 @@
 --
 
 DROP INDEX IF EXISTS /*i*/iwl_prefix;
+

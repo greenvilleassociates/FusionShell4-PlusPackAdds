@@ -2,6 +2,8 @@
 /**
  * Query the list of contributors to a page
  *
+ * Created on Nov 14, 2013
+ *
  * Copyright © 2013 Wikimedia Foundation and contributors
  *
  * This program is free software; you can redistribute it and/or modify
@@ -23,9 +25,6 @@
  * @since 1.23
  */
 
-use MediaWiki\MediaWikiServices;
-use MediaWiki\Revision\RevisionRecord;
-
 /**
  * A query module to show contributors to a page
  *
@@ -37,7 +36,7 @@ class ApiQueryContributors extends ApiQueryBase {
 	 * database pages too heavily), so only do the first MAX_PAGES input pages
 	 * in each API call (leaving the rest for continuation).
 	 */
-	private const MAX_PAGES = 100;
+	const MAX_PAGES = 100;
 
 	public function __construct( ApiQuery $query, $moduleName ) {
 		// "pc" is short for "page contributors", "co" was already taken by the
@@ -62,7 +61,7 @@ class ApiQueryContributors extends ApiQueryBase {
 				return $v >= $cont_page;
 			} );
 		}
-		if ( $pages === [] ) {
+		if ( !count( $pages ) ) {
 			// Nothing to do
 			return;
 		}
@@ -76,24 +75,17 @@ class ApiQueryContributors extends ApiQueryBase {
 		}
 
 		$result = $this->getResult();
-		$revQuery = MediaWikiServices::getInstance()->getRevisionStore()->getQueryInfo();
-
-		// Target indexes on the revision_actor_temp table.
-		$pageField = 'revactor_page';
-		$idField = 'revactor_actor';
-		$countField = 'revactor_actor';
 
 		// First, count anons
-		$this->addTables( $revQuery['tables'] );
-		$this->addJoinConds( $revQuery['joins'] );
+		$this->addTables( 'revision' );
 		$this->addFields( [
-			'page' => $pageField,
-			'anons' => "COUNT(DISTINCT $countField)",
+			'page' => 'rev_page',
+			'anons' => 'COUNT(DISTINCT rev_user_text)',
 		] );
-		$this->addWhereFld( $pageField, $pages );
-		$this->addWhere( ActorMigration::newMigration()->isAnon( $revQuery['fields']['rev_user'] ) );
-		$this->addWhere( $db->bitAnd( 'rev_deleted', RevisionRecord::DELETED_USER ) . ' = 0' );
-		$this->addOption( 'GROUP BY', $pageField );
+		$this->addWhereFld( 'rev_page', $pages );
+		$this->addWhere( 'rev_user = 0' );
+		$this->addWhere( $db->bitAnd( 'rev_deleted', Revision::DELETED_USER ) . ' = 0' );
+		$this->addOption( 'GROUP BY', 'rev_page' );
 		$res = $this->select( __METHOD__ );
 		foreach ( $res as $row ) {
 			$fit = $result->addValue( [ 'query', 'pages', $row->page ],
@@ -104,7 +96,7 @@ class ApiQueryContributors extends ApiQueryBase {
 				// some other module used up all the space. Just set a dummy
 				// continue and hope it works next time.
 				$this->setContinueEnumParameter( 'continue',
-					$params['continue'] ?? '0|0'
+					$params['continue'] !== null ? $params['continue'] : '0|0'
 				);
 
 				return;
@@ -113,27 +105,24 @@ class ApiQueryContributors extends ApiQueryBase {
 
 		// Next, add logged-in users
 		$this->resetQueryParams();
-		$this->addTables( $revQuery['tables'] );
-		$this->addJoinConds( $revQuery['joins'] );
+		$this->addTables( 'revision' );
 		$this->addFields( [
-			'page' => $pageField,
-			'id' => $idField,
-			// Non-MySQL databases don't like partial group-by
-			'userid' => 'MAX(' . $revQuery['fields']['rev_user'] . ')',
-			'username' => 'MAX(' . $revQuery['fields']['rev_user_text'] . ')',
+			'page' => 'rev_page',
+			'user' => 'rev_user',
+			'username' => 'MAX(rev_user_text)', // Non-MySQL databases don't like partial group-by
 		] );
-		$this->addWhereFld( $pageField, $pages );
-		$this->addWhere( ActorMigration::newMigration()->isNotAnon( $revQuery['fields']['rev_user'] ) );
-		$this->addWhere( $db->bitAnd( 'rev_deleted', RevisionRecord::DELETED_USER ) . ' = 0' );
-		$this->addOption( 'GROUP BY', [ $pageField, $idField ] );
+		$this->addWhereFld( 'rev_page', $pages );
+		$this->addWhere( 'rev_user != 0' );
+		$this->addWhere( $db->bitAnd( 'rev_deleted', Revision::DELETED_USER ) . ' = 0' );
+		$this->addOption( 'GROUP BY', 'rev_page, rev_user' );
 		$this->addOption( 'LIMIT', $params['limit'] + 1 );
 
 		// Force a sort order to ensure that properties are grouped by page
-		// But only if rev_page is not constant in the WHERE clause.
+		// But only if pp_page is not constant in the WHERE clause.
 		if ( count( $pages ) > 1 ) {
-			$this->addOption( 'ORDER BY', [ 'page', 'id' ] );
+			$this->addOption( 'ORDER BY', 'rev_page, rev_user' );
 		} else {
-			$this->addOption( 'ORDER BY', 'id' );
+			$this->addOption( 'ORDER BY', 'rev_user' );
 		}
 
 		$limitGroups = [];
@@ -146,8 +135,7 @@ class ApiQueryContributors extends ApiQueryBase {
 		} elseif ( $params['rights'] ) {
 			$excludeGroups = false;
 			foreach ( $params['rights'] as $r ) {
-				$limitGroups = array_merge( $limitGroups, $this->getPermissionManager()
-					->getGroupsWithPermission( $r ) );
+				$limitGroups = array_merge( $limitGroups, User::getGroupsWithPermission( $r ) );
 			}
 
 			// If no group has the rights requested, no need to query
@@ -163,8 +151,7 @@ class ApiQueryContributors extends ApiQueryBase {
 		} elseif ( $params['excluderights'] ) {
 			$excludeGroups = true;
 			foreach ( $params['excluderights'] as $r ) {
-				$limitGroups = array_merge( $limitGroups, $this->getPermissionManager()
-					->getGroupsWithPermission( $r ) );
+				$limitGroups = array_merge( $limitGroups, User::getGroupsWithPermission( $r ) );
 			}
 		}
 
@@ -172,9 +159,9 @@ class ApiQueryContributors extends ApiQueryBase {
 			$limitGroups = array_unique( $limitGroups );
 			$this->addTables( 'user_groups' );
 			$this->addJoinConds( [ 'user_groups' => [
-				$excludeGroups ? 'LEFT JOIN' : 'JOIN',
+				$excludeGroups ? 'LEFT OUTER JOIN' : 'INNER JOIN',
 				[
-					'ug_user=' . $revQuery['fields']['rev_user'],
+					'ug_user=rev_user',
 					'ug_group' => $limitGroups,
 					'ug_expiry IS NULL OR ug_expiry >= ' . $db->addQuotes( $db->timestamp() )
 				]
@@ -186,11 +173,11 @@ class ApiQueryContributors extends ApiQueryBase {
 			$cont = explode( '|', $params['continue'] );
 			$this->dieContinueUsageIf( count( $cont ) != 2 );
 			$cont_page = (int)$cont[0];
-			$cont_id = (int)$cont[1];
+			$cont_user = (int)$cont[1];
 			$this->addWhere(
-				"$pageField > $cont_page OR " .
-				"($pageField = $cont_page AND " .
-				"$idField >= $cont_id)"
+				"rev_page > $cont_page OR " .
+				"(rev_page = $cont_page AND " .
+				"rev_user >= $cont_user)"
 			);
 		}
 
@@ -200,16 +187,18 @@ class ApiQueryContributors extends ApiQueryBase {
 			if ( ++$count > $params['limit'] ) {
 				// We've reached the one extra which shows that
 				// there are additional pages to be had. Stop here...
-				$this->setContinueEnumParameter( 'continue', $row->page . '|' . $row->id );
+				$this->setContinueEnumParameter( 'continue', $row->page . '|' . $row->user );
+
 				return;
 			}
 
 			$fit = $this->addPageSubItem( $row->page,
-				[ 'userid' => (int)$row->userid, 'name' => $row->username ],
+				[ 'userid' => (int)$row->user, 'name' => $row->username ],
 				'user'
 			);
 			if ( !$fit ) {
-				$this->setContinueEnumParameter( 'continue', $row->page . '|' . $row->id );
+				$this->setContinueEnumParameter( 'continue', $row->page . '|' . $row->user );
+
 				return;
 			}
 		}
@@ -223,13 +212,9 @@ class ApiQueryContributors extends ApiQueryBase {
 		return 'public';
 	}
 
-	public function getAllowedParams( $flags = 0 ) {
+	public function getAllowedParams() {
 		$userGroups = User::getAllGroups();
-		$userRights = $this->getPermissionManager()->getAllPermissions();
-
-		if ( $flags & ApiBase::GET_VALUES_FOR_HELP ) {
-			sort( $userGroups );
-		}
+		$userRights = User::getAllRights();
 
 		return [
 			'group' => [

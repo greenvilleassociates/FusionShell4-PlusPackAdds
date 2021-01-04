@@ -21,10 +21,8 @@
 namespace MediaWiki\Logger;
 
 use MediaWiki\Logger\Monolog\BufferHandler;
-use Monolog\Handler\NullHandler;
-use Monolog\Handler\StreamHandler;
 use Monolog\Logger;
-use Wikimedia\ObjectFactory;
+use ObjectFactory;
 
 /**
  * LoggerFactory service provider that creates loggers implemented by
@@ -42,7 +40,7 @@ use Wikimedia\ObjectFactory;
  * default SPI provider:
  * @code
  * $wgMWLoggerDefaultSpi = [
- *   'class' => \MediaWiki\Logger\MonologSpi::class,
+ *   'class' => '\\MediaWiki\\Logger\\MonologSpi',
  *   'args' => [ [
  *       'loggers' => [
  *           '@default' => [
@@ -56,29 +54,29 @@ use Wikimedia\ObjectFactory;
  *       ],
  *       'processors' => [
  *           'wiki' => [
- *               'class' => \MediaWiki\Logger\Monolog\WikiProcessor::class,
+ *               'class' => '\\MediaWiki\\Logger\\Monolog\\WikiProcessor',
  *           ],
  *           'psr' => [
- *               'class' => \Monolog\Processor\PsrLogMessageProcessor::class,
+ *               'class' => '\\Monolog\\Processor\\PsrLogMessageProcessor',
  *           ],
  *           'pid' => [
- *               'class' => \Monolog\Processor\ProcessIdProcessor::class,
+ *               'class' => '\\Monolog\\Processor\\ProcessIdProcessor',
  *           ],
  *           'uid' => [
- *               'class' => \Monolog\Processor\UidProcessor::class,
+ *               'class' => '\\Monolog\\Processor\\UidProcessor',
  *           ],
  *           'web' => [
- *               'class' => \Monolog\Processor\WebProcessor::class,
+ *               'class' => '\\Monolog\\Processor\\WebProcessor',
  *           ],
  *       ],
  *       'handlers' => [
  *           'stream' => [
- *               'class'     => \Monolog\Handler\StreamHandler::class,
+ *               'class'     => '\\Monolog\\Handler\\StreamHandler',
  *               'args'      => [ 'path/to/your.log' ],
  *               'formatter' => 'line',
  *           ],
  *           'redis' => [
- *               'class'     => \Monolog\Handler\RedisHandler::class,
+ *               'class'     => '\\Monolog\\Handler\\RedisHandler',
  *               'args'      => [ function() {
  *                       $redis = new Redis();
  *                       $redis->connect( '127.0.0.1', 6379 );
@@ -90,7 +88,7 @@ use Wikimedia\ObjectFactory;
  *               'buffer' => true,
  *           ],
  *           'udp2log' => [
- *               'class' => \MediaWiki\Logger\Monolog\LegacyHandler::class,
+ *               'class' => '\\MediaWiki\\Logger\\Monolog\\LegacyHandler',
  *               'args' => [
  *                   'udp://127.0.0.1:8420/mediawiki
  *               ],
@@ -99,10 +97,10 @@ use Wikimedia\ObjectFactory;
  *       ],
  *       'formatters' => [
  *           'line' => [
- *               'class' => \Monolog\Formatter\LineFormatter::class,
+ *               'class' => '\\Monolog\\Formatter\\LineFormatter',
  *            ],
  *            'logstash' => [
- *                'class' => \Monolog\Formatter\LogstashFormatter::class,
+ *                'class' => '\\Monolog\\Formatter\\LogstashFormatter',
  *                'args'  => [ 'mediawiki', php_uname( 'n' ), null, '', 1 ],
  *            ],
  *       ],
@@ -117,13 +115,13 @@ use Wikimedia\ObjectFactory;
 class MonologSpi implements Spi {
 
 	/**
-	 * @var array
+	 * @var array $singletons
 	 */
 	protected $singletons;
 
 	/**
 	 * Configuration for creating new loggers.
-	 * @var array[][]
+	 * @var array $config
 	 */
 	protected $config;
 
@@ -147,17 +145,6 @@ class MonologSpi implements Spi {
 				$this->config[$key] = array_merge( $this->config[$key], $value );
 			} else {
 				$this->config[$key] = $value;
-			}
-		}
-		if ( !isset( $this->config['loggers']['@default'] ) ) {
-			$this->config['loggers']['@default'] = [
-				'handlers' => [ '@default' ],
-			];
-			if ( !isset( $this->config['handlers']['@default'] ) ) {
-				$this->config['handlers']['@default'] = [
-					'class' => StreamHandler::class,
-					'args' => [ 'php://stderr', Logger::ERROR ],
-				];
 			}
 		}
 		$this->reset();
@@ -192,7 +179,9 @@ class MonologSpi implements Spi {
 		if ( !isset( $this->singletons['loggers'][$channel] ) ) {
 			// Fallback to using the '@default' configuration if an explict
 			// configuration for the requested channel isn't found.
-			$spec = $this->config['loggers'][$channel] ?? $this->config['loggers']['@default'];
+			$spec = isset( $this->config['loggers'][$channel] ) ?
+				$this->config['loggers'][$channel] :
+				$this->config['loggers']['@default'];
 
 			$monolog = $this->createLogger( $channel, $spec );
 			$this->singletons['loggers'][$channel] = $monolog;
@@ -212,7 +201,7 @@ class MonologSpi implements Spi {
 
 		if ( isset( $spec['calls'] ) ) {
 			foreach ( $spec['calls'] as $method => $margs ) {
-				$obj->$method( ...$margs );
+				call_user_func_array( [ $obj, $method ], $margs );
 			}
 		}
 
@@ -222,14 +211,10 @@ class MonologSpi implements Spi {
 			}
 		}
 
-		if ( isset( $spec['handlers'] ) && $spec['handlers'] ) {
+		if ( isset( $spec['handlers'] ) ) {
 			foreach ( $spec['handlers'] as $handler ) {
 				$obj->pushHandler( $this->getHandler( $handler ) );
 			}
-		} else {
-			// When no handlers are registered Monolog 1.x sends logs to stderr,
-			// which could be not expected: avoid this behaviour
-			$obj->pushHandler( new NullHandler() );
 		}
 		return $obj;
 	}

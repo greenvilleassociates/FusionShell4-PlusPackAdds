@@ -1,5 +1,9 @@
 <?php
 /**
+ *
+ *
+ * Created on January 1, 2017
+ *
  * Copyright © 2017 Justin Du "<justin.d128@gmail.com>"
  *
  * This program is free software; you can redistribute it and/or modify
@@ -19,8 +23,6 @@
  *
  * @file
  */
-
-use MediaWiki\MediaWikiServices;
 
 /**
  * API module that facilitates changing the language of a page.
@@ -71,7 +73,7 @@ class ApiSetPageLanguage extends ApiBase {
 
 		// If change tagging was requested, check that the user is allowed to tag,
 		// and the tags are valid
-		if ( $params['tags'] ) {
+		if ( count( $params['tags'] ) ) {
 			$tagStatus = ChangeTags::canAddTagsAccompanyingChange( $params['tags'], $user );
 			if ( !$tagStatus->isOK() ) {
 				$this->dieStatus( $tagStatus );
@@ -82,7 +84,7 @@ class ApiSetPageLanguage extends ApiBase {
 			$this,
 			$titleObj,
 			$params['lang'],
-			$params['reason'] ?? '',
+			$params['reason'] === null ? '' : $params['reason'],
 			$params['tags'] ?: []
 		);
 
@@ -116,9 +118,7 @@ class ApiSetPageLanguage extends ApiBase {
 			'lang' => [
 				ApiBase::PARAM_TYPE => array_merge(
 					[ 'default' ],
-					array_keys( MediaWikiServices::getInstance()
-						->getLanguageNameUtils()
-						->getLanguageNames( null, 'mwfile' ) )
+					array_keys( Language::fetchLanguageNames( null, 'mwfile' ) )
 				),
 				ApiBase::PARAM_REQUIRED => true,
 			],

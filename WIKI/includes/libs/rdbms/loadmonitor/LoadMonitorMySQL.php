@@ -39,20 +39,22 @@ class LoadMonitorMySQL extends LoadMonitor {
 	) {
 		parent::__construct( $lb, $srvCache, $wCache, $options );
 
-		$this->warmCacheRatio = $options['warmCacheRatio'] ?? 0.0;
+		$this->warmCacheRatio = isset( $options['warmCacheRatio'] )
+			? $options['warmCacheRatio']
+			: 0.0;
 	}
 
 	protected function getWeightScale( $index, IDatabase $conn = null ) {
-		if ( $conn === null ) {
-			return parent::getWeightScale( $index, $conn );
+		if ( !$conn ) {
+			return 0.0;
 		}
 
 		$weight = 1.0;
 		if ( $this->warmCacheRatio > 0 ) {
-			$res = $conn->query( 'SHOW STATUS', __METHOD__ );
+			$res = $conn->query( 'SHOW STATUS', false );
 			$s = $res ? $conn->fetchObject( $res ) : false;
 			if ( $s === false ) {
-				$host = $this->lb->getServerName( $index );
+				$host = $this->parent->getServerName( $index );
 				$this->replLogger->error( __METHOD__ . ": could not get status for $host" );
 			} else {
 				// https://dev.mysql.com/doc/refman/5.7/en/server-status-variables.html

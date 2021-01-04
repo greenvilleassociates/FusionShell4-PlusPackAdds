@@ -33,7 +33,9 @@ class SpecialActiveUsers extends SpecialPage {
 	}
 
 	/**
-	 * @param string|null $par Parameter passed to the page or null
+	 * Show the special page
+	 *
+	 * @param string $par Parameter passed to the page or null
 	 */
 	public function execute( $par ) {
 		$out = $this->getOutput();
@@ -67,7 +69,6 @@ class SpecialActiveUsers extends SpecialPage {
 				Html::rawElement( 'ul', [], $usersBody ) .
 				$pager->getNavigationBar()
 			);
-			$out->addModuleStyles( 'mediawiki.interface.helpers.styles' );
 		} else {
 			$out->addWikiMsg( 'activeusers-noresult' );
 		}
@@ -79,12 +80,10 @@ class SpecialActiveUsers extends SpecialPage {
 	protected function buildForm() {
 		$groups = User::getAllGroups();
 
-		$options = [];
 		foreach ( $groups as $group ) {
 			$msg = htmlspecialchars( UserGroupMembership::getGroupName( $group ) );
 			$options[$msg] = $group;
 		}
-		ksort( $options );
 
 		// Backwards-compatibility with old URLs
 		$req = $this->getRequest();
@@ -155,7 +154,7 @@ class SpecialActiveUsers extends SpecialPage {
 			if ( $cTime ) {
 				$secondsOld = wfTimestamp( TS_UNIX, $rcMax ) - wfTimestamp( TS_UNIX, $cTime );
 			} else {
-				$rcMin = $dbr->selectField( 'recentchanges', 'MIN(rc_timestamp)', '', __METHOD__ );
+				$rcMin = $dbr->selectField( 'recentchanges', 'MIN(rc_timestamp)' );
 				$secondsOld = time() - wfTimestamp( TS_UNIX, $rcMin );
 			}
 			if ( $secondsOld > 0 ) {

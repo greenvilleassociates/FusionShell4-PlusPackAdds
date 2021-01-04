@@ -22,14 +22,13 @@
  * http://www.gnu.org/copyleft/gpl.html
  *
  * @file
- * @ingroup Dump
- * @ingroup Maintenance
+ * @ingroup Dump Maintenance
  */
 
-require_once __DIR__ . '/includes/BackupDumper.php';
+require_once __DIR__ . '/backup.inc';
 
 class DumpBackup extends BackupDumper {
-	public function __construct( $args = null ) {
+	function __construct( $args = null ) {
 		parent::__construct();
 
 		$this->addDescription( <<<TEXT
@@ -65,7 +64,6 @@ TEXT
 		$this->addOption( 'stub', 'Don\'t perform old_text lookups; for 2-pass dump' );
 		$this->addOption( 'uploads', 'Include upload records without files' );
 		$this->addOption( 'include-files', 'Include files within the XML stream' );
-		$this->addOption( 'namespaces', 'Limit to this comma-separated list of namespace numbers' );
 
 		if ( $args ) {
 			$this->loadWithArgv( $args );
@@ -73,7 +71,7 @@ TEXT
 		}
 	}
 
-	public function execute() {
+	function execute() {
 		$this->processOptions();
 
 		$textMode = $this->hasOption( 'stub' ) ? WikiExporter::STUB : WikiExporter::TEXT;
@@ -89,11 +87,11 @@ TEXT
 		} elseif ( $this->hasOption( 'revrange' ) ) {
 			$this->dump( WikiExporter::RANGE, $textMode );
 		} else {
-			$this->fatalError( 'No valid action specified.' );
+			$this->error( 'No valid action specified.', 1 );
 		}
 	}
 
-	protected function processOptions() {
+	function processOptions() {
 		parent::processOptions();
 
 		// Evaluate options specific to this class
@@ -132,13 +130,8 @@ TEXT
 		$this->dumpUploads = $this->hasOption( 'uploads' );
 		$this->dumpUploadFileContents = $this->hasOption( 'include-files' );
 		$this->orderRevs = $this->hasOption( 'orderrevs' );
-		if ( $this->hasOption( 'namespaces' ) ) {
-			$this->limitNamespaces = explode( ',', $this->getOption( 'namespaces' ) );
-		} else {
-			$this->limitNamespaces = null;
-		}
 	}
 }
 
-$maintClass = DumpBackup::class;
+$maintClass = 'DumpBackup';
 require_once RUN_MAINTENANCE_IF_MAIN;

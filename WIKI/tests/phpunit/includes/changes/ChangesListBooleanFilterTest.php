@@ -3,7 +3,7 @@
 /**
  * @covers ChangesListBooleanFilter
  */
-class ChangesListBooleanFilterTest extends MediaWikiIntegrationTestCase {
+class ChangesListBooleanFilterTest extends MediaWikiTestCase {
 	public function testGetJsData() {
 		$group = new ChangesListBooleanFilterGroup( [
 			'name' => 'group',
@@ -49,7 +49,6 @@ class ChangesListBooleanFilterTest extends MediaWikiIntegrationTestCase {
 				'default' => 1,
 				'priority' => 1,
 				'cssClass' => null,
-				'defaultHighlightColor' => null,
 				'conflicts' => [
 					[
 						'group' => 'group',
@@ -86,7 +85,6 @@ class ChangesListBooleanFilterTest extends MediaWikiIntegrationTestCase {
 				'default' => 1,
 				'priority' => 1,
 				'cssClass' => null,
-				'defaultHighlightColor' => null,
 				'conflicts' => [
 					[
 						'group' => 'group',
@@ -126,8 +124,8 @@ class ChangesListBooleanFilterTest extends MediaWikiIntegrationTestCase {
 			'priority' => 2,
 		] );
 
-		$this->assertTrue(
-
+		$this->assertEquals(
+			true,
 			$foo->isFeatureAvailableOnStructuredUi(),
 			'Same filter appears on both'
 		);
@@ -141,7 +139,8 @@ class ChangesListBooleanFilterTest extends MediaWikiIntegrationTestCase {
 			'priority' => 2,
 		] );
 
-		$this->assertFalse(
+		$this->assertEquals(
+			false,
 			$bar->isFeatureAvailableOnStructuredUi(),
 			'Only on unstructured UI'
 		);
@@ -155,8 +154,8 @@ class ChangesListBooleanFilterTest extends MediaWikiIntegrationTestCase {
 			'priority' => 2,
 		] );
 
-		$this->assertTrue(
-
+		$this->assertEquals(
+			true,
 			$baz->isFeatureAvailableOnStructuredUi(),
 			'Legacy filter does not appear directly in new UI, but equivalent ' .
 				'does and is marked with isReplacedInStructuredUi'

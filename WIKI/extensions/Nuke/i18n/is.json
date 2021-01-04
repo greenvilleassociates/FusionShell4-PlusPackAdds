@@ -1,10 +1,8 @@
 {
 	"@metadata": {
 		"authors": [
-			"Maxí",
 			"S.Örvarr.S",
-			"Snævar",
-			"Sveinn í Felli"
+			"Snævar"
 		]
 	},
 	"nuke": "Fjöldaeyða",
@@ -19,14 +17,14 @@
 	"nuke-submit-user": "Lista síður",
 	"nuke-submit-delete": "Eyða völdum síðum",
 	"right-nuke": "Fjöldaeyða síðum",
+	"nuke-select": "Velja: $1",
 	"nuke-userorip": "Notandanafn, vistfang eða tómt:",
 	"nuke-maxpages": "Hámarksfjöldi síðna:",
 	"nuke-editby": "Búnar til af [[Special:Contributions/$1|{{GENDER:$1|$1}}]]",
 	"nuke-deleted": "'''$1''' hefur verið eytt.",
 	"nuke-not-deleted": "Mistök við eyðingu síðunnar [[:$1]].",
 	"nuke-delete-more": "[[Special:Nuke|Fjöldaeyða fleiri skrám]]",
-	"nuke-pattern": "SQL-LÍKT mynstur (t.d. %) fyrir nafn á síðuna:",
-	"nuke-nopages-global": "Það eru engir síðutitlar sem samsvara leitinni þinni.",
-	"nuke-viewchanges": "skoða breytingar",
-	"nuke-linkoncontribs": "fjöldaeyða"
+	"nuke-pattern": "Nafna mynstur:",
+	"nuke-nopages-global": "Það eru engar nýjar síður í [[Special:RecentChanges|nýjustu breytingum]].",
+	"nuke-viewchanges": "skoða breytingar"
 }

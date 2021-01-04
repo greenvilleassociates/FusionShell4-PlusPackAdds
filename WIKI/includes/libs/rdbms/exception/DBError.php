@@ -21,32 +21,25 @@
 
 namespace Wikimedia\Rdbms;
 
-use RuntimeException;
+use Exception;
 
 /**
  * Database error base class
- * @newable
- * @stable to extend
  * @ingroup Database
  */
-class DBError extends RuntimeException {
+class DBError extends Exception {
 	/** @var IDatabase|null */
 	public $db;
 
 	/**
 	 * Construct a database error
-	 * @stable to call
-	 * @param IDatabase|null $db Object which threw the error
+	 * @param IDatabase $db Object which threw the error
 	 * @param string $error A simple error message to be used for debugging
-	 * @param \Throwable|null $prev Previous throwable
 	 */
-	public function __construct( ?IDatabase $db, $error, \Throwable $prev = null ) {
-		parent::__construct( $error, 0, $prev );
+	public function __construct( IDatabase $db = null, $error ) {
 		$this->db = $db;
+		parent::__construct( $error );
 	}
 }
 
-/**
- * @deprecated since 1.29
- */
 class_alias( DBError::class, 'DBError' );

@@ -23,8 +23,7 @@
 
 require __DIR__ . '/../commandLine.inc';
 
-use MediaWiki\MediaWikiServices;
-use Wikimedia\Rdbms\Database;
+use Wikimedia\Rdbms\IMaintainableDatabase;
 
 /**
  * Maintenance script that upgrade for log_id/log_deleted fields in a
@@ -35,34 +34,32 @@ use Wikimedia\Rdbms\Database;
 class UpdateLogging {
 
 	/**
-	 * @var Database
+	 * @var IMaintainableDatabase
 	 */
 	public $dbw;
 	public $batchSize = 1000;
 	public $minTs = false;
 
-	public function execute() {
-		$this->dbw = wfGetDB( DB_MASTER );
+	function execute() {
+		$this->dbw = $this->getDB( DB_MASTER );
 		$logging = $this->dbw->tableName( 'logging' );
 		$logging_1_10 = $this->dbw->tableName( 'logging_1_10' );
 		$logging_pre_1_10 = $this->dbw->tableName( 'logging_pre_1_10' );
 
-		if ( $this->dbw->tableExists( 'logging_pre_1_10', __METHOD__ )
-			&& !$this->dbw->tableExists( 'logging', __METHOD__ )
-		) {
+		if ( $this->dbw->tableExists( 'logging_pre_1_10' ) && !$this->dbw->tableExists( 'logging' ) ) {
 			# Fix previous aborted run
 			echo "Cleaning up from previous aborted run\n";
 			$this->dbw->query( "RENAME TABLE $logging_pre_1_10 TO $logging", __METHOD__ );
 		}
 
-		if ( $this->dbw->tableExists( 'logging_pre_1_10', __METHOD__ ) ) {
+		if ( $this->dbw->tableExists( 'logging_pre_1_10' ) ) {
 			echo "This script has already been run to completion\n";
 
 			return;
 		}
 
 		# Create the target table
-		if ( !$this->dbw->tableExists( 'logging_1_10', __METHOD__ ) ) {
+		if ( !$this->dbw->tableExists( 'logging_1_10' ) ) {
 			global $wgDBTableOptions;
 
 			$sql = <<<EOT
@@ -133,16 +130,15 @@ EOT;
 	 * @param string $srcTable
 	 * @param string $dstTable
 	 */
-	private function sync( $srcTable, $dstTable ) {
+	function sync( $srcTable, $dstTable ) {
 		$batchSize = 1000;
-		$minTs = $this->dbw->selectField( $srcTable, 'MIN(log_timestamp)', '', __METHOD__ );
+		$minTs = $this->dbw->selectField( $srcTable, 'MIN(log_timestamp)', false, __METHOD__ );
 		$minTsUnix = wfTimestamp( TS_UNIX, $minTs );
 		$numRowsCopied = 0;
-		$lbFactory = MediaWikiServices::getInstance()->getDBLoadBalancerFactory();
 
 		while ( true ) {
-			$maxTs = $this->dbw->selectField( $srcTable, 'MAX(log_timestamp)', '', __METHOD__ );
-			$copyPos = $this->dbw->selectField( $dstTable, 'MAX(log_timestamp)', '', __METHOD__ );
+			$maxTs = $this->dbw->selectField( $srcTable, 'MAX(log_timestamp)', false, __METHOD__ );
+			$copyPos = $this->dbw->selectField( $dstTable, 'MAX(log_timestamp)', false, __METHOD__ );
 			$maxTsUnix = wfTimestamp( TS_UNIX, $maxTs );
 			$copyPosUnix = wfTimestamp( TS_UNIX, $copyPos );
 
@@ -179,12 +175,12 @@ EOT;
 			$this->dbw->insert( $dstTable, $batch, __METHOD__ );
 			$numRowsCopied += count( $batch );
 
-			$lbFactory->waitForReplication();
+			wfWaitForSlaves();
 		}
 		echo "Copied $numRowsCopied rows\n";
 	}
 
-	private function copyExactMatch( $srcTable, $dstTable, $copyPos ) {
+	function copyExactMatch( $srcTable, $dstTable, $copyPos ) {
 		$numRowsCopied = 0;
 		$srcRes = $this->dbw->select( $srcTable, '*', [ 'log_timestamp' => $copyPos ], __METHOD__ );
 		$dstRes = $this->dbw->select( $dstTable, '*', [ 'log_timestamp' => $copyPos ], __METHOD__ );

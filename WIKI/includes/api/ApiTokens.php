@@ -1,5 +1,9 @@
 <?php
 /**
+ *
+ *
+ * Created on Jul 29, 2011
+ *
  * Copyright © 2011 John Du Hart john@johnduhart.me
  *
  * This program is free software; you can redistribute it and/or modify
@@ -62,13 +66,13 @@ class ApiTokens extends ApiBase {
 		if ( $types ) {
 			return $types;
 		}
-		$types = [ 'patrol' => [ ApiQueryRecentChanges::class, 'getPatrolToken' ] ];
+		$types = [ 'patrol' => [ 'ApiQueryRecentChanges', 'getPatrolToken' ] ];
 		$names = [ 'edit', 'delete', 'protect', 'move', 'block', 'unblock',
 			'email', 'import', 'watch', 'options' ];
 		foreach ( $names as $name ) {
-			$types[$name] = [ ApiQueryInfo::class, 'get' . ucfirst( $name ) . 'Token' ];
+			$types[$name] = [ 'ApiQueryInfo', 'get' . ucfirst( $name ) . 'Token' ];
 		}
-		$this->getHookRunner()->onApiTokensGetTokenTypes( $types );
+		Hooks::run( 'ApiTokensGetTokenTypes', [ &$types ] );
 
 		// For forwards-compat, copy any token types from ApiQueryTokens that
 		// we don't already have something for.

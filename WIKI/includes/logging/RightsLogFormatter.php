@@ -19,11 +19,9 @@
  *
  * @file
  * @author Alexandre Emsenhuber
- * @license GPL-2.0-or-later
+ * @license http://www.gnu.org/copyleft/gpl.html GNU General Public License 2.0 or later
  * @since 1.22
  */
-
-use MediaWiki\MediaWikiServices;
 
 /**
  * This class formats rights log entries.
@@ -32,11 +30,10 @@ use MediaWiki\MediaWikiServices;
  */
 class RightsLogFormatter extends LogFormatter {
 	protected function makePageLink( Title $title = null, $parameters = [], $html = null ) {
-		global $wgUserrightsInterwikiDelimiter;
+		global $wgContLang, $wgUserrightsInterwikiDelimiter;
 
 		if ( !$this->plaintext ) {
-			$text = MediaWikiServices::getInstance()->getContentLanguage()->
-				ucfirst( $title->getDBkey() );
+			$text = $wgContLang->ucfirst( $title->getDBkey() );
 			$parts = explode( $wgUserrightsInterwikiDelimiter, $text, 2 );
 
 			if ( count( $parts ) === 2 ) {
@@ -97,16 +94,16 @@ class RightsLogFormatter extends LogFormatter {
 		$allParams = $this->entry->getParameters();
 
 		if ( count( $oldGroups ) ) {
-			$params[3] = Message::rawParam( $this->formatRightsList( $oldGroups,
-				$allParams['oldmetadata'] ?? [] ) );
+			$params[3] = [ 'raw' => $this->formatRightsList( $oldGroups,
+				isset( $allParams['oldmetadata'] ) ? $allParams['oldmetadata'] : [] ) ];
 		} else {
 			$params[3] = $this->msg( 'rightsnone' )->text();
 		}
 		if ( count( $newGroups ) ) {
 			// Array_values is used here because of T44211
 			// see use of array_unique in UserrightsPage::doSaveUserGroups on $newGroups.
-			$params[4] = Message::rawParam( $this->formatRightsList( array_values( $newGroups ),
-				$allParams['newmetadata'] ?? [] ) );
+			$params[4] = [ 'raw' => $this->formatRightsList( array_values( $newGroups ),
+				isset( $allParams['newmetadata'] ) ? $allParams['newmetadata'] : [] ) ];
 		} else {
 			$params[4] = $this->msg( 'rightsnone' )->text();
 		}
@@ -184,7 +181,8 @@ class RightsLogFormatter extends LogFormatter {
 				if ( isset( $oldmetadata[$index] ) ) {
 					$result += $oldmetadata[$index];
 				}
-				$result['expiry'] = ApiResult::formatExpiry( $result['expiry'] ?? null );
+				$result['expiry'] = ApiResult::formatExpiry( isset( $result['expiry'] ) ?
+					$result['expiry'] : null );
 
 				return $result;
 			}, array_keys( $params['4:array:oldgroups'] ) );
@@ -201,7 +199,8 @@ class RightsLogFormatter extends LogFormatter {
 				if ( isset( $newmetadata[$index] ) ) {
 					$result += $newmetadata[$index];
 				}
-				$result['expiry'] = ApiResult::formatExpiry( $result['expiry'] ?? null );
+				$result['expiry'] = ApiResult::formatExpiry( isset( $result['expiry'] ) ?
+					$result['expiry'] : null );
 
 				return $result;
 			}, array_keys( $params['5:array:newgroups'] ) );

@@ -119,9 +119,7 @@ class ConfirmLinkSecondaryAuthenticationProvider extends AbstractSecondaryAuthen
 				$status = $this->manager->allowsAuthenticationDataChange( $req );
 				$statuses[] = [ $req, $status ];
 				if ( $status->isGood() ) {
-					// We're not changing credentials, just adding a new link
-					// to an already-known user.
-					$this->manager->changeAuthenticationData( $req, /* $isAddition */ true );
+					$this->manager->changeAuthenticationData( $req );
 				} else {
 					$anyFailed = true;
 				}

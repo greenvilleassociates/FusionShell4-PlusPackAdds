@@ -22,38 +22,15 @@
  */
 
 /**
- * Simple version of LockManager that only does lock reference counting
+ * Simple version of LockManager that does nothing
  * @since 1.19
  */
 class NullLockManager extends LockManager {
 	protected function doLock( array $paths, $type ) {
-		foreach ( $paths as $path ) {
-			if ( isset( $this->locksHeld[$path][$type] ) ) {
-				++$this->locksHeld[$path][$type];
-			} else {
-				$this->locksHeld[$path][$type] = 1;
-			}
-		}
-
 		return StatusValue::newGood();
 	}
 
 	protected function doUnlock( array $paths, $type ) {
-		$status = StatusValue::newGood();
-
-		foreach ( $paths as $path ) {
-			if ( isset( $this->locksHeld[$path][$type] ) ) {
-				if ( --$this->locksHeld[$path][$type] <= 0 ) {
-					unset( $this->locksHeld[$path][$type] );
-					if ( !$this->locksHeld[$path] ) {
-						unset( $this->locksHeld[$path] ); // clean up
-					}
-				}
-			} else {
-				$status->warning( 'lockmanager-notlocked', $path );
-			}
-		}
-
-		return $status;
+		return StatusValue::newGood();
 	}
 }

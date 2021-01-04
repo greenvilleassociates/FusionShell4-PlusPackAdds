@@ -1,31 +1,34 @@
 <?php
 
 /**
- * @group medium
  * @group Database
- * @covers FormattedRCFeed
- * @covers RecentChange
- * @covers JSONRCFeedFormatter
- * @covers MachineReadableRCFeedFormatter
- * @covers RCFeed
  */
-class RCFeedIntegrationTest extends MediaWikiIntegrationTestCase {
-	protected function setUp() : void {
+class RCFeedIntegrationTest extends MediaWikiTestCase {
+	protected function setUp() {
 		parent::setUp();
 		$this->setMwGlobals( [
 			'wgCanonicalServer' => 'https://example.org',
 			'wgServerName' => 'example.org',
 			'wgScriptPath' => '/w',
 			'wgDBname' => 'example',
-			'wgDBprefix' => $this->dbPrefix(),
+			'wgDBprefix' => '',
 			'wgRCFeeds' => [],
 			'wgRCEngines' => [],
 		] );
 	}
 
+	/**
+	 * @covers RecentChange::notifyRCFeeds
+	 * @covers RecentChange::getEngine
+	 * @covers RCFeed::factory
+	 * @covers FormattedRCFeed::__construct
+	 * @covers FormattedRCFeed::notify
+	 * @covers JSONRCFeedFormatter::formatArray
+	 * @covers MachineReadableRCFeedFormatter::getLine
+	 */
 	public function testNotify() {
-		$feed = $this->getMockBuilder( RCFeedEngine::class )
-			->setConstructorArgs( [ [ 'formatter' => JSONRCFeedFormatter::class ] ] )
+		$feed = $this->getMockBuilder( 'RCFeedEngine' )
+			->setConstructorArgs( [ [ 'formatter' => 'JSONRCFeedFormatter' ] ] )
 			->setMethods( [ 'send' ] )
 			->getMock();
 
@@ -57,7 +60,7 @@ class RCFeedIntegrationTest extends MediaWikiIntegrationTestCase {
 						'server_url' => 'https://example.org',
 						'server_name' => 'example.org',
 						'server_script_path' => '/w',
-						'wiki' => 'example-' . $this->dbPrefix(),
+						'wiki' => 'example',
 					] ),
 					$line
 				);
@@ -68,7 +71,7 @@ class RCFeedIntegrationTest extends MediaWikiIntegrationTestCase {
 			'wgRCFeeds' => [
 				'myfeed' => [
 					'uri' => 'test://localhost:1234',
-					'formatter' => JSONRCFeedFormatter::class,
+					'formatter' => 'JSONRCFeedFormatter',
 				],
 			],
 			'wgRCEngines' => [
