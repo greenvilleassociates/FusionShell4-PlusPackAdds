@@ -20,7 +20,7 @@ $def_coy - the default company that is pre-selected on login
 
 $def_coy = 0;
 
-$tb_pref_counter = 1;
+$tb_pref_counter = 2;
 
 $db_connections = array (
   0 => 
@@ -33,5 +33,16 @@ $db_connections = array (
     'tbpref' => '0_',
     'dbuser' => 'gaweb1_sa',
     'dbpassword' => 'test1',
+  ),
+  1 => 
+  array (
+    'name' => 'GREENVILLE1',
+    'host' => 'localhost',
+    'port' => '',
+    'dbuser' => 'gaweb1_sa',
+    'dbpassword' => 'test1',
+    'dbname' => 'gaweb1_faccounting',
+    'collation' => 'utf8_xx',
+    'tbpref' => '1_',
   ),
 );

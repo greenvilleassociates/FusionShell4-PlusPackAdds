@@ -1,1 +1,11 @@
 [04-Jan-2021 08:05:07 America/New_York] 0::login.php:108:[before upgrade] count(): Parameter must be an array or an object that implements Countable
+[04-Jan-2021 18:50:33 America/New_York] 1:fusionmanager:simple_crud_class.inc:114: key() expects parameter 1 to be array, string given
+[04-Jan-2021 18:51:54 America/New_York] 1:fusionmanager:simple_crud_class.inc:114: key() expects parameter 1 to be array, string given
+[04-Jan-2021 18:52:08 America/New_York] 1:fusionmanager:simple_crud_class.inc:114: key() expects parameter 1 to be array, string given
+[04-Jan-2021 18:52:24 America/New_York] 1:fusionmanager:simple_crud_class.inc:114: key() expects parameter 1 to be array, string given
+[04-Jan-2021 18:52:24 America/New_York] <b>DATABASE ERROR :</b> Can't insert crm person<br>error code : 1406<br>error message : Data too long for column 'ref' at row 1<br>sql that failed was : INSERT INTO 1_crm_persons (ref, name, name2, address,
+		phone, phone2, fax, email, lang, notes)
+		VALUES ('Chief Executive - Capitol Technology', 'John', 'Stritzinger', '2156 Cresthill Rd\r\nColumbia, SC 29223', '843-352-3459', '', '', 'jstritzinger33@gmail.com', 'C', 'JSS is CEO of both G/a and CTS. G/a owns only the VM instances at Amazon for Demo purposes. Other services for Glocation.Info and Development purposes are based on credit balances.')<br><br><br>
+[04-Jan-2021 18:52:43 America/New_York] 1:fusionmanager:simple_crud_class.inc:114: key() expects parameter 1 to be array, string given
+[04-Jan-2021 18:53:05 America/New_York] 1:fusionmanager:simple_crud_class.inc:114: key() expects parameter 1 to be array, string given
+[04-Jan-2021 18:53:12 America/New_York] 1:fusionmanager:simple_crud_class.inc:114: key() expects parameter 1 to be array, string given
