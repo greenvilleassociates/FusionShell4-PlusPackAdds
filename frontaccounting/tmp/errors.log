@@ -9,3 +9,99 @@
 [04-Jan-2021 18:52:43 America/New_York] 1:fusionmanager:simple_crud_class.inc:114: key() expects parameter 1 to be array, string given
 [04-Jan-2021 18:53:05 America/New_York] 1:fusionmanager:simple_crud_class.inc:114: key() expects parameter 1 to be array, string given
 [04-Jan-2021 18:53:12 America/New_York] 1:fusionmanager:simple_crud_class.inc:114: key() expects parameter 1 to be array, string given
+[03-Mar-2022 12:51:49 America/New_York] 1::connect_db_mysqli.inc:33:[before upgrade] mysqli_connect(): (HY000/1045): Access denied for user 'gaweb1_sa'@'localhost' (using password: YES)
+[03-Mar-2022 12:51:49 America/New_York] 1::connect_db_mysqli.inc:35:[before upgrade] mysqli_select_db() expects parameter 1 to be mysqli, bool given
+[03-Mar-2022 12:51:49 America/New_York] 1::connect_db_mysqli.inc:68:[before upgrade] mysqli_query() expects parameter 1 to be mysqli, bool given
+[03-Mar-2022 12:51:49 America/New_York] 1::connect_db_mysqli.inc:69:[before upgrade] mysqli_errno() expects parameter 1 to be mysqli, bool given
+[03-Mar-2022 12:51:49 America/New_York] 1::connect_db_mysqli.inc:68:[before upgrade] mysqli_query() expects parameter 1 to be mysqli, bool given
+[03-Mar-2022 12:51:49 America/New_York] 1::connect_db_mysqli.inc:69:[before upgrade] mysqli_errno() expects parameter 1 to be mysqli, bool given
+[03-Mar-2022 12:51:49 America/New_York] 1::connect_db_mysqli.inc:286:[before upgrade] mysqli_set_charset() expects parameter 1 to be mysqli, bool given
+[03-Mar-2022 12:51:49 America/New_York] 1::connect_db_mysqli.inc:150:[before upgrade] mysqli_real_escape_string() expects parameter 1 to be mysqli, bool given
+[03-Mar-2022 12:51:49 America/New_York] 1::connect_db_mysqli.inc:150:[before upgrade] mysqli_real_escape_string() expects parameter 1 to be mysqli, bool given
+[03-Mar-2022 12:51:49 America/New_York] 1::connect_db_mysqli.inc:68:[before upgrade] mysqli_query() expects parameter 1 to be mysqli, bool given
+[03-Mar-2022 12:51:49 America/New_York] 1::connect_db_mysqli.inc:69:[before upgrade] mysqli_errno() expects parameter 1 to be mysqli, bool given
+[03-Mar-2022 12:51:49 America/New_York] 1::connect_db_mysqli.inc:165:[before upgrade] mysqli_errno() expects parameter 1 to be mysqli, bool given
+[03-Mar-2022 12:51:49 America/New_York] 1::connect_db_mysqli.inc:127:[before upgrade] mysqli_num_rows() expects parameter 1 to be mysqli_result, null given
+[03-Mar-2022 12:51:59 America/New_York] 0::connect_db_mysqli.inc:33:[before upgrade] mysqli_connect(): (HY000/1045): Access denied for user 'gaweb1_sa'@'localhost' (using password: YES)
+[03-Mar-2022 12:51:59 America/New_York] 0::connect_db_mysqli.inc:35:[before upgrade] mysqli_select_db() expects parameter 1 to be mysqli, bool given
+[03-Mar-2022 12:51:59 America/New_York] 0::connect_db_mysqli.inc:68:[before upgrade] mysqli_query() expects parameter 1 to be mysqli, bool given
+[03-Mar-2022 12:51:59 America/New_York] 0::connect_db_mysqli.inc:69:[before upgrade] mysqli_errno() expects parameter 1 to be mysqli, bool given
+[03-Mar-2022 12:51:59 America/New_York] 0::connect_db_mysqli.inc:68:[before upgrade] mysqli_query() expects parameter 1 to be mysqli, bool given
+[03-Mar-2022 12:51:59 America/New_York] 0::connect_db_mysqli.inc:69:[before upgrade] mysqli_errno() expects parameter 1 to be mysqli, bool given
+[03-Mar-2022 12:51:59 America/New_York] 0::connect_db_mysqli.inc:286:[before upgrade] mysqli_set_charset() expects parameter 1 to be mysqli, bool given
+[03-Mar-2022 12:51:59 America/New_York] 0::connect_db_mysqli.inc:150:[before upgrade] mysqli_real_escape_string() expects parameter 1 to be mysqli, bool given
+[03-Mar-2022 12:51:59 America/New_York] 0::connect_db_mysqli.inc:150:[before upgrade] mysqli_real_escape_string() expects parameter 1 to be mysqli, bool given
+[03-Mar-2022 12:51:59 America/New_York] 0::connect_db_mysqli.inc:68:[before upgrade] mysqli_query() expects parameter 1 to be mysqli, bool given
+[03-Mar-2022 12:51:59 America/New_York] 0::connect_db_mysqli.inc:69:[before upgrade] mysqli_errno() expects parameter 1 to be mysqli, bool given
+[03-Mar-2022 12:51:59 America/New_York] 0::connect_db_mysqli.inc:165:[before upgrade] mysqli_errno() expects parameter 1 to be mysqli, bool given
+[03-Mar-2022 12:51:59 America/New_York] 0::connect_db_mysqli.inc:127:[before upgrade] mysqli_num_rows() expects parameter 1 to be mysqli_result, null given
+[03-Mar-2022 13:09:35 America/New_York] 0::login.php:108:[before upgrade] count(): Parameter must be an array or an object that implements Countable
+[03-Mar-2022 13:10:12 America/New_York] 0::login.php:108:[before upgrade] count(): Parameter must be an array or an object that implements Countable
+[03-Mar-2022 13:32:37 America/New_York] 0:admin:maintenance_db.inc:953: mkdir(): File exists
+[03-Mar-2022 13:32:37 America/New_York] 0:admin:maintenance_db.inc:960: mkdir(): File exists
+[03-Mar-2022 13:32:37 America/New_York] 0:admin:maintenance_db.inc:960: mkdir(): File exists
+[03-Mar-2022 13:32:37 America/New_York] 0:admin:maintenance_db.inc:960: mkdir(): File exists
+[03-Mar-2022 13:32:37 America/New_York] 0:admin:maintenance_db.inc:960: mkdir(): File exists
+[03-Mar-2022 13:32:37 America/New_York] 0:admin:maintenance_db.inc:960: mkdir(): File exists
+[03-Mar-2022 13:32:37 America/New_York] 0:admin:maintenance_db.inc:960: mkdir(): File exists
+[03-Mar-2022 14:39:32 America/New_York] 0::current_user.inc:753:[before upgrade] unlink(./company/0/js_cache/0/behaviour.js): No such file or directory
+[03-Mar-2022 14:39:32 America/New_York] 0::current_user.inc:753:[before upgrade] unlink(./company/0/js_cache/0/inserts.js): No such file or directory
+[03-Mar-2022 14:39:32 America/New_York] 0::current_user.inc:753:[before upgrade] unlink(./company/0/js_cache/0/JsHttpRequest.js): No such file or directory
+[03-Mar-2022 14:39:32 America/New_York] 0::current_user.inc:753:[before upgrade] unlink(./company/0/js_cache/0/login.js): No such file or directory
+[03-Mar-2022 14:39:32 America/New_York] 0::current_user.inc:753:[before upgrade] unlink(./company/0/js_cache/0/utils.js): No such file or directory
+[03-Mar-2022 14:40:48 America/New_York] 0::connect_db_mysqli.inc:33:[before upgrade] mysqli_connect(): The server requested authentication method unknown to the client [caching_sha2_password]
+[03-Mar-2022 14:40:48 America/New_York] 0::connect_db_mysqli.inc:33:[before upgrade] mysqli_connect(): (HY000/2054): The server requested authentication method unknown to the client
+[03-Mar-2022 14:40:48 America/New_York] 0::connect_db_mysqli.inc:35:[before upgrade] mysqli_select_db() expects parameter 1 to be mysqli, bool given
+[03-Mar-2022 14:40:48 America/New_York] 0::connect_db_mysqli.inc:68:[before upgrade] mysqli_query() expects parameter 1 to be mysqli, bool given
+[03-Mar-2022 14:40:48 America/New_York] 0::connect_db_mysqli.inc:69:[before upgrade] mysqli_errno() expects parameter 1 to be mysqli, bool given
+[03-Mar-2022 14:40:48 America/New_York] 0::connect_db_mysqli.inc:68:[before upgrade] mysqli_query() expects parameter 1 to be mysqli, bool given
+[03-Mar-2022 14:40:48 America/New_York] 0::connect_db_mysqli.inc:69:[before upgrade] mysqli_errno() expects parameter 1 to be mysqli, bool given
+[03-Mar-2022 14:40:48 America/New_York] 0::connect_db_mysqli.inc:286:[before upgrade] mysqli_set_charset() expects parameter 1 to be mysqli, bool given
+[03-Mar-2022 14:40:48 America/New_York] 0::connect_db_mysqli.inc:150:[before upgrade] mysqli_real_escape_string() expects parameter 1 to be mysqli, bool given
+[03-Mar-2022 14:40:48 America/New_York] 0::connect_db_mysqli.inc:150:[before upgrade] mysqli_real_escape_string() expects parameter 1 to be mysqli, bool given
+[03-Mar-2022 14:40:48 America/New_York] 0::connect_db_mysqli.inc:68:[before upgrade] mysqli_query() expects parameter 1 to be mysqli, bool given
+[03-Mar-2022 14:40:48 America/New_York] 0::connect_db_mysqli.inc:69:[before upgrade] mysqli_errno() expects parameter 1 to be mysqli, bool given
+[03-Mar-2022 14:40:48 America/New_York] 0::connect_db_mysqli.inc:165:[before upgrade] mysqli_errno() expects parameter 1 to be mysqli, bool given
+[03-Mar-2022 14:40:48 America/New_York] 0::connect_db_mysqli.inc:127:[before upgrade] mysqli_num_rows() expects parameter 1 to be mysqli_result, null given
+[03-Mar-2022 14:41:00 America/New_York] 0::connect_db_mysqli.inc:33:[before upgrade] mysqli_connect(): The server requested authentication method unknown to the client [caching_sha2_password]
+[03-Mar-2022 14:41:00 America/New_York] 0::connect_db_mysqli.inc:33:[before upgrade] mysqli_connect(): (HY000/2054): The server requested authentication method unknown to the client
+[03-Mar-2022 14:41:00 America/New_York] 0::connect_db_mysqli.inc:35:[before upgrade] mysqli_select_db() expects parameter 1 to be mysqli, bool given
+[03-Mar-2022 14:41:00 America/New_York] 0::connect_db_mysqli.inc:68:[before upgrade] mysqli_query() expects parameter 1 to be mysqli, bool given
+[03-Mar-2022 14:41:00 America/New_York] 0::connect_db_mysqli.inc:69:[before upgrade] mysqli_errno() expects parameter 1 to be mysqli, bool given
+[03-Mar-2022 14:41:00 America/New_York] 0::connect_db_mysqli.inc:68:[before upgrade] mysqli_query() expects parameter 1 to be mysqli, bool given
+[03-Mar-2022 14:41:00 America/New_York] 0::connect_db_mysqli.inc:69:[before upgrade] mysqli_errno() expects parameter 1 to be mysqli, bool given
+[03-Mar-2022 14:41:00 America/New_York] 0::connect_db_mysqli.inc:286:[before upgrade] mysqli_set_charset() expects parameter 1 to be mysqli, bool given
+[03-Mar-2022 14:41:00 America/New_York] 0::connect_db_mysqli.inc:150:[before upgrade] mysqli_real_escape_string() expects parameter 1 to be mysqli, bool given
+[03-Mar-2022 14:41:00 America/New_York] 0::connect_db_mysqli.inc:150:[before upgrade] mysqli_real_escape_string() expects parameter 1 to be mysqli, bool given
+[03-Mar-2022 14:41:00 America/New_York] 0::connect_db_mysqli.inc:68:[before upgrade] mysqli_query() expects parameter 1 to be mysqli, bool given
+[03-Mar-2022 14:41:00 America/New_York] 0::connect_db_mysqli.inc:69:[before upgrade] mysqli_errno() expects parameter 1 to be mysqli, bool given
+[03-Mar-2022 14:41:00 America/New_York] 0::connect_db_mysqli.inc:165:[before upgrade] mysqli_errno() expects parameter 1 to be mysqli, bool given
+[03-Mar-2022 14:41:00 America/New_York] 0::connect_db_mysqli.inc:127:[before upgrade] mysqli_num_rows() expects parameter 1 to be mysqli_result, null given
+[03-Mar-2022 14:41:07 America/New_York] 0::connect_db_mysqli.inc:33:[before upgrade] mysqli_connect(): The server requested authentication method unknown to the client [caching_sha2_password]
+[03-Mar-2022 14:41:07 America/New_York] 0::connect_db_mysqli.inc:33:[before upgrade] mysqli_connect(): (HY000/2054): The server requested authentication method unknown to the client
+[03-Mar-2022 14:41:07 America/New_York] 0::connect_db_mysqli.inc:35:[before upgrade] mysqli_select_db() expects parameter 1 to be mysqli, bool given
+[03-Mar-2022 14:41:07 America/New_York] 0::connect_db_mysqli.inc:68:[before upgrade] mysqli_query() expects parameter 1 to be mysqli, bool given
+[03-Mar-2022 14:41:07 America/New_York] 0::connect_db_mysqli.inc:69:[before upgrade] mysqli_errno() expects parameter 1 to be mysqli, bool given
+[03-Mar-2022 14:41:07 America/New_York] 0::connect_db_mysqli.inc:68:[before upgrade] mysqli_query() expects parameter 1 to be mysqli, bool given
+[03-Mar-2022 14:41:07 America/New_York] 0::connect_db_mysqli.inc:69:[before upgrade] mysqli_errno() expects parameter 1 to be mysqli, bool given
+[03-Mar-2022 14:41:07 America/New_York] 0::connect_db_mysqli.inc:286:[before upgrade] mysqli_set_charset() expects parameter 1 to be mysqli, bool given
+[03-Mar-2022 14:41:07 America/New_York] 0::connect_db_mysqli.inc:150:[before upgrade] mysqli_real_escape_string() expects parameter 1 to be mysqli, bool given
+[03-Mar-2022 14:41:07 America/New_York] 0::connect_db_mysqli.inc:150:[before upgrade] mysqli_real_escape_string() expects parameter 1 to be mysqli, bool given
+[03-Mar-2022 14:41:07 America/New_York] 0::connect_db_mysqli.inc:68:[before upgrade] mysqli_query() expects parameter 1 to be mysqli, bool given
+[03-Mar-2022 14:41:07 America/New_York] 0::connect_db_mysqli.inc:69:[before upgrade] mysqli_errno() expects parameter 1 to be mysqli, bool given
+[03-Mar-2022 14:41:07 America/New_York] 0::connect_db_mysqli.inc:165:[before upgrade] mysqli_errno() expects parameter 1 to be mysqli, bool given
+[03-Mar-2022 14:41:07 America/New_York] 0::connect_db_mysqli.inc:127:[before upgrade] mysqli_num_rows() expects parameter 1 to be mysqli_result, null given
+[03-Mar-2022 14:41:18 America/New_York] 1::connect_db_mysqli.inc:33:[before upgrade] mysqli_connect(): The server requested authentication method unknown to the client [caching_sha2_password]
+[03-Mar-2022 14:41:18 America/New_York] 1::connect_db_mysqli.inc:33:[before upgrade] mysqli_connect(): (HY000/2054): The server requested authentication method unknown to the client
+[03-Mar-2022 14:41:18 America/New_York] 1::connect_db_mysqli.inc:35:[before upgrade] mysqli_select_db() expects parameter 1 to be mysqli, bool given
+[03-Mar-2022 14:41:18 America/New_York] 1::connect_db_mysqli.inc:68:[before upgrade] mysqli_query() expects parameter 1 to be mysqli, bool given
+[03-Mar-2022 14:41:18 America/New_York] 1::connect_db_mysqli.inc:69:[before upgrade] mysqli_errno() expects parameter 1 to be mysqli, bool given
+[03-Mar-2022 14:41:18 America/New_York] 1::connect_db_mysqli.inc:68:[before upgrade] mysqli_query() expects parameter 1 to be mysqli, bool given
+[03-Mar-2022 14:41:18 America/New_York] 1::connect_db_mysqli.inc:69:[before upgrade] mysqli_errno() expects parameter 1 to be mysqli, bool given
+[03-Mar-2022 14:41:18 America/New_York] 1::connect_db_mysqli.inc:286:[before upgrade] mysqli_set_charset() expects parameter 1 to be mysqli, bool given
+[03-Mar-2022 14:41:18 America/New_York] 1::connect_db_mysqli.inc:150:[before upgrade] mysqli_real_escape_string() expects parameter 1 to be mysqli, bool given
+[03-Mar-2022 14:41:18 America/New_York] 1::connect_db_mysqli.inc:150:[before upgrade] mysqli_real_escape_string() expects parameter 1 to be mysqli, bool given
+[03-Mar-2022 14:41:18 America/New_York] 1::connect_db_mysqli.inc:68:[before upgrade] mysqli_query() expects parameter 1 to be mysqli, bool given
+[03-Mar-2022 14:41:18 America/New_York] 1::connect_db_mysqli.inc:69:[before upgrade] mysqli_errno() expects parameter 1 to be mysqli, bool given
+[03-Mar-2022 14:41:18 America/New_York] 1::connect_db_mysqli.inc:165:[before upgrade] mysqli_errno() expects parameter 1 to be mysqli, bool given
+[03-Mar-2022 14:41:18 America/New_York] 1::connect_db_mysqli.inc:127:[before upgrade] mysqli_num_rows() expects parameter 1 to be mysqli_result, null given
